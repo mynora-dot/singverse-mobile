@@ -206,7 +206,7 @@ void main() {
     state.stageRequests++;
     state.notifyListeners();
     await tester.pumpAndSettle();
-    expect(find.text('练唱 · 麦克风未开启'), findsOneWidget);
+    expect(find.text('练唱 · 未录音'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets('new take countdown does not reopen an older pending draft', (
@@ -319,7 +319,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const Key('mini-player')).first);
     await tester.pumpAndSettle();
-    expect(find.text('练唱 · 麦克风未开启'), findsOneWidget);
+    expect(find.text('练唱 · 未录音'), findsOneWidget);
     expect(find.text('4:29'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.binding.setSurfaceSize(const Size(844, 390));

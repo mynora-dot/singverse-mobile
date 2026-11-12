@@ -39,6 +39,8 @@ class MainActivity : FlutterActivity() {
     private val updateWorker = Executors.newSingleThreadExecutor()
     private var updateEvents: EventChannel.EventSink? = null
     private var updater: MobileUpdater? = null
+    private var discovery: NasDiscovery? = null
+    private var discoveryEvents: EventChannel.EventSink? = null
     private fun withPlayer(result: MethodChannel.Result, block: (PlaybackService) -> Unit) {
         startService(Intent(this, PlaybackService::class.java))
         fun attach(tries: Int) {
@@ -61,6 +63,37 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
         val transport = NasTransport.get(this)
+        val logins = LoginVault(this)
+        val discovery = NasDiscovery(this) { discoveryEvents?.success(it) }
+        this.discovery = discovery
+        EventChannel(engine.dartExecutor.binaryMessenger, "singverse/discovery-events").setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, sink: EventChannel.EventSink) { discoveryEvents = sink; discovery.snapshot() }
+            override fun onCancel(arguments: Any?) { discoveryEvents = null; discovery.stop() }
+        })
+        MethodChannel(engine.dartExecutor.binaryMessenger, "singverse/discovery").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> { discovery.start(); result.success(null) }
+                "stop" -> { discovery.stop(); result.success(null) }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(engine.dartExecutor.binaryMessenger, "singverse/logins").setMethodCallHandler { call, result ->
+            worker.execute {
+                try {
+                    val input = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                    val value: Any? = when (call.method) {
+                        "list" -> logins.list()
+                        "password" -> logins.password(input)
+                        "save" -> { logins.save(input); null }
+                        "remove" -> { logins.remove(input); null }
+                        "forgetPassword" -> { logins.forgetPassword(input); null }
+                        "forgetServerPasswords" -> { logins.forgetServerPasswords(input["instanceId"] as String); null }
+                        else -> throw IllegalArgumentException("Unknown login method")
+                    }
+                    main.post { result.success(value) }
+                } catch (_: Exception) { main.post { result.error("vault", "无法读写手机上的已保存登录，请重试", null) } }
+            }
+        }
         val updates = MobileUpdater(this, transport, updateWorker, busy = {
             updateBlocked(PlaybackService.current?.karaoke?.phase.orEmpty(),
                 PlaybackService.current?.snapshot()?.get("countdown") as? Int ?: 0, exportResult != null || exportInProgress)
@@ -227,9 +260,10 @@ class MainActivity : FlutterActivity() {
         }
     }
     override fun onStart() { super.onStart(); videoViews.forEach { it.player = PlaybackService.current?.player } }
-    override fun onStop() { PlaybackService.current?.karaoke?.testMicrophone(false); videoViews.forEach { it.player = null }; super.onStop() }
+    override fun onStop() { discovery?.stop(); PlaybackService.current?.karaoke?.testMicrophone(false); videoViews.forEach { it.player = null }; super.onStop() }
     override fun onDestroy() {
         events = null; PlaybackService.listener = null
+        discoveryEvents = null; discovery?.stop(); discovery = null
         updateEvents = null; updater?.cancel(); updateWorker.shutdownNow()
         worker.shutdown(); artworkWorker.shutdownNow(); exportWorker.shutdown(); super.onDestroy()
     }

@@ -52,6 +52,7 @@ class AppState extends ChangeNotifier {
   static const player = MethodChannel('singverse/player');
   StreamSubscription<dynamic>? _events;
   String origin = '', instanceId = '', accountName = '';
+  String serverName = '';
   bool initialized = false,
       authenticated = false,
       mfaRequired = false,
@@ -160,6 +161,7 @@ class AppState extends ChangeNotifier {
         await refreshPersonal();
         final info = await api.inspect(origin) as Json;
         _checkServer(info);
+        serverName = info['name'] is String ? info['name'] as String : '';
         instanceId = info['instanceId'] as String;
         await preferences.setString('server-instance:$origin', instanceId);
         await refreshPersonal();
@@ -197,6 +199,7 @@ class AppState extends ChangeNotifier {
       await api.configure(next);
       origin = next;
       instanceId = info['instanceId'] as String;
+      serverName = info['name'] is String ? info['name'] as String : '';
       await preferences.setString('server-instance:$origin', instanceId);
       authenticated = false;
       mfaRequired = false;
@@ -210,18 +213,37 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  Future<void> login(String password) => _run(() async {
-    final result = await api.request(
-      '/api/v1/auth/login',
+  Future<void> login(String password, {String username = 'admin'}) =>
+      _run(() async {
+        final result = await api.request(
+          '/api/v1/auth/login',
+          method: 'POST',
+          body: {'username': username.trim(), 'password': password},
+        ) as Json;
+        mfaRequired = result['state'] == 'mfaRequired';
+        authenticated = result['state'] == 'authenticated';
+        if (authenticated) {
+          await readSession();
+          await refreshPersonal();
+        }
+      });
+  Future<void> resetPassword({
+    required String username,
+    required String resetToken,
+    required String newPassword,
+  }) => _run(() async {
+    await api.request(
+      '/api/v1/auth/password/reset',
       method: 'POST',
-      body: {'username': 'admin', 'password': password},
-    ) as Json;
-    mfaRequired = result['state'] == 'mfaRequired';
-    authenticated = result['state'] == 'authenticated';
-    if (authenticated) {
-      await readSession();
-      await refreshPersonal();
-    }
+      body: {
+        'username': username.trim(),
+        'resetToken': resetToken.trim(),
+        'newPassword': newPassword,
+      },
+    );
+    authenticated = false;
+    mfaRequired = false;
+    accountName = '';
   });
   Future<void> verify(String code) => _run(() async {
     await api.request(

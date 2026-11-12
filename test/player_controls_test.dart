@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -186,7 +187,7 @@ void main() {
   );
 
   testWidgets(
-    'real phone metrics keep compact lyrics and a centered recording pill',
+    'real phone metrics keep readable lyrics and grouped primary actions',
     (tester) async {
       const logicalSize = Size(360, 800);
       tester.view.devicePixelRatio = 3.5;
@@ -260,21 +261,30 @@ void main() {
             final recordRect = tester.getRect(record);
             expect(play.hitTestable(), findsOneWidget, reason: reason);
             expect(record.hitTestable(), findsOneWidget, reason: reason);
+            final groupRect = tester.getRect(
+              find.byKey(const ValueKey('player-action-group')),
+            );
+            expect(groupRect.contains(playRect.center), isTrue, reason: reason);
             expect(
-              recordRect.top,
-              greaterThanOrEqualTo(playRect.bottom + 16 - .001),
+              groupRect.contains(recordRect.center),
+              isTrue,
               reason: reason,
             );
+            expect(playRect.overlaps(recordRect), isFalse, reason: reason);
             expect(recordRect.left, greaterThanOrEqualTo(20), reason: reason);
             expect(recordRect.right, lessThanOrEqualTo(340), reason: reason);
-            expect(recordRect.width, lessThan(320), reason: reason);
             expect(
               recordRect.width,
-              greaterThanOrEqualTo(senior ? 184 : 160),
+              greaterThanOrEqualTo(playRect.width),
               reason: reason,
             );
-            expect(recordRect.center.dx, closeTo(180, .001), reason: reason);
-            expect(playRect.center.dx, closeTo(180, .001), reason: reason);
+            if (!senior && scale == 1) {
+              expect(
+                recordRect.center.dy,
+                closeTo(playRect.center.dy, .001),
+                reason: reason,
+              );
+            }
             for (final rect in [playRect, recordRect]) {
               expect(rect.top, greaterThanOrEqualTo(40), reason: reason);
               expect(rect.bottom, lessThanOrEqualTo(800), reason: reason);
@@ -290,6 +300,136 @@ void main() {
       }
       expect(native.commands, isEmpty);
       expect(native.calls, isEmpty);
+    },
+  );
+
+  testWidgets('portrait video follows its source aspect without lyrics', (
+    tester,
+  ) async {
+    state.current = Song({...state.current!.data, 'mediaType': 'VIDEO'});
+    for (final aspect in [16 / 9, 4 / 3, 9 / 16]) {
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.videoAspect = aspect;
+      await player(tester, const Size(360, 800));
+      final frame = tester.getRect(find.byKey(const ValueKey('player-video')));
+      expect(frame.width, closeTo(320, .01));
+      expect(frame.width / frame.height, closeTo(aspect, .001));
+      for (final key in ['player-play', 'player-record']) {
+        expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    }
+    expect(native.commands, isEmpty);
+    expect(native.calls, isEmpty);
+  });
+
+  for (final size in [const Size(360, 800), const Size(844, 390)]) {
+    testWidgets(
+      'video explains loading and retries failure in its canvas at $size',
+      (tester) async {
+        state
+          ..authenticated = true
+          ..current = Song({...state.current!.data, 'mediaType': 'VIDEO'});
+        (state.api as FakeApi).textTracks = [
+          {'format': 'lrc', 'text': '[00:00.00]当前歌词'},
+        ];
+        await player(tester, size);
+        final video = find.byKey(const ValueKey('player-video'));
+        for (final phase in ['PREPARING', 'BUFFERING']) {
+          state
+            ..playbackState = phase
+            ..isPlaying = false;
+          native.emit();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+          final label = find.text(phase == 'BUFFERING' ? '正在缓冲…' : '正在准备歌曲…');
+          expect(find.descendant(of: video, matching: label), findsOneWidget);
+          expect(
+            tester
+                .widget<FilledButton>(find.byKey(const ValueKey('player-play')))
+                .onPressed,
+            isNull,
+          );
+          expect(native.commands, isEmpty);
+        }
+        state
+          ..playbackState = 'ERROR'
+          ..playbackError = '视频暂时无法加载';
+        native.emit();
+        await tester.pumpAndSettle();
+        final retry = find.text('重试播放');
+        expect(find.descendant(of: video, matching: retry), findsOneWidget);
+        expect(find.text('视频暂时无法加载'), findsOneWidget);
+        expect(retry.hitTestable(), findsOneWidget);
+        await tester.tap(retry);
+        await tester.pumpAndSettle();
+        expect(state.isPlaying, isTrue);
+        expect(
+          find.byKey(const ValueKey('player-video-feedback')),
+          findsNothing,
+        );
+        expect(native.calls, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'unavailable audio roles explain their state beside the choices',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        state
+          ..originalMapped = false
+          ..backingMapped = false
+          ..audioRole = '';
+        await player(tester, const Size(360, 800));
+        expect(find.text('播放音轨'), findsOneWidget);
+        expect(find.text('此歌曲暂无可切换音轨'), findsOneWidget);
+        state
+          ..originalMapped = true
+          ..audioRole = 'original';
+        native.emit();
+        await tester.pumpAndSettle();
+        expect(find.text('伴奏暂不可用'), findsOneWidget);
+        expect(
+          tester
+              .getSemantics(find.bySemanticsLabel('原唱'))
+              .getSemanticsData()
+              .flagsCollection
+              .isSelected,
+          Tristate.isTrue,
+        );
+        expect(native.commands, isEmpty);
+        expect(native.calls, isEmpty);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'wrapped lyrics keep their row height as the current line changes',
+    (tester) async {
+      (state.api as FakeApi).textTracks = [
+        {
+          'format': 'lrc',
+          'text': '[00:00.00]这是一句需要换行的歌词把心事轻轻唱出来\n[00:10.00]下一句歌词同样可以自由换行',
+        },
+      ];
+      await player(tester, const Size(320, 568));
+      Finder row(int index) => find.ancestor(
+        of: find.byKey(ValueKey('lyrics-line-$index')),
+        matching: find.byType(InkWell),
+      );
+      final firstHeight = tester.getSize(row(0)).height;
+      final nextHeight = tester.getSize(row(1)).height;
+      state.positionMs = 12000;
+      native.emit();
+      await tester.pumpAndSettle();
+      expect(tester.getSize(row(0)).height, firstHeight);
+      expect(tester.getSize(row(1)).height, nextHeight);
+      expect(tester.takeException(), isNull);
     },
   );
 

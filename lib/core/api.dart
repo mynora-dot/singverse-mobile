@@ -73,6 +73,7 @@ String normalizeOrigin(String input) {
   if (uri == null ||
       !['http', 'https'].contains(uri.scheme) ||
       uri.host.isEmpty ||
+      (uri.hasPort && (uri.port < 1 || uri.port > 65535)) ||
       uri.userInfo.isNotEmpty ||
       uri.hasQuery ||
       uri.hasFragment ||

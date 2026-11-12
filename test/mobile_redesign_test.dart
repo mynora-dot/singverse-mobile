@@ -518,7 +518,7 @@ void main() {
       await tester.tap(find.text('晴天'));
       await tester.pumpAndSettle();
       expect(find.byType(PlayerPage), findsOneWidget);
-      expect(find.text('练唱 · 麦克风未开启'), findsOneWidget);
+      expect(find.text('练唱 · 未录音'), findsOneWidget);
       expect(find.text('演唱准备'), findsNothing);
       expect(find.text('歌曲详情'), findsNothing);
       expect(state.isPlaying, isTrue);
@@ -1823,7 +1823,12 @@ void main() {
             await tester.pumpAndSettle();
             expect(
               tester
-                  .widget<EditableText>(find.byType(EditableText))
+                  .widget<EditableText>(
+                    find.descendant(
+                      of: address,
+                      matching: find.byType(EditableText),
+                    ),
+                  )
                   .focusNode
                   .hasFocus,
               isTrue,
@@ -2121,6 +2126,36 @@ void main() {
         true,
         true,
       ),
+      (
+        '09-light-video-no-lyrics',
+        Brightness.light,
+        const Size(360, 800),
+        'VIDEO',
+        false,
+        1.0,
+        false,
+        false,
+      ),
+      (
+        '10-light-video-buffering',
+        Brightness.light,
+        const Size(360, 800),
+        'VIDEO',
+        false,
+        1.0,
+        false,
+        false,
+      ),
+      (
+        '11-light-video-error',
+        Brightness.light,
+        const Size(360, 800),
+        'VIDEO',
+        false,
+        1.0,
+        false,
+        false,
+      ),
     ];
     for (final sample in scenarios) {
       await tester.pumpWidget(const SizedBox.shrink());
@@ -2130,7 +2165,7 @@ void main() {
           ? [
               {
                 'format': 'lrc',
-                'text': '[00:00.00]晨光落在窗前\n[00:10.00]把心事轻轻唱出来\n[00:20.00]熟悉的旋律还在\n[00:30.00]每一次开口都值得期待',
+                'text': '[00:00.00]晨光落在窗前\n[00:10.00]把心事轻轻唱出来\n[00:20.00]熟悉的旋律还在\n[00:30.00]每一次开口都值得期待\n[00:40.00]让声音跟着节拍\n[00:50.00]再把这一句唱一遍',
               },
             ]
           : [];
@@ -2146,12 +2181,19 @@ void main() {
         ..positionMs = 12000
         ..durationMs = 240000
         ..isPlaying = false
-        ..playbackState = 'PAUSED'
+        ..playbackState = sample.$1 == '10-light-video-buffering'
+            ? 'BUFFERING'
+            : sample.$1 == '11-light-video-error'
+            ? 'ERROR'
+            : 'PAUSED'
+        ..playbackError = sample.$1 == '11-light-video-error'
+            ? '视频暂时无法加载，请重试'
+            : ''
         ..rangeA = sample.$1 == '08-selected-range' ? 10000 : 0
         ..rangeB = sample.$1 == '08-selected-range' ? 30000 : 0
-        ..backingMapped = true
-        ..originalMapped = true
-        ..audioRole = 'backing'
+        ..backingMapped = sample.$7
+        ..originalMapped = sample.$7
+        ..audioRole = sample.$7 ? 'backing' : ''
         ..tracks = [
           {'id': '0:0', 'type': 'audio', 'selected': true, 'channels': 2},
         ];
@@ -2174,7 +2216,12 @@ void main() {
           ),
         );
       }
-      await tester.pumpAndSettle();
+      if (state.playbackState == 'BUFFERING') {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+      } else {
+        await tester.pumpAndSettle();
+      }
       await tester.runAsync(() async {
         final render =
             boundary.currentContext!.findRenderObject()!

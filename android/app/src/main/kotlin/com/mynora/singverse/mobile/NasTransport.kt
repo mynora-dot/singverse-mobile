@@ -193,7 +193,7 @@ class NasTransport internal constructor(context: Context) {
         }
         fun normalize(value: String): String {
             val uri = URI(value.trim())
-            if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank() || uri.rawUserInfo != null ||
+            if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank() || (uri.port != -1 && uri.port !in 1..65535) || uri.rawUserInfo != null ||
                 uri.rawQuery != null || uri.rawFragment != null || uri.path !in listOf("", "/"))
                 throw NasFailure(400, "请输入 NAS 根地址，例如 http://nas.local:18080")
             return authority(uri)

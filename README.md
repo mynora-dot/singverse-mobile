@@ -14,6 +14,18 @@ make build
 
 `VERSION` 是唯一产品版本来源；只接受 `major.minor.patch`，minor/patch 最大 999，`versionCode = major*1000000 + minor*1000 + patch`，必须为正且不超过 2100000000。每次正式发布提高版本，不能复用旧码。Flutter 的构建参数和 Android 包版本均从根 VERSION 注入，不在 pubspec 中维护第二份版本。
 
+## NAS 登录
+
+连接页支持 HTTP / HTTPS，地址可输入 IP、域名和实际端口，也可粘贴完整根地址。切换协议不会自动降低 HTTPS 或跳过证书校验。管理员账号可修改，不再固定为 `admin`；NAS 启用二次验证时，仍需输入动态码或恢复码。
+
+点击「查找局域网 NAS」通过 Android NSD 查找 `_singverse._tcp.` 服务，15 秒后结束，可重新查找或手动填写地址。进入后台或离开查找页时停止扫描。发现候选后只回填地址，登录前再次检查 `/api/v1/server-info`。Go 原生部署可配置 `SINGVERSE_TV_DISCOVERY_ADDRESS=<本机内网 IP>`、`SINGVERSE_TV_DISCOVERY_PORT=<实际 HTTP 入口端口>`；桥接 Docker 可在 NAS 宿主机用 Avahi 发布同类型服务，端口必须是手机能访问的入口。发现默认关闭；未发布 mDNS、访客 Wi-Fi 或隔离网络应手动填写地址。HTTPS 广告可带 `scheme=https` TXT 属性，否则按 HTTP 处理。
+
+成功登录后记录曲库、地址、协议和账号，最多保留 20 条。历史页可回填、移除记录或单独忘记密码。勾选「记住密码」后，密码仅在登录和二次验证均成功后保存；取消勾选会立即移除该条已保存密码。历史及密码使用独立 Android Keystore AES-GCM 加密存储，不放入 Flutter SharedPreferences，不与 Cookie 或 WebView 共享。使用保存的密码前核对根地址、账号与 NAS instanceId；地址指向不同 NAS 时要求重新输入。退出会话保留用户主动记住的历史登录。
+
+「忘记密码」使用现有 `POST /api/v1/auth/password/reset`，在应用内提供 Docker / 原生进程的一次性重置码获取说明、账号、重置码、新密码和确认密码表单。重置码由部署主机生成，15 分钟有效，新密码为 15～128 个 Unicode 字符。重置成功后返回登录，并清除此手机上同一 NAS 各地址保存的旧密码，保留其他曲库记录；服务端撤销所有设备会话并保留二次验证。客户端不会代替用户执行 NAS 上的恢复命令。
+
+`test/connection_test.dart` 覆盖登录、历史、协议、身份隔离、二次验证、重置和小屏大字交互；`LoginVaultInstrumentedTest` 需在 Android 测试设备上验证 Keystore 加密与重启后读取，单元测试和 APK 编译不能代替真实 LAN/mDNS 与证书验收。
+
 ## 应用内更新
 
 每次恢复或成功连接家庭 NAS 后异步检查一次（包括重新连接同一 NAS），之后仅在应用前台且距离上次检查满 24 小时再查。登录会话刷新不重复触发连接检查。“设置 → 应用更新”可随时手动检查。扫码 H5 的临时电视会话不作为更新来源。网络失败、未发布包或无新版本都不影响曲库和播放。
