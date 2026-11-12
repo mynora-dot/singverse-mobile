@@ -68,3 +68,6 @@ temp/
 # Keep project inputs
 !**/gradle/wrapper/gradle-wrapper.jar
 !pubspec.lock
+
+# Personal agent skills are maintained outside this repository.
+/skills/
