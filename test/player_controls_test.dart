@@ -231,12 +231,20 @@ void main() {
             final inactive = find.byKey(const ValueKey('lyrics-line-0'));
             expect(
               tester.widget<Text>(active).style?.fontSize,
-              senior ? 32 : 18,
+              senior
+                  ? 32
+                  : scale == 1
+                  ? 26
+                  : 18,
               reason: reason,
             );
             expect(
               tester.widget<Text>(inactive).style?.fontSize,
-              senior ? 23 : 15,
+              senior
+                  ? 23
+                  : scale == 1
+                  ? 18
+                  : 15,
               reason: reason,
             );
             expect(
@@ -280,8 +288,8 @@ void main() {
             );
             if (!senior && scale == 1) {
               expect(
-                recordRect.center.dy,
-                closeTo(playRect.center.dy, .001),
+                recordRect.top,
+                greaterThan(playRect.bottom),
                 reason: reason,
               );
             }
@@ -312,7 +320,8 @@ void main() {
       state.videoAspect = aspect;
       await player(tester, const Size(360, 800));
       final frame = tester.getRect(find.byKey(const ValueKey('player-video')));
-      expect(frame.width, closeTo(320, .01));
+      expect(frame.left, 0);
+      expect(frame.width, closeTo(360, .01));
       expect(frame.width / frame.height, closeTo(aspect, .001));
       for (final key in ['player-play', 'player-record']) {
         expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
@@ -321,6 +330,50 @@ void main() {
     }
     expect(native.commands, isEmpty);
     expect(native.calls, isEmpty);
+  });
+
+  testWidgets('wide video keeps its ratio beside readable independent lyrics', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 40, bottom: 24);
+    tester.view.viewPadding = tester.view.padding;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    (state.api as FakeApi).textTracks = [
+      {
+        'format': 'lrc',
+        'text': '[00:00.00]第一句歌词\n[00:10.00]当前歌词\n[00:20.00]下一句歌词',
+      },
+    ];
+    state
+      ..current = Song({...state.current!.data, 'mediaType': 'VIDEO'})
+      ..videoAspect = 16 / 9
+      ..positionMs = 12000;
+    for (final dimensions in [const Size(360, 800), const Size(390, 844)]) {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await player(tester, dimensions);
+      final frame = tester.getRect(find.byKey(const ValueKey('player-video')));
+      final current = tester.getRect(find.text('当前歌词'));
+      final lyrics = tester.getRect(
+        find.byKey(const ValueKey('lyrics-viewport')),
+      );
+      expect(frame.left, 0);
+      expect(frame.width, dimensions.width);
+      expect(frame.width / frame.height, closeTo(16 / 9, .001));
+      expect(lyrics.contains(current.topLeft), isTrue);
+      expect(lyrics.contains(current.bottomRight), isTrue);
+      expect(
+        find.byKey(const ValueKey('player-play')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('player-record')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    }
   });
 
   for (final size in [const Size(360, 800), const Size(844, 390)]) {
@@ -384,7 +437,7 @@ void main() {
           ..backingMapped = false
           ..audioRole = '';
         await player(tester, const Size(360, 800));
-        expect(find.text('播放音轨'), findsOneWidget);
+        expect(find.bySemanticsLabel('播放音轨'), findsOneWidget);
         expect(find.text('此歌曲暂无可切换音轨'), findsOneWidget);
         state
           ..originalMapped = true
@@ -405,6 +458,34 @@ void main() {
       } finally {
         semantics.dispose();
       }
+    },
+  );
+
+  testWidgets(
+    'opening credits stay in song information and lyrics retain seeking',
+    (tester) async {
+      (state.api as FakeApi).textTracks = [
+        {
+          'format': 'lrc',
+          'text': '[00:00.00]词：Kenzie\n[00:01.00]曲：Ollipop / Daniel Caesar\n[00:02.00]编曲：Caesar & Loui\n[00:04.00]I like to party\n[00:08.00]아 알고 있잖아',
+        },
+      ];
+      state.positionMs = 5000;
+      await player(tester, const Size(390, 844));
+      expect(find.text('词：Kenzie'), findsNothing);
+      expect(find.text('I like to party'), findsOneWidget);
+      await tester.tap(find.text('I like to party'));
+      await tester.pumpAndSettle();
+      expect(native.commands.last, {'action': 'seek', 'value': 4000});
+      await tester.tap(find.byTooltip('歌曲信息'));
+      await tester.pumpAndSettle();
+      expect(find.text('作词'), findsOneWidget);
+      expect(find.text('Kenzie'), findsOneWidget);
+      expect(find.text('作曲'), findsOneWidget);
+      expect(find.text('Ollipop / Daniel Caesar'), findsOneWidget);
+      expect(find.text('编曲'), findsOneWidget);
+      expect(find.text('Caesar & Loui'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -434,13 +515,21 @@ void main() {
   );
 
   testWidgets(
-    'player follows portrait themes and preserves playback on the dark landscape stage',
+    'player keeps its dark stage local and preserves playback across rotation',
     (tester) async {
       state.positionMs = 63000;
       for (final brightness in Brightness.values) {
         await player(tester, const Size(390, 844), brightness: brightness);
         final primary = find.byKey(const ValueKey('player-primary-controls'));
-        expect(Theme.of(tester.element(primary)).brightness, brightness);
+        expect(Theme.of(tester.element(primary)).brightness, Brightness.dark);
+        expect(
+          tester
+              .widget<MaterialApp>(find.byType(MaterialApp))
+              .theme!
+              .brightness,
+          brightness,
+        );
+        expect(state.themeMode, ThemeMode.system);
         await tester.binding.setSurfaceSize(const Size(844, 390));
         await tester.pumpAndSettle();
         expect(

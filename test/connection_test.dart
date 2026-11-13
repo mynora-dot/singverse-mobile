@@ -209,6 +209,7 @@ void main() {
       api: api,
       store: local,
       preferences: await SharedPreferences.getInstance(),
+      loginStore: logins,
       listenPlayer: false,
     )..initialized = true;
     native = NativeFixture(state)..install();
@@ -371,28 +372,246 @@ void main() {
     expect(logins.secrets, isEmpty);
   });
 
-  testWidgets('MFA saves credentials only after verification succeeds', (
+  testWidgets('automatic login requires remembering the password', (
     tester,
   ) async {
-    api.loginState = 'mfaRequired';
-    api.verifyFailure = ApiFailure(401, '验证码错误');
+    await open(tester);
+    final automatic = find.byKey(const ValueKey('automatic-login'));
+    final remember = find.byKey(const ValueKey('remember-password'));
+    expect(tester.widget<Checkbox>(automatic).value, false);
+    await tap(tester, automatic);
+    expect(tester.widget<Checkbox>(automatic).value, true);
+    expect(tester.widget<Checkbox>(remember).value, true);
+    expect(find.text('下次打开自动连接此 NAS。'), findsOneWidget);
+    await tap(tester, remember);
+    expect(tester.widget<Checkbox>(automatic).value, false);
+    expect(tester.widget<Checkbox>(remember).value, false);
+    expect(state.automaticLogin, false);
+    expect(api.loginBodies, isEmpty);
+  });
+
+  testWidgets('automatic login persists only after a successful login', (
+    tester,
+  ) async {
     await open(tester);
     await enter(tester, 'nas-address-field', 'nas.local:18080');
-    await enter(tester, 'nas-password-field', 'pending MFA password');
-    await tap(tester, find.byKey(const ValueKey('remember-password')));
+    await enter(tester, 'nas-username-field', 'family-admin');
+    await enter(tester, 'nas-password-field', 'automatically remembered');
+    await tap(tester, find.byKey(const ValueKey('automatic-login')));
+    expect(state.automaticLogin, false);
     await submit(tester);
+    expect(state.automaticLoginFor(logins.records.single), true);
+    expect(logins.secrets.values.single, 'automatically remembered');
+
+    // A fresh process can reconnect from history even if its session has gone.
+    api.origin = '';
+    api.loggedIn = false;
+    final restarted = AppState(
+      api: api,
+      store: local,
+      preferences: state.preferences,
+      loginStore: logins,
+      listenPlayer: false,
+    );
+    addTearDown(restarted.dispose);
+    await restarted.initialize();
+    expect(restarted.authenticated, true);
+    expect(restarted.accountName, 'family-admin');
+    expect(restarted.origin, 'http://nas.local:18080');
+    expect(api.loginBodies, hasLength(2));
+    expect(logins.passwordReads, 1);
+    expect(
+      state.preferences.getKeys().map(state.preferences.get),
+      isNot(contains('automatically remembered')),
+    );
+  });
+
+  testWidgets('turning off automatic login keeps the remembered password', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    await open(tester);
+    final automatic = find.byKey(const ValueKey('automatic-login'));
+    expect(tester.widget<Checkbox>(automatic).value, true);
+    await tap(tester, automatic);
+    expect(state.automaticLogin, false);
+    expect(logins.secrets[saved.id], 'remembered password');
+    expect(
+      tester
+          .widget<Checkbox>(find.byKey(const ValueKey('remember-password')))
+          .value,
+      true,
+    );
+  });
+
+  test(
+    'automatic login reuses an unexpired session without reading a password',
+    () async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      api.origin = saved.origin;
+      api.loggedIn = true;
+      await state.initialize();
+      expect(state.authenticated, true);
+      expect(logins.passwordReads, 0);
+      expect(api.loginBodies, isEmpty);
+    },
+  );
+
+  test(
+    'disabled automatic login requires manual login with a valid cookie',
+    () async {
+      api.origin = record().origin;
+      api.loggedIn = true;
+      await state.setAutomaticLogin(null);
+      await state.initialize();
+      expect(state.authenticated, false);
+      expect(api.requests, isNot(contains('/api/v1/auth/session')));
+      expect(logins.passwordReads, 0);
+    },
+  );
+
+  test(
+    'automatic login verifies the NAS identity before retrieving a password',
+    () async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      api.identity = 'replacement';
+      await state.initialize();
+      expect(state.authenticated, false);
+      expect(state.automaticLogin, false);
+      expect(logins.passwordReads, 0);
+      expect(api.loginBodies, isEmpty);
+      expect(state.error, contains('曲库身份已变化'));
+    },
+  );
+
+  test(
+    'an unreachable NAS does not read the saved password or retry in a loop',
+    () async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      api.offline = true;
+      await state.initialize();
+      expect(state.initialized, true);
+      expect(state.authenticated, false);
+      expect(state.automaticLogin, true);
+      expect(logins.passwordReads, 0);
+      expect(api.loginBodies, isEmpty);
+      expect(state.error, 'NAS 不可达');
+    },
+  );
+
+  test(
+    'rejected automatic credentials stop further automatic attempts',
+    () async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      api.loginFailure = ApiFailure(401, '密码错误');
+      await state.initialize();
+      expect(state.initialized, true);
+      expect(state.authenticated, false);
+      expect(state.automaticLogin, false);
+      expect(api.loginBodies, hasLength(1));
+      expect(logins.secrets[saved.id], 'remembered password');
+      expect(state.error, '密码错误');
+    },
+  );
+
+  test('rate-limited automatic login exposes the server retry delay', () async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    api.loginFailure = ApiFailure(429, '登录次数过多', retryAfter: '30');
+    await state.initialize();
+    expect(state.authenticated, false);
+    expect(api.loginBodies, hasLength(1));
+    expect(state.retryAfter, '30');
+    expect(state.automaticLogin, true);
+  });
+
+  test('a removed remembered login disables automatic login', () async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    await logins.forgetPassword(saved);
+    api.origin = saved.origin;
+    api.loggedIn = true;
+    await state.initialize();
+    expect(state.authenticated, false);
+    expect(state.automaticLogin, false);
+    expect(logins.passwordReads, 0);
+    expect(api.loginBodies, isEmpty);
+  });
+
+  test(
+    'explicit logout disables automatic login but keeps saved credentials',
+    () async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      state.origin = api.origin = saved.origin;
+      state.authenticated = api.loggedIn = true;
+      await state.logout();
+      expect(state.automaticLogin, false);
+      expect(state.authenticated, false);
+      expect(logins.secrets[saved.id], 'remembered password');
+      await state.initialize();
+      expect(state.authenticated, false);
+      expect(api.loginBodies, isEmpty);
+    },
+  );
+
+  testWidgets('automatic login still requires MFA verification', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    api.loginState = 'mfaRequired';
+    await state.initialize();
+    expect(state.authenticated, false);
+    expect(state.mfaRequired, true);
+    await open(tester);
     expect(find.text('验证身份'), findsOneWidget);
-    expect(logins.records, isEmpty);
-    await enter(tester, 'nas-mfa-field', '000000');
-    await submit(tester);
-    expect(logins.secrets, isEmpty);
-    expect(find.textContaining('验证码错误'), findsOneWidget);
-    api.verifyFailure = null;
     await enter(tester, 'nas-mfa-field', '123456');
     await submit(tester);
-    expect(logins.secrets.values.single, 'pending MFA password');
     expect(state.authenticated, true);
+    expect(state.automaticLogin, true);
   });
+
+  testWidgets(
+    'MFA saves credentials and automatic login only after verification',
+    (tester) async {
+      api.loginState = 'mfaRequired';
+      api.verifyFailure = ApiFailure(401, '验证码错误');
+      await open(tester);
+      await enter(tester, 'nas-address-field', 'nas.local:18080');
+      await enter(tester, 'nas-password-field', 'pending MFA password');
+      await tap(tester, find.byKey(const ValueKey('automatic-login')));
+      await submit(tester);
+      expect(find.text('验证身份'), findsOneWidget);
+      expect(logins.records, isEmpty);
+      expect(state.automaticLogin, false);
+      await enter(tester, 'nas-mfa-field', '000000');
+      await submit(tester);
+      expect(logins.secrets, isEmpty);
+      expect(state.automaticLogin, false);
+      expect(find.textContaining('验证码错误'), findsOneWidget);
+      api.verifyFailure = null;
+      await enter(tester, 'nas-mfa-field', '123456');
+      await submit(tester);
+      expect(logins.secrets.values.single, 'pending MFA password');
+      expect(state.authenticated, true);
+      expect(state.automaticLoginFor(logins.records.single), true);
+    },
+  );
 
   testWidgets(
     'saved password is read only after the same NAS identity is verified',

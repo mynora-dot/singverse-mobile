@@ -26,6 +26,8 @@ import org.json.JSONObject
 import kotlin.math.max
 import kotlin.math.pow
 import java.util.UUID
+import java.io.FileDescriptor
+import java.io.PrintWriter
 
 class PlaybackService : MediaSessionService() {
     lateinit var player: ExoPlayer; private set
@@ -64,6 +66,7 @@ class PlaybackService : MediaSessionService() {
     private var sharedRoles = JSONObject()
     private var selectedSourceId = ""
     private var sourceAudioIds = listOf<String>()
+    private var sourceAudio = listOf<PlaybackAudioSource>()
     private var requestedAudioRole = ""
     private var backingUrl = ""
     private var originalDuration = 0L
@@ -81,6 +84,11 @@ class PlaybackService : MediaSessionService() {
     private var nextLeaseAt = 0L
     private var lastLeaseSuccessAt = 0L
     private var preparationStartedAt = 0L
+    private val playbackTrace = ArrayDeque<String>()
+    private fun trace(event: String) {
+        if (playbackTrace.size == 40) playbackTrace.removeFirst()
+        playbackTrace.addLast("${SystemClock.elapsedRealtime()} $event")
+    }
     private var focusRequest: AudioFocusRequest? = null
     private val audio by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
     private val focus = AudioManager.OnAudioFocusChangeListener { change ->
@@ -129,14 +137,14 @@ class PlaybackService : MediaSessionService() {
             }
         }).build()
         player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) { trace("playerState=$playbackState ready=$resourceReady") }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { trace("playWhenReady=$playWhenReady reason=$reason") }
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-                if (resourceMode != "DIRECT" || selectedSourceId.isBlank()) return
+                if (selectedSourceId.isBlank()) return
                 val available = availableAudioTracks(tracks)
-                if (available.size != sourceAudioIds.size) return
-                val ordinal = sourceAudioIds.indexOf(selectedSourceId)
-                val target = available.getOrNull(ordinal) ?: return
+                val target = available.singleOrNull { it.sourceId == selectedSourceId } ?: return
                 val group = tracks.groups[target.groupIndex]
-                if (!target.selected) player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, target.trackIndex)).build()
+                if (!target.selected) player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false).setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, target.trackIndex)).build()
                 selectedSourceId = ""
             }
             override fun onEvents(p: Player, events: Player.Events) {
@@ -144,6 +152,7 @@ class PlaybackService : MediaSessionService() {
                     Player.STATE_BUFFERING -> "BUFFERING"
                     Player.STATE_ENDED -> "ENDED"
                     Player.STATE_READY -> if (p.isPlaying) "PLAYING" else "PAUSED"
+                    Player.STATE_IDLE -> "PAUSED"
                     else -> state
                 }
                 if (karaoke.phase == "RECORDING" && p.playbackState == Player.STATE_ENDED) finishRecording("", true)
@@ -151,6 +160,7 @@ class PlaybackService : MediaSessionService() {
                 publish()
             }
             override fun onPlayerError(error: PlaybackException) {
+                trace("playerError=${error.errorCode} cause=${error.cause?.javaClass?.simpleName}")
                 requestedPosition = player.currentPosition + offsetMs
                 var cause: Throwable? = error
                 var expired = false
@@ -184,6 +194,21 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
+    override fun dump(fd: FileDescriptor, writer: PrintWriter, args: Array<out String>?) {
+        super.dump(fd, writer, args)
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0 || !::player.isInitialized) return
+        writer.println(JSONObject(mapOf(
+            "state" to state, "playerState" to player.playbackState, "positionMs" to player.currentPosition,
+            "bufferedPositionMs" to player.bufferedPosition, "playWhenReady" to player.playWhenReady,
+            "isPlaying" to player.isPlaying, "suppressionReason" to player.playbackSuppressionReason,
+            "mode" to resourceMode, "resourceReady" to resourceReady, "hasLease" to leaseId.isNotBlank(),
+            "audioRole" to snapshot()["audioRole"], "tracks" to snapshot()["tracks"],
+            "errorCode" to player.playerError?.errorCode,
+            "errorCause" to player.playerError?.cause?.javaClass?.simpleName,
+            "errorDetail" to player.playerError?.cause?.message?.replace(Regex("https?://\\S+"), "<media>"),
+            "trace" to playbackTrace.toList(),
+        )).toString())
+    }
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (!player.playWhenReady && karaoke.phase != "RECORDING" && countdown == 0) stopSelf()
     }
@@ -226,10 +251,18 @@ class PlaybackService : MediaSessionService() {
         generation++
         val ticket = generation
         player.stop(); player.clearMediaItems()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
+        sourceAudioIds = emptyList(); sourceAudio = emptyList()
         song = value; server = instanceId; force = compatible; requestedPosition = max(0, position)
         playbackOrigin = transport.origin; playAfterPreparation = autoplay
         val expectedOrigin = playbackOrigin
-        val requestedRole = requestedAudioRole
+        // Preserve both source tracks across seeks/replay. Asking the NAS for a
+        // single role would discard the other track and make the next switch reopen.
+        val requestedRole = when {
+            sharedRoles.optString("originalId").isNotBlank() && sharedRoles.optString("backingId").isNotBlank() -> ""
+            sharedRoles.optJSONObject("backingResource") != null -> "backing"
+            else -> requestedAudioRole
+        }
         originalDuration = value.optLong("durationMs", 0); offsetMs = 0; resourceMode = ""
         state = "PREPARING"; message = "正在准备播放"; leaseId = ""; resourceReady = false; requestInFlight = true
         if (!keepHistory) beginHistory()
@@ -283,8 +316,10 @@ class PlaybackService : MediaSessionService() {
         offsetMs = (result.optDouble("offset", 0.0) * 1000).toLong()
         val mapped = result.optJSONObject("execution")?.optJSONArray("trackMapping")
         val streams = mapped ?: media?.optJSONArray("streams") ?: sharedRoles.optJSONArray("streams")
-        sourceAudioIds = (0 until (streams?.length() ?: 0)).map { streams!!.getJSONObject(it) }.filter { it.optString("kind") == "audio" }.map { it.optString(if (mapped != null) "sourceId" else "id") }
-        selectedSourceId = if (resourceMode == "DIRECT" && backingUrl.isBlank()) sharedRoles.optString(if (requestedAudioRole == "original") "originalId" else if (requestedAudioRole == "backing") "backingId" else "") else ""
+        sourceAudio = (0 until (streams?.length() ?: 0)).map { streams!!.getJSONObject(it) }.filter { it.optString("kind") == "audio" }
+            .map { PlaybackAudioSource(it.optString(if (mapped != null) "sourceId" else "id"), it.optString("title")) }
+        sourceAudioIds = sourceAudio.map { it.id }
+        selectedSourceId = roleSource(requestedAudioRole)
         val builder = MediaItem.Builder().setMediaId(song.getString("id")).setUri(transport.resolve(result.getString("url")))
             .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(song.optString("title")).setArtist(song.optJSONArray("artists")?.let { (0 until it.length()).joinToString(" / ") { i -> it.getString(i) } }).build())
         if (resourceMode == "HLS") builder.setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -292,9 +327,11 @@ class PlaybackService : MediaSessionService() {
         if (subtitle.isNotBlank()) builder.setSubtitleConfigurations(listOf(MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(transport.resolve(subtitle)))
             .setMimeType(MimeTypes.TEXT_VTT).setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build()))
         if (ticket != generation) return
-        if (requestedAudioRole == "backing" && backingUrl.isNotBlank()) {
+        if (backingUrl.isNotBlank()) {
             val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(this, OkHttpDataSource.Factory(transport.mediaClient())))
-            val original = androidx.media3.exoplayer.source.FilteringMediaSource(factory.createMediaSource(builder.build()), setOf(C.TRACK_TYPE_VIDEO, C.TRACK_TYPE_TEXT))
+            // Keep the original audio in this timeline, as on TV. Once loaded, both
+            // roles can switch through Media3 without another NAS lease or MV reload.
+            val original = factory.createMediaSource(builder.build())
             val backing = factory.createMediaSource(MediaItem.Builder().setUri(transport.resolve(backingUrl)).setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setStartPositionMs(offsetMs).build()).build())
             player.setMediaSource(androidx.media3.exoplayer.source.MergingMediaSource(true, original, backing), max(0, requestedPosition - offsetMs))
         } else player.setMediaItem(builder.build(), max(0, requestedPosition - offsetMs))
@@ -305,6 +342,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun fail(error: Exception) {
+        trace("resourceError=${error.javaClass.simpleName}")
         if (resourceReady) requestedPosition = player.currentPosition + offsetMs
         requestInFlight = false; resourceReady = false; finishRecording(error.message ?: "歌曲连接中断"); player.pause()
         state = if (error is NasFailure && error.status in listOf(401, 403)) "AUTH_REQUIRED" else "ERROR"
@@ -344,6 +382,7 @@ class PlaybackService : MediaSessionService() {
                 } catch(e: Exception) { main.post { if (currentRequest(ticket, roleOrigin, scope)) { message = e.message ?: "保存失败"; publish() } } } }
             }
             "useRole" -> {
+                require(value in listOf("original", "backing")) { "音轨角色无效" }
                 val saved = roles.getString(roleKey(value.toString()), "").orEmpty().split('|')
                 val localTrack = availableAudioTracks().singleOrNull()
                 if (saved.size == 2 && saved[1] in listOf("LEFT", "RIGHT") && localTrack != null && localTrack.id == saved[0] && localTrack.channelCount == 2) {
@@ -351,13 +390,35 @@ class PlaybackService : MediaSessionService() {
                 }
                 chain.channels.mode = "STEREO"
                 requestedAudioRole = value.toString()
-                open(song, server, player.currentPosition + offsetMs, force, player.playWhenReady, preserveSettings = true)
+                val target = availableAudioTracks().singleOrNull { it.sourceId.isNotBlank() && it.sourceId == roleSource(requestedAudioRole) }
+                if (resourceReady && target != null) {
+                    selectedSourceId = ""
+                    if (!target.selected) {
+                        command("track", target.id)
+                        // Flush queued PCM while paused: it cannot drain until play,
+                        // which would otherwise leave the new role buffering indefinitely.
+                        if (!player.playWhenReady) player.seekTo(player.currentPosition)
+                    }
+                } else open(song, server, player.currentPosition + offsetMs, force,
+                    if (resourceReady) player.playWhenReady else playAfterPreparation, preserveSettings = true)
             }
             "record" -> { require(value == true || usingBacking() || song.optString("version") in listOf("ACCOMPANIMENT", "INSTRUMENTAL")) { "请先确认伴奏，或明确选择跟原唱录唱" }; beginRecording() }
             "endRecord" -> finishRecording("主动结束录唱", false)
             "cancelCountdown" -> { countdownGeneration++; countdown = 0; stopRecordingForeground() }
 
-            "play" -> { playAfterPreparation = true; if (resourceReady && state !in listOf("ERROR", "AUTH_REQUIRED") && requestFocus()) { message = ""; player.play() } }
+            "play" -> { playAfterPreparation = true; if (resourceReady && state !in listOf("ERROR", "AUTH_REQUIRED") && requestFocus()) {
+                message = ""
+                if (player.playbackState == Player.STATE_ENDED && workId.isEmpty() && leaseId.isNotBlank()) {
+                    // Ended sessions stop heartbeating and can expire. Replay must acquire
+                    // a fresh lease from the song start, including an offset HLS window.
+                    finishHistory("COMPLETED")
+                    open(song, server, 0, force, autoplay = true, preserveSettings = true)
+                } else {
+                    if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                    if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+                    player.play()
+                }
+            } }
             "pause" -> { finishRecording("演唱已暂停，录音片段已保留"); playAfterPreparation = false; player.pause() }
             "restart" -> { finishHistory("STOPPED"); beginHistory(); command("seek", value ?: 0L) }
             "stop" -> {
@@ -438,7 +499,9 @@ class PlaybackService : MediaSessionService() {
         val available = tracks.groups.flatMapIndexed { g, group ->
             (0 until group.length).filter { group.type == C.TRACK_TYPE_AUDIO && group.isTrackSupported(it) }.map { i ->
                 val format = group.getTrackFormat(i)
-                PlaybackAudioTrack(g, i, group.isTrackSelected(i), format.sampleMimeType, format.channelCount, format.sampleRate)
+                // Media3 prefixes merged group IDs with their child media period index.
+                val sourceIndex = if (backingUrl.isNotBlank()) group.mediaTrackGroup.id.substringBefore(':').toIntOrNull() ?: 0 else 0
+                PlaybackAudioTrack(g, i, group.isTrackSelected(i), format.sampleMimeType, format.channelCount, format.sampleRate, format.label.orEmpty(), mediaSourceIndex = sourceIndex)
             }
         }
         val manifest = if (resourceMode == "HLS") player.currentManifest as? HlsManifest else null
@@ -446,7 +509,16 @@ class PlaybackService : MediaSessionService() {
         val rendition = manifest?.multivariantPlaylist?.audios?.singleOrNull()
         val duplicate = variant != null && rendition?.url != null && variant.url == rendition.url && variant.audioGroupId == rendition.groupId
         val decoded = player.audioFormat?.let { PlaybackAudioFormat(it.sampleMimeType, it.channelCount, it.sampleRate) }
-        return PlaybackAudioTracks.usable(available, sourceAudioIds.count { it.isNotBlank() }, duplicate, decoded)
+        val original = available.filter { it.mediaSourceIndex == 0 }
+        val identified = PlaybackAudioTracks.identify(PlaybackAudioTracks.usable(original, sourceAudioIds.count { it.isNotBlank() }, duplicate, decoded), sourceAudio)
+        val backing = available.filter { it.mediaSourceIndex == 1 }.map { it.copy(sourceId = GENERATED_BACKING_SOURCE) }
+        return identified + backing
+    }
+
+    private fun roleSource(role: String): String = when (role) {
+        "backing" -> if (backingUrl.isNotBlank()) GENERATED_BACKING_SOURCE else sharedRoles.optString("backingId")
+        "original" -> sharedRoles.optString("originalId").ifBlank { sourceAudioIds.singleOrNull().orEmpty() }
+        else -> ""
     }
 
     fun snapshot(): Map<String, Any?> {
@@ -454,15 +526,14 @@ class PlaybackService : MediaSessionService() {
             Player.STATE_BUFFERING -> "BUFFERING"
             Player.STATE_ENDED -> "ENDED"
             Player.STATE_READY -> if (player.isPlaying) "PLAYING" else "PAUSED"
+            Player.STATE_IDLE -> "PAUSED"
             else -> state
         }
-        var audioOrdinal = 0
         val availableAudio = availableAudioTracks()
         val audioIds = availableAudio.map { it.id }.toSet()
-        val audioCount = availableAudio.size
         val tracks = player.currentTracks.groups.flatMapIndexed { g, group -> (0 until group.length).filter { group.isTrackSupported(it) && (group.type == C.TRACK_TYPE_TEXT || group.type == C.TRACK_TYPE_AUDIO && "$g:$it" in audioIds) }.map { i ->
             val f = group.getTrackFormat(i)
-            mapOf("sourceId" to if(group.type == C.TRACK_TYPE_AUDIO && audioCount == sourceAudioIds.size) sourceAudioIds.getOrElse(audioOrdinal++) { "" } else "", "id" to "$g:$i", "type" to if (group.type == C.TRACK_TYPE_AUDIO) "audio" else "text", "selected" to group.isTrackSelected(i), "channels" to f.channelCount,
+            mapOf("sourceId" to availableAudio.firstOrNull { it.id == "$g:$i" }?.sourceId.orEmpty(), "id" to "$g:$i", "type" to if (group.type == C.TRACK_TYPE_AUDIO) "audio" else "text", "selected" to group.isTrackSelected(i), "channels" to f.channelCount,
                 "label" to listOfNotNull(f.label, f.language?.takeUnless { it == "und" }, f.channelCount.takeIf { it > 0 }?.let { "$it 声道" }).joinToString(" · ").ifBlank { "轨道 ${i + 1}" })
         } }
         val selectedAudio = tracks.firstOrNull { it["type"] == "audio" && it["selected"] == true }
@@ -471,8 +542,8 @@ class PlaybackService : MediaSessionService() {
         val selectedSource = selectedAudio?.get("sourceId").toString()
         val audioRole = when {
             workId.isNotBlank() -> ""
-            localBacking || sharedRoles.optString("backingId").isNotBlank() && sharedRoles.optString("backingId") == selectedSource -> "backing"
-            localOriginal || sharedRoles.optString("originalId").isNotBlank() && sharedRoles.optString("originalId") == selectedSource -> "original"
+            localBacking || roleSource("backing").isNotBlank() && roleSource("backing") == selectedSource -> "backing"
+            localOriginal || roleSource("original").isNotBlank() && roleSource("original") == selectedSource -> "original"
             selectedSource.isBlank() || selectedSource == "null" -> requestedAudioRole
             else -> ""
         }
@@ -531,7 +602,7 @@ class PlaybackService : MediaSessionService() {
     }
     private fun duration(): Long = (snapshot()["durationMs"] as Number).toLong()
     private fun usingBacking(): Boolean {
-        if(requestedAudioRole == "backing" && backingUrl.isNotBlank())return true
+        if(snapshot()["audioRole"] == "backing")return true
         val selected=(snapshot()["tracks"] as List<*>).map { it as Map<*, *> }.firstOrNull { it["type"]=="audio" && it["selected"]==true } ?: return false
         val backingId=sharedRoles.optString("backingId")
         if(backingId.isNotBlank() && selected["sourceId"]==backingId)return true
@@ -600,6 +671,9 @@ class PlaybackService : MediaSessionService() {
         finishHistory("STOPPED")
         requestScope.cancel()
         generation++; cancelResource(leaseId); leaseId = ""; workId = id; resourceMode = "LOCAL"; rangeA = 0; rangeB = 0
+        backingUrl = ""; selectedSourceId = ""; requestedAudioRole = ""
+        sourceAudioIds = emptyList(); sourceAudio = emptyList(); sharedRoles = JSONObject()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
         song = JSONObject(record.getJSONObject("song").toString()).put("title", record.optString("name")).put("mediaType", "AUDIO")
         originalDuration = record.optLong("durationMs"); offsetMs = 0; requestedPosition = 0; resourceReady = true; state = "BUFFERING"; message = ""
         pitch = 0; speed = 1f; player.playbackParameters = PlaybackParameters.DEFAULT

@@ -17,13 +17,18 @@ const tagDimensions = {
   'CUSTOM': '其他分类',
 };
 
-Future<void> showSong(BuildContext context, AppState state, Song song) =>
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) => SongDetail(state: state, song: song),
-    );
+Future<void> showSong(
+  BuildContext context,
+  AppState state,
+  Song song, {
+  List<(String, String)> credits = const [],
+}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  builder: (sheetContext) =>
+      SongDetail(state: state, song: song, credits: credits),
+);
 
 class SongsPage extends StatefulWidget {
   const SongsPage({
@@ -991,9 +996,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
 }
 
 class SongDetail extends StatefulWidget {
-  const SongDetail({super.key, required this.state, required this.song});
+  const SongDetail({
+    super.key,
+    required this.state,
+    required this.song,
+    this.credits = const [],
+  });
   final AppState state;
   final Song song;
+  final List<(String, String)> credits;
   @override
   State<SongDetail> createState() => _SongDetailState();
 }
@@ -1078,6 +1089,7 @@ class _SongDetailState extends State<SongDetail> {
                     ('来源', song.source.isEmpty ? '家庭曲库' : song.source),
                     if (song.data['album'] != null)
                       ('专辑', '${song.data['album']}'),
+                    ...widget.credits,
                   ])
                     TableRow(
                       children: [

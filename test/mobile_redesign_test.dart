@@ -518,7 +518,8 @@ void main() {
       await tester.tap(find.text('晴天'));
       await tester.pumpAndSettle();
       expect(find.byType(PlayerPage), findsOneWidget);
-      expect(find.text('练唱 · 未录音'), findsOneWidget);
+      expect(find.text('练唱中'), findsOneWidget);
+      expect(find.text('尚未录音'), findsOneWidget);
       expect(find.text('演唱准备'), findsNothing);
       expect(find.text('歌曲详情'), findsNothing);
       expect(state.isPlaying, isTrue);
@@ -2209,18 +2210,25 @@ void main() {
         ),
       );
       if (sample.$8) {
-        await tester.runAsync(
-          () => precacheImage(
-            MemoryImage(fixtureCover),
-            boundary.currentContext!,
-          ),
-        );
+        await tester.pumpAndSettle();
+        await tester.runAsync(() async {
+          for (final element in find.byType(Image).evaluate()) {
+            await precacheImage((element.widget as Image).image, element);
+          }
+        });
       }
       if (state.playbackState == 'BUFFERING') {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 200));
       } else {
         await tester.pumpAndSettle();
+      }
+      if (sample.$8 && sample.$4 == 'AUDIO') {
+        expect(
+          tester.widget<RawImage>(find.byType(RawImage).first).image,
+          isNotNull,
+          reason: '${sample.$1} artwork must decode before capture',
+        );
       }
       await tester.runAsync(() async {
         final render =

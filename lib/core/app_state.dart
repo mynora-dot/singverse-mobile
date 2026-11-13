@@ -9,6 +9,7 @@ import 'api.dart';
 import 'app_updates.dart';
 import 'artwork_cache.dart';
 import 'local_store.dart';
+import 'login_store.dart';
 import 'models.dart';
 
 enum UiMode { standard, senior }
@@ -18,8 +19,9 @@ class AppState extends ChangeNotifier {
     required this.api,
     required this.store,
     required this.preferences,
+    LoginStore? loginStore,
     bool listenPlayer = true,
-  }) {
+  }) : loginStore = loginStore ?? NativeLoginStore() {
     themeMode = ThemeMode.values[preferences.getInt('theme')?.clamp(0, 2) ?? 0];
     uiMode = preferences.getString('uiMode') == 'senior'
         ? UiMode.senior
@@ -49,6 +51,27 @@ class AppState extends ChangeNotifier {
   late final AppUpdates updates;
   final LocalStore store;
   final SharedPreferences preferences;
+  final LoginStore loginStore;
+  static const _automaticLoginKey = 'login:automatic';
+  static const _automaticLoginRecordKey = 'login:automatic-record';
+  bool get automaticLogin => preferences.getBool(_automaticLoginKey) == true;
+  bool automaticLoginFor(LoginRecord record) =>
+      automaticLogin &&
+      preferences.getString(_automaticLoginRecordKey) == record.id;
+
+  Future<void> setAutomaticLogin(LoginRecord? record) async {
+    // Only the selected record's identity is stored here. Its password stays in
+    // the existing Android Keystore vault.
+    if (record == null) {
+      await preferences.setBool(_automaticLoginKey, false);
+      await preferences.remove(_automaticLoginRecordKey);
+    } else {
+      await preferences.setString(_automaticLoginRecordKey, record.id);
+      await preferences.setBool(_automaticLoginKey, true);
+    }
+    notifyListeners();
+  }
+
   static const player = MethodChannel('singverse/player');
   StreamSubscription<dynamic>? _events;
   String origin = '', instanceId = '', accountName = '';
@@ -156,24 +179,67 @@ class AppState extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       origin = await api.restore();
+      LoginRecord? automatic;
+      if (automaticLogin) {
+        final id = preferences.getString(_automaticLoginRecordKey);
+        automatic = (await loginStore.load())
+            .where((record) => record.id == id && record.hasPassword)
+            .firstOrNull;
+        if (automatic == null) {
+          await setAutomaticLogin(null);
+        } else {
+          origin = automatic.origin;
+        }
+      }
       if (origin.isNotEmpty) {
         instanceId = preferences.getString('server-instance:$origin') ?? '';
         await refreshPersonal();
         final info = await api.inspect(origin) as Json;
         _checkServer(info);
+        if (automatic != null && automatic.instanceId != info['instanceId']) {
+          await setAutomaticLogin(null);
+          throw const FormatException('此地址的曲库身份已变化，请重新登录');
+        }
         serverName = info['name'] is String ? info['name'] as String : '';
         instanceId = info['instanceId'] as String;
         await preferences.setString('server-instance:$origin', instanceId);
         await refreshPersonal();
+        if (automatic != null) await api.configure(origin);
         updates.connect(origin);
-        try {
-          await readSession();
-        } on ApiFailure catch (e) {
-          if (e.status != 401) rethrow;
+        // Preserve existing session restoration until the user has made an
+        // explicit choice with the new control. Turning it off requires a
+        // manual login on the next launch, even if a cookie is still valid.
+        if (preferences.getBool(_automaticLoginKey) != false) {
+          try {
+            await readSession();
+          } on ApiFailure catch (e) {
+            if (e.status != 401) rethrow;
+          }
+          if (automatic != null &&
+              (!authenticated || accountName != automatic.username)) {
+            authenticated = false;
+            accountName = '';
+            await api.forget();
+            final secret = await loginStore.password(automatic);
+            if (secret == null || secret.isEmpty) {
+              await setAutomaticLogin(null);
+              throw const FormatException('已保存的密码不可用，请重新登录');
+            }
+            try {
+              await _authenticate(secret, username: automatic.username);
+            } on ApiFailure catch (e) {
+              if (e.status == 401 || e.status == 403) {
+                await setAutomaticLogin(null);
+              }
+              rethrow;
+            }
+            if (mfaRequired) error = '自动登录需要验证身份，请输入动态码或恢复码';
+          }
         }
       }
     } catch (e) {
       error = e is FormatException ? e.message : e.toString();
+      if (e is ApiFailure) retryAfter = e.retryAfter;
     }
     initialized = true;
     notifyListeners();
@@ -214,19 +280,25 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> login(String password, {String username = 'admin'}) =>
-      _run(() async {
-        final result = await api.request(
-          '/api/v1/auth/login',
-          method: 'POST',
-          body: {'username': username.trim(), 'password': password},
-        ) as Json;
-        mfaRequired = result['state'] == 'mfaRequired';
-        authenticated = result['state'] == 'authenticated';
-        if (authenticated) {
-          await readSession();
-          await refreshPersonal();
-        }
-      });
+      _run(() => _authenticate(password, username: username));
+
+  Future<void> _authenticate(
+    String password, {
+    required String username,
+  }) async {
+    final result = await api.request(
+      '/api/v1/auth/login',
+      method: 'POST',
+      body: {'username': username.trim(), 'password': password},
+    ) as Json;
+    mfaRequired = result['state'] == 'mfaRequired';
+    authenticated = result['state'] == 'authenticated';
+    if (authenticated) {
+      await readSession();
+      await refreshPersonal();
+    }
+  }
+
   Future<void> resetPassword({
     required String username,
     required String resetToken,
@@ -244,6 +316,7 @@ class AppState extends ChangeNotifier {
     authenticated = false;
     mfaRequired = false;
     accountName = '';
+    await setAutomaticLogin(null);
   });
   Future<void> verify(String code) => _run(() async {
     await api.request(
@@ -292,6 +365,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await setAutomaticLogin(null);
     await command('stop');
     try {
       if (authenticated) {

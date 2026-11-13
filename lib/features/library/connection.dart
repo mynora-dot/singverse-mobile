@@ -44,9 +44,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
   final username = TextEditingController(text: 'admin');
   final password = TextEditingController();
   final code = TextEditingController();
-  late final vault = widget.loginStore ?? NativeLoginStore();
+  late final vault = widget.loginStore ?? widget.state.loginStore;
   bool editing = false, checked = false, localBusy = false;
   bool remember = false, visible = false, useSavedPassword = false;
+  bool automatic = false;
   String scheme = 'http';
   String? notice;
   int formRevision = 0;
@@ -104,6 +105,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
       username.text = record.username;
       password.clear();
       remember = record.hasPassword;
+      automatic = record.hasPassword && widget.state.automaticLoginFor(record);
       useSavedPassword = record.hasPassword;
       pendingLogin = null;
       pendingPassword = null;
@@ -135,9 +137,13 @@ class _ConnectionPageState extends State<ConnectionPage> {
     code.clear();
     if (record != null) {
       try {
+        if (automatic && (secret == null || secret.isEmpty)) {
+          throw const FormatException('自动登录需要保存密码，请重新输入密码');
+        }
         await vault.save(record, password: secret);
+        await widget.state.setAutomaticLogin(automatic ? record : null);
       } catch (_) {
-        if (mounted) setState(() => notice = '已登录，但未能保存历史登录，请稍后重试');
+        if (mounted) setState(() => notice = '已登录，但未能保存登录设置，请稍后重试');
         return;
       }
     }
@@ -191,6 +197,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
         lastUsed: DateTime.now().millisecondsSinceEpoch,
       );
       if (state.authenticated && state.accountName == account) {
+        secret ??= password.text.isEmpty ? null : password.text;
+        if (automatic && (secret == null || secret.isEmpty)) {
+          throw const FormatException('自动登录需要保存密码，请重新输入密码');
+        }
         await finish(record, remember ? secret : null);
         return;
       }
@@ -224,15 +234,23 @@ class _ConnectionPageState extends State<ConnectionPage> {
     if (working) return;
     final record = selected;
     if (value || record == null || !record.hasPassword) {
-      setState(() => remember = value);
+      setState(() {
+        formRevision++;
+        remember = value;
+        if (!value) automatic = false;
+      });
       return;
     }
     setState(() => localBusy = true);
     try {
+      if (widget.state.automaticLoginFor(record)) {
+        await widget.state.setAutomaticLogin(null);
+      }
       await vault.forgetPassword(record);
       if (mounted) {
         setState(() {
           remember = false;
+          automatic = false;
           useSavedPassword = false;
           selected = null;
         });
@@ -241,6 +259,26 @@ class _ConnectionPageState extends State<ConnectionPage> {
       if (mounted) setState(() => notice = connectionError(error));
     } finally {
       if (mounted) setState(() => localBusy = false);
+    }
+  }
+
+  Future<void> changeAutomatic(bool value) async {
+    if (working) return;
+    final record = selected;
+    setState(() {
+      formRevision++;
+      automatic = value;
+      if (value) remember = true;
+    });
+    if (!value && record != null && widget.state.automaticLoginFor(record)) {
+      setState(() => localBusy = true);
+      try {
+        await widget.state.setAutomaticLogin(null);
+      } catch (error) {
+        if (mounted) setState(() => notice = connectionError(error));
+      } finally {
+        if (mounted) setState(() => localBusy = false);
+      }
     }
   }
 
@@ -261,10 +299,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
         if (!mounted || selected?.id != id) return;
         final current = records.where((item) => item.id == id).firstOrNull;
         if (current?.hasPassword != true) {
+          if (widget.state.automaticLoginFor(selected!)) {
+            await widget.state.setAutomaticLogin(null);
+            if (!mounted) return;
+          }
           setState(() {
             selected = current;
             useSavedPassword = false;
             remember = false;
+            automatic = false;
           });
         }
       } catch (_) {
@@ -323,6 +366,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
         useSavedPassword = false;
         pendingPassword = null;
         pendingLogin = null;
+        automatic = false;
         notice = '密码已重置，请使用新密码登录';
       });
     } catch (error) {
@@ -569,6 +613,28 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   ),
                 ),
               ),
+              MergeSemantics(
+                child: InkWell(
+                  onTap: working ? null : () => changeAutomatic(!automatic),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Checkbox(
+                        key: const ValueKey('automatic-login'),
+                        value: automatic,
+                        onChanged: working
+                            ? null
+                            : (value) => changeAutomatic(value ?? false),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Text('自动登录'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               TextButton(
                 key: const ValueKey('forgot-password'),
                 onPressed: working ? null : forgotPassword,
@@ -576,6 +642,16 @@ class _ConnectionPageState extends State<ConnectionPage> {
               ),
             ],
           ),
+          if (automatic)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '下次打开自动连接此 NAS。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
           const SizedBox(height: 16),
           FilledButton(
             key: const ValueKey('nas-submit'),
@@ -609,6 +685,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       fillAddress(state.origin);
                       invalidateSaved();
                       remember = false;
+                      automatic = false;
                       username.text = state.accountName.isEmpty
                           ? 'admin'
                           : state.accountName;
@@ -758,6 +835,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     editing = true;
                     checked = false;
                     fillAddress(state.origin);
+                    loadRecent();
                   }),
           ),
           const Divider(indent: 16),

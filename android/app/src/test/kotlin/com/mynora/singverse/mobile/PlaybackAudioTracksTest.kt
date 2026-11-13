@@ -8,6 +8,20 @@ class PlaybackAudioTracksTest {
     private val decoded = PlaybackAudioTrack(1, 0, true, "audio/mp4a-latm", 2, 48000)
     private val decoderFormat = PlaybackAudioFormat("audio/mp4a-latm", 2, 48000)
 
+    @Test fun mergedOriginalAndGeneratedBackingKeepDistinctSourceIdentities() {
+        val tracks = listOf(decoded, decoded.copy(groupIndex = 2, selected = false))
+        val identified = PlaybackAudioTracks.identify(tracks, listOf(PlaybackAudioSource("stream:1"), PlaybackAudioSource(GENERATED_BACKING_SOURCE)))
+        assertEquals(listOf("stream:1", GENERATED_BACKING_SOURCE), identified.map { it.sourceId })
+        assertEquals(listOf("1:0", "2:0"), identified.map { it.id })
+    }
+
+    @Test fun uniqueLabelsIdentifyTracksWhenTheDecoderOmitsAnUnsupportedSource() {
+        val identified = PlaybackAudioTracks.identify(listOf(decoded.copy(label = "伴奏")), listOf(
+            PlaybackAudioSource("stream:1", "原唱"), PlaybackAudioSource("stream:2", "伴奏")))
+        assertEquals("stream:2", identified.single().sourceId)
+        assertEquals("", PlaybackAudioTracks.identify(listOf(decoded), listOf(PlaybackAudioSource("stream:1"), PlaybackAudioSource("stream:2"))).single().sourceId)
+    }
+
     @Test fun duplicatedSingleSourceHlsExposesOnlyTheDecodedRendition() {
         val actual = PlaybackAudioTracks.usable(listOf(declaration, decoded), 1, true, decoderFormat)
         assertEquals(listOf(decoded), actual)

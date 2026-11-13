@@ -169,7 +169,11 @@ class PlaybackInstrumentedTest {
                 }
                 waitReady(service, "original source ready")
                 main { service.command("useRole", "backing") }
-                waitFor("merged backing is ready") { var ready = false; main { ready = service.player.playbackState == Player.STATE_READY && service.snapshot()["audioRole"] == "backing" }; ready }
+                var diagnostic = ""
+                try { waitFor("merged backing is ready") { var ready = false; main {
+                    diagnostic = "${service.snapshot()} groups=${service.player.currentTracks.groups.map { it.mediaTrackGroup.id }}"
+                    ready = service.player.playbackState == Player.STATE_READY && service.snapshot()["audioRole"] == "backing"
+                }; ready } } catch (failure: AssertionError) { throw AssertionError(diagnostic, failure) }
                 main { service.beginRecording() }
                 waitFor("actual playback PCM was captured after recording restart", 15_000) {
                     engine.phase == "RECORDING" && engine.takeId.isNotBlank() && engine.works.backing(engine.takeId).length() >= 48000 * 2
@@ -189,6 +193,125 @@ class PlaybackInstrumentedTest {
                 val tracks = engine.works.get(engine.takeId).getJSONObject("settings").getJSONArray("tracks")
                 assertTrue("track snapshot must be saved before stop clears currentTracks", tracks.length() > 0)
             } finally { main { service.command("pause", null) }; engine.close(); engine.works.close(); root.deleteRecursively() }
+        } } finally { server.close() }
+    }
+
+    @Test fun generatedRolesSwitchLocallyWithoutReopeningAndPreservePauseAndPosition() {
+        val opens = java.util.concurrent.atomic.AtomicInteger()
+        val requestedRoles = Collections.synchronizedList(mutableListOf<String>())
+        val original = wave(220.0); val backing = wave(660.0)
+        val server = HttpFixture { request -> when {
+            request.path.endsWith("/csrf") -> Reply("{\"token\":\"test-token\"}")
+            request.path.contains("/playback/") -> {
+                opens.incrementAndGet()
+                requestedRoles.add(JSONObject(request.body).optString("audioRole"))
+                Reply(JSONObject().put("id", "switch-lease").put("status", "READY").put("mode", "DIRECT")
+                    .put("url", "/api/v1/test/original.wav").put("backingUrl", "/api/v1/test/backing.wav")
+                    .put("media", JSONObject().put("streams", org.json.JSONArray().put(JSONObject().put("kind", "audio").put("id", "stream:0"))))
+                    .put("audioRoles", JSONObject().put("originalId", "stream:0").put("backingResource", JSONObject())).toString())
+            }
+            request.path.endsWith("/original.wav") -> Reply(original, "audio/wav")
+            request.path.endsWith("/backing.wav") -> Reply(backing, "audio/wav")
+            else -> Reply("{}")
+        } }
+        try { withService(server) { service ->
+            main { service.open(song("switch"), "isolated", autoplay = false) }
+            waitReady(service, "both role sources loaded")
+            main { service.command("seek", 1500L) }
+            waitReady(service, "paused seek settled")
+            for (role in listOf("backing", "original", "backing", "original")) {
+                main { service.command("useRole", role) }
+                waitFor("$role selected from the loaded timeline") { var selected = false
+                    main { selected = service.snapshot()["audioRole"] == role && service.player.playbackState == Player.STATE_READY }; selected
+                }
+                main {
+                    assertFalse("switching a paused role must not start sound", service.player.playWhenReady)
+                    assertEquals("the timeline must not jump", 1500L, service.player.currentPosition)
+                }
+            }
+            assertEquals("no new lease or negotiation for loaded audio roles", 1, opens.get())
+            main { service.command("play", null) }
+            waitFor("actual playback resumes after role switches") { var playing = false; main { playing = service.player.isPlaying && service.player.currentPosition > 1700 }; playing }
+            main { service.command("useRole", "backing") }
+            waitFor("playing role switch keeps advancing") { var playing = false; main { playing = service.player.isPlaying && service.snapshot()["audioRole"] == "backing" && service.player.currentPosition > 2000 }; playing }
+            assertEquals(1, opens.get())
+            main { service.command("useRole", "original"); service.command("seek", 4900L) }
+            waitFor("generated-role timeline ended") { var ended = false; main { ended = service.player.playbackState == Player.STATE_ENDED }; ended }
+            main { service.command("play", null) }
+            waitFor("replay retains both original and generated backing") { var ready = false; main {
+                ready = service.player.isPlaying && service.snapshot()["audioRole"] == "original" && (service.snapshot()["tracks"] as List<*>).size == 2
+            }; opens.get() == 2 && ready }
+            assertEquals("NAS must still include the generated backing URL", "backing", requestedRoles.last())
+            main { service.command("useRole", "backing") }
+            waitFor("backing remains local after replay") { var ready = false; main { ready = service.player.isPlaying && service.snapshot()["audioRole"] == "backing" }; ready }
+            assertEquals("replayed roles must not reopen the song again", 2, opens.get())
+        } } finally { server.close() }
+    }
+
+    @Test fun playPreparesAStoppedTimelineAndCanReplayAfterTheEnd() {
+        val wav = wave()
+        val server = HttpFixture { request -> when {
+            request.path.endsWith("/csrf") -> Reply("{\"token\":\"test-token\"}")
+            request.path.contains("/playback/") -> Reply(JSONObject().put("status", "READY").put("mode", "DIRECT").put("url", "/api/v1/test/tone.wav").toString())
+            request.path.endsWith("/tone.wav") -> Reply(wav, "audio/wav")
+            else -> Reply("{}")
+        } }
+        try { withService(server) { service ->
+            main { service.open(song("stopped"), "isolated", autoplay = false) }
+            waitReady(service, "fixture ready")
+            main { service.player.stop(); service.command("play", null) }
+            waitFor("play really prepares an idle player") { var playing = false; main { playing = service.player.isPlaying && service.player.currentPosition > 100 }; playing }
+            main { service.command("seek", 4900L) }
+            waitFor("controlled song ended") { var ended = false; main { ended = service.player.playbackState == Player.STATE_ENDED }; ended }
+            main { service.command("play", null) }
+            waitFor("ended song can replay") { var playing = false; main { playing = service.player.isPlaying && service.player.currentPosition in 100..1500 }; playing }
+        } } finally { server.close() }
+    }
+
+    @Test fun replayingEndedHlsKeepsBothRolesAndAcquiresAFreshLeaseFromTheSongStart() {
+        val audio = InstrumentationRegistry.getInstrumentation().context.assets.open("controlled-tone.aac").use { it.readBytes() }
+        val attempts = Collections.synchronizedList(mutableListOf<JSONObject>())
+        val expired = java.util.concurrent.atomic.AtomicBoolean()
+        val renewedReads = java.util.concurrent.atomic.AtomicInteger()
+        val master = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"original\",DEFAULT=YES,URI=\"original.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"backing\",DEFAULT=NO,URI=\"backing.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=128000,CODECS=\"mp4a.40.2\",AUDIO=\"audio\"\noriginal.m3u8\n"
+        val playlist = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:3\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:2.02,\npart0.aac\n#EXTINF:2.02,\npart1.aac\n#EXTINF:2.02,\npart2.aac\n#EXT-X-ENDLIST\n"
+        val server = HttpFixture { request -> when {
+            request.path.endsWith("/csrf") -> Reply("{\"token\":\"test-token\"}")
+            request.path.contains("/playback/") -> {
+                val options = JSONObject(request.body); attempts.add(options)
+                Reply(JSONObject().put("id", "replay-${attempts.size}").put("status", "READY").put("mode", "HLS")
+                    .put("offset", options.getDouble("start")).put("url", "/api/v1/test/replay-${attempts.size}/index.m3u8")
+                    .put("media", JSONObject().put("streams", org.json.JSONArray()
+                        .put(JSONObject().put("kind", "audio").put("id", "stream:1").put("title", "original"))
+                        .put(JSONObject().put("kind", "audio").put("id", "stream:2").put("title", "backing"))))
+                    .put("audioRoles", JSONObject().put("originalId", "stream:1").put("backingId", "stream:2")).toString())
+            }
+            expired.get() && request.path.contains("/replay-1/") -> Reply(ByteArray(0), "application/octet-stream", 410)
+            request.path.endsWith("/index.m3u8") -> {
+                if (request.path.contains("/replay-2/")) renewedReads.incrementAndGet()
+                Reply(master.toByteArray(), "application/vnd.apple.mpegurl")
+            }
+            request.path.endsWith(".m3u8") -> Reply(playlist.toByteArray(), "application/vnd.apple.mpegurl")
+            request.path.endsWith(".aac") -> Reply(audio, "audio/aac")
+            else -> Reply("{}")
+        } }
+        try { withService(server) { service ->
+            main { service.open(song("replay"), "isolated", position = 30_000, compatible = true, autoplay = false) }
+            waitReady(service, "offset HLS ready")
+            main { service.command("useRole", "backing") }
+            waitFor("backing source selected before replay") { var selected = false; main { selected = service.snapshot()["audioRole"] == "backing" && service.player.playbackState == Player.STATE_READY }; selected }
+            main { service.command("seek", 35_900L); service.command("play", null) }
+            waitFor("offset HLS ended") { var ended = false; main { ended = service.player.playbackState == Player.STATE_ENDED }; ended }
+            expired.set(true)
+            main { service.command("play", null) }
+            waitFor("fresh lease actually plays", 15_000) { var playing = false; main { playing = service.player.isPlaying && service.player.currentPosition in 100..3000 }; attempts.size == 2 && playing }
+            assertEquals("replay must start from the song start, not the previous HLS offset", 0.0, attempts[1].getDouble("start"), 0.001)
+            assertTrue("compatibility setting survives replay", attempts[1].getBoolean("force"))
+            assertEquals("both source roles must remain in the renewed resource", "", attempts[1].getString("audioRole"))
+            assertTrue("playback must load the renewed session's playlist", renewedReads.get() > 0)
+            main { assertEquals("backing", service.snapshot()["audioRole"]); service.command("useRole", "original") }
+            waitFor("original remains available locally after replay") { var selected = false; main { selected = service.snapshot()["audioRole"] == "original" && service.player.isPlaying }; selected }
+            assertEquals("post-replay role switch must not negotiate again", 2, attempts.size)
         } } finally { server.close() }
     }
 
@@ -314,6 +437,8 @@ class PlaybackInstrumentedTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val target = instrumentation.targetContext
         assertTrue("only the isolated .e2e application may run service tests", target.packageName.endsWith(".e2e"))
+        main { target.stopService(Intent(target, PlaybackService::class.java)) }
+        waitFor("previous isolated service stopped") { PlaybackService.current == null }
         assertNull(PlaybackService.current)
         val preferences = "playback-fixture-${UUID.randomUUID()}"
         val isolated = object : ContextWrapper(target) {
@@ -339,10 +464,15 @@ class PlaybackInstrumentedTest {
             block(service)
         } finally {
             main {
-                target.stopService(Intent(target, PlaybackService::class.java))
                 Stage.values().flatMap { ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(it) }
                     .filterIsInstance<MainActivity>().distinct().forEach { it.finish() }
             }
+            waitFor("test activities destroyed") { var finished = false; main {
+                finished = Stage.values().filter { it != Stage.DESTROYED }
+                    .flatMap { ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(it) }
+                    .none { it is MainActivity }
+            }; finished }
+            main { target.stopService(Intent(target, PlaybackService::class.java)) }
             waitFor("service stopped") { PlaybackService.current == null }
             singleton.set(null, previousTransport)
             target.getSharedPreferences(preferences, Context.MODE_PRIVATE).edit().clear().commit()
@@ -358,7 +488,7 @@ class PlaybackInstrumentedTest {
         }.array()
     }
     private data class Received(val path: String, val body: String, val cookie: String)
-    private data class Reply(val bytes: ByteArray, val type: String) {
+    private data class Reply(val bytes: ByteArray, val type: String, val status: Int = 200) {
         constructor(json: String) : this(json.toByteArray(), "application/json")
     }
     private class HttpFixture(private val respond: (Received) -> Reply) : AutoCloseable {
@@ -391,7 +521,7 @@ class PlaybackInstrumentedTest {
                     android.util.Log.i("PlaybackFixture", "served $path (${reply.bytes.size} bytes)")
                     socket.getOutputStream().apply {
                         val credential = if (path.endsWith("/csrf")) "Set-Cookie: singverse_session=fixture; Path=/\r\n" else ""
-                        write("HTTP/1.1 200 OK\r\nContent-Type: ${reply.type}\r\nContent-Length: ${reply.bytes.size}\r\n${credential}Connection: close\r\n\r\n".toByteArray())
+                        write("HTTP/1.1 ${reply.status} Response\r\nContent-Type: ${reply.type}\r\nContent-Length: ${reply.bytes.size}\r\n${credential}Connection: close\r\n\r\n".toByteArray())
                         write(reply.bytes); flush()
                     }
                 } } catch (_: java.io.IOException) { } finally { sockets.remove(socket) } }
