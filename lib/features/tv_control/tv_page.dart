@@ -9,6 +9,7 @@ import '../../core/api.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../singing/actions.dart';
+import 'tv_login_pairing.dart';
 
 // A retained WebView keeps H5 sessionStorage alive when returning to native pages.
 final tvSession = TvSession();
@@ -79,6 +80,9 @@ class _TvPageState extends State<TvPage> {
   }
 
   bool scanning = false, checking = false;
+  final loginPairing = TvLoginPairing();
+  String? loginComplete;
+  int scanGeneration = 0;
   String? error;
   MobileScannerController? camera;
   MobileScannerController createCamera() {
@@ -97,21 +101,27 @@ class _TvPageState extends State<TvPage> {
 
   Future<void> scan() async {
     if (!mounted) return;
-    await camera?.dispose();
+    final previous = camera;
+    await previous?.stop();
     if (!mounted) return;
     setState(() {
       camera = createCamera();
       scanning = true;
+      loginComplete = null;
       error = null;
     });
+    // MobileScanner owns a final controller in its State. Replace that State
+    // before disposing the old controller, including when cancelling a login.
+    await WidgetsBinding.instance.endOfFrame;
+    await previous?.dispose();
   }
 
   Future<void> detected(String value) async {
     if (checking) return;
     setState(() => checking = true);
     try {
-      if (Uri.tryParse(value)?.path == '/admin/') {
-        await approveTv(value);
+      if (TvLoginPairing.recognizes(value)) {
+        await loginTelevision(value);
         return;
       }
       final invite = TvInvite.parse(value);
@@ -182,7 +192,7 @@ class _TvPageState extends State<TvPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = e.toString();
+          error = e is FormatException ? e.message : e.toString();
           scanning = true;
         });
         await camera?.stop();
@@ -192,61 +202,56 @@ class _TvPageState extends State<TvPage> {
     }
   }
 
-  Future<void> approveTv(String value) async {
-    if (!widget.state.authenticated) {
-      throw const FormatException('请先登录当前 NAS 管理账号，再授权电视登录');
+  Future<void> loginTelevision(String value) async {
+    final state = widget.state;
+    if (!state.authenticated || state.origin.isEmpty) {
+      throw const FormatException('请先在 App 登录音乐库，再扫描电视登录码');
     }
-    final qr = TvAuthorizationQr.parse(value);
-    if (qr.origin != widget.state.origin) {
-      throw const FormatException('二维码来自另一台 NAS，请切换到对应 NAS 后再扫描');
-    }
+    final generation = ++scanGeneration;
+    final origin = state.origin;
     await camera?.stop();
-    final result =
-        await widget.state.api.request('/api/v1/admin/tv-devices') as Json;
-    final pending = (result['pending'] as List? ?? const [])
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .where((item) => item['id'] == qr.id && item['status'] == 'PENDING')
-        .firstOrNull;
-    if (pending == null) {
-      throw const FormatException('这台电视的登录申请已处理或过期，请在电视上重新申请');
-    }
-    if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('授权电视登录'),
-        content: Text('允许「${pending['name'] ?? 'SingVerse TV'}」登录并访问本机曲库吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+    final preview = await loginPairing.inspect(value, origin);
+    try {
+      if (!mounted || generation != scanGeneration) return;
+      if (state.origin != origin || !state.authenticated) {
+        throw const FormatException('音乐库已切换，请重新扫码');
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('连接这台电视？'),
+          content: Text(
+            '${preview.name}\n\n将「${state.serverName.isEmpty ? '当前音乐库' : state.serverName}」连接到电视，随后就能在大屏上点歌。',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('确认授权'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) {
-      if (mounted) await scan();
-      return;
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('确认连接'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted || generation != scanGeneration) {
+        if (mounted) await scan();
+        return;
+      }
+      if (state.origin != origin || !state.authenticated) {
+        throw const FormatException('音乐库已切换，请重新扫码');
+      }
+      await loginPairing.confirm(preview, origin);
+      if (mounted && generation == scanGeneration) {
+        setState(() {
+          loginComplete = preview.name;
+          scanning = false;
+        });
+      }
+    } finally {
+      await loginPairing.cancel(preview.id);
     }
-    await widget.state.api.request(
-      '/api/v1/admin/device-authorizations/${Uri.encodeComponent(qr.id)}/approve',
-      method: 'POST',
-      body: {'code': qr.code},
-    );
-    if (!mounted) return;
-    setState(() {
-      scanning = true;
-      error = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已授权「${pending['name'] ?? 'SingVerse TV'}」登录')),
-    );
-    if (mounted) Navigator.pop(context);
   }
 
   Future<void> back() async {
@@ -260,6 +265,8 @@ class _TvPageState extends State<TvPage> {
 
   @override
   void dispose() {
+    scanGeneration++;
+    loginPairing.cancel();
     camera?.dispose();
     super.dispose();
   }
@@ -375,6 +382,7 @@ class _TvPageState extends State<TvPage> {
                             fit: StackFit.expand,
                             children: [
                               MobileScanner(
+                                key: ObjectKey(camera),
                                 controller: camera,
                                 scanWindow: window,
                                 onDetect: (capture) {
@@ -401,7 +409,7 @@ class _TvPageState extends State<TvPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '将二维码放入框内，自动连接电视或确认授权。',
+                    '扫描登录码，将当前音乐库连接到电视；也可扫描聚会码参与点歌。',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -465,15 +473,23 @@ class _TvPageState extends State<TvPage> {
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.close_rounded),
             ),
-            title: Text(scanning ? '扫一扫' : tvSession.deviceName ?? '电视点歌'),
+            title: Text(
+              scanning
+                  ? '扫一扫'
+                  : loginComplete != null
+                  ? '电视已连接'
+                  : tvSession.deviceName ?? '电视点歌',
+            ),
             actions: [
-              if (!scanning)
+              if (!scanning && loginComplete == null)
                 IconButton(
                   tooltip: '重新扫码',
                   onPressed: checking ? null : scan,
                   icon: const Icon(Icons.qr_code_scanner_rounded),
                 ),
-              if (!scanning && tvSession.controller != null)
+              if (!scanning &&
+                  loginComplete == null &&
+                  tvSession.controller != null)
                 IconButton(
                   tooltip: '断开电视',
                   onPressed: () => uiTask(context, () async {
@@ -504,7 +520,42 @@ class _TvPageState extends State<TvPage> {
           ),
           body: SafeArea(
             top: false,
-            child: scanning
+            child: loginComplete != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 56,
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            '已连接 $loginComplete',
+                            style: Theme.of(context).textTheme.titleLarge,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            '音乐库已在电视上打开，可以开始点歌了。',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 28),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('完成'),
+                          ),
+                          TextButton(
+                            onPressed: scan,
+                            child: const Text('继续扫码点歌'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : scanning
                 ? scannerBody(context)
                 : tvSession.controller != null
                 ? Column(

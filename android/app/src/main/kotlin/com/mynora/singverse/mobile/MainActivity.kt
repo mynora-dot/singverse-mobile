@@ -37,6 +37,8 @@ class MainActivity : FlutterActivity() {
     private var exportingId = ""
     @Volatile private var exportInProgress = false
     private val updateWorker = Executors.newSingleThreadExecutor()
+    private val pairingWorker = Executors.newSingleThreadExecutor()
+    private var tvPairing: TvPairingClient? = null
     private var updateEvents: EventChannel.EventSink? = null
     private var updater: MobileUpdater? = null
     private var discovery: NasDiscovery? = null
@@ -63,6 +65,26 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
         val transport = NasTransport.get(this)
+        val pairing = TvPairingClient(transport)
+        tvPairing = pairing
+        MethodChannel(engine.dartExecutor.binaryMessenger, "singverse/tv-pairing").setMethodCallHandler { call, result ->
+            if (call.method == "cancel") {
+                pairing.cancel(call.argument<String>("id")); result.success(null)
+            } else if (call.method in listOf("inspect", "confirm")) {
+                pairingWorker.execute {
+                    try {
+                        val value: Any? = when (call.method) {
+                            "inspect" -> pairing.inspect(call.argument<String>("qr")!!, call.argument<String>("origin")!!)
+                            else -> { pairing.confirm(call.argument<String>("id")!!, call.argument<String>("origin")!!); null }
+                        }
+                        main.post { result.success(value) }
+                    } catch (failure: Exception) {
+                        main.post { result.error(if (failure is NasFailure) "${failure.status}" else "pairing",
+                            if (failure is NasFailure) failure.message else "连接电视失败，请刷新二维码重试", null) }
+                    }
+                }
+            } else result.notImplemented()
+        }
         val logins = LoginVault(this)
         val discovery = NasDiscovery(this) { discoveryEvents?.success(it) }
         this.discovery = discovery
@@ -127,6 +149,7 @@ class MainActivity : FlutterActivity() {
             }
         }
         MethodChannel(engine.dartExecutor.binaryMessenger, "singverse/nas").setMethodCallHandler { call, result ->
+            if (call.method in listOf("configure", "forget") || call.method == "request" && call.argument<String>("path") == "/api/v1/auth/logout") pairing.cancel()
             val executor = when {
                 call.method == "bytes" -> artworkWorker
                 call.method == "request" && call.argument<String>("path") == "/api/v1/client-releases/mobile" -> updateWorker
@@ -260,11 +283,12 @@ class MainActivity : FlutterActivity() {
         }
     }
     override fun onStart() { super.onStart(); videoViews.forEach { it.player = PlaybackService.current?.player } }
-    override fun onStop() { discovery?.stop(); PlaybackService.current?.karaoke?.testMicrophone(false); videoViews.forEach { it.player = null }; super.onStop() }
+    override fun onStop() { tvPairing?.cancel(); discovery?.stop(); PlaybackService.current?.karaoke?.testMicrophone(false); videoViews.forEach { it.player = null }; super.onStop() }
     override fun onDestroy() {
         events = null; PlaybackService.listener = null
         discoveryEvents = null; discovery?.stop(); discovery = null
         updateEvents = null; updater?.cancel(); updateWorker.shutdownNow()
+        tvPairing?.cancel(); tvPairing = null; pairingWorker.shutdown()
         worker.shutdown(); artworkWorker.shutdownNow(); exportWorker.shutdown(); super.onDestroy()
     }
 }

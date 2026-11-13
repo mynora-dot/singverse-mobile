@@ -1,6 +1,6 @@
 # SingVerse 手机端
 
-Flutter / Android 家庭 KTV 客户端，使用用户自备歌曲。手机连接 NAS 的 Go 主服务，支持家庭曲库、本机练唱与录音、作品回听导出，以及扫码参与电视 H5 点歌和授权电视登录。没有 iOS 工程；手机 minSdk 24，包名保持 `com.mynora.singverse.mobile`。
+Flutter / Android 家庭 KTV 客户端，使用用户自备歌曲。手机连接 NAS 的 Go 主服务，支持家庭曲库、本机练唱与录音、作品回听导出，以及扫码参与电视 H5 点歌。支持用已登录音乐库的 App 扫描电视登录码，在手机确认后将当前音乐库连接到电视，电视无需填写 IP；账号登录保留为备用方式。没有 iOS 工程；手机 minSdk 24，包名保持 `com.mynora.singverse.mobile`。
 
 ## 独立构建
 
@@ -57,3 +57,9 @@ GitHub Actions 在正式 GitHub Release `v<VERSION>` 发布后验证和构建上
 自动化和模拟器不能替代真实手机麦克风、蓝牙、NAS 权限、微信扫码以及系统覆盖安装验证。真实安装验收需同一测试签名的两个递增版本，确认安装权限返回续装、拒绝/重试、跳过、新版本提醒和本机作品/会话保留。正式密钥、远程 GitHub Actions 与用户设备验收需发行环境完成。
 
 相关技能维护在项目外的用户技能目录（默认 `~/.codex/skills`），保留第三方技能作者、许可和来源；仓库不内置副本。
+
+## 扫码登录电视
+
+手机和电视需同时安装支持本协议的构建。若手机仍提示「请扫描 SingVerse 电视上的聚会二维码」，请先更新手机 App；旧扫码入口还不能识别电视登录码。
+
+在 App 登录音乐库后打开「电视」扫码，识别 `singverse://tv-login` 登录码与原有聚会邀请码。登录码会先展示电视名称与当前音乐库；确认后，原生桥接复用现有 `POST /api/v1/auth/tv-session` 并加密接力，Cookie 与 TV token 不进入 Flutter。手机与电视需在同一私有 IPv4 网络并可互访。取消、退出、后台或更换音乐库会取消本次尝试；失败时尽力撤销本次新建的电视凭据。原有扫码 H5 点歌流程保留。协议见 [TV 登录接力](contracts/tv-login-pairing.md)；界面与取消回归见 `test/tv_login_pairing_test.dart`。

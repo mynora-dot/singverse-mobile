@@ -223,7 +223,7 @@ void main() {
           );
           for (final text in [
             find.byKey(const ValueKey('tv-scan-instructions')),
-            find.text('将二维码放入框内，自动连接电视或确认授权。'),
+            find.text('扫描登录码，将当前音乐库连接到电视；也可扫描聚会码参与点歌。'),
           ]) {
             await expectReachable(tester, text, size: size, reason: reason);
           }
