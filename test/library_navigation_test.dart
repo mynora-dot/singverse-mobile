@@ -61,7 +61,8 @@ void main() {
       await tester.tap(find.byTooltip('收藏 真实曲库歌曲'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('取消收藏 真实曲库歌曲'), findsOneWidget);
-      expect((await store.favorites('nas-a')).single.id, 'one');
+      expect(api.favoriteRows.keys, ['one']);
+      expect(await store.favorites('nas-a'), isEmpty);
       expect(await store.favorites('nas-b'), isEmpty);
       expect(tester.takeException(), isNull);
     },

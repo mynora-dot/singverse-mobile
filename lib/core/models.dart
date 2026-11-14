@@ -4,6 +4,7 @@ class Song {
   Song(this.data);
   final Json data;
   String get id => data['id'] as String;
+  bool get available => data['available'] != false;
   String get title => data['title'] as String? ?? '未命名歌曲';
   String get artist => (data['artists'] as List? ?? []).join(' / ');
   String? get cover => data['coverPath'] as String?;

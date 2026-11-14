@@ -383,7 +383,7 @@ void main() {
       expect(state.uiMode, UiMode.standard);
       expect(state.themeMode, ThemeMode.system);
       final song = Song(api.rows.first);
-      await store.favorite('nas-a', song, true);
+      api.favoriteRows[song.id] = song.data;
       await store.played('nas-a', song, 42123, newPlay: true);
       await state.refreshPersonal();
       state.current = song;
@@ -1979,7 +1979,7 @@ void main() {
       expect(tester.takeException(), isNull, reason: name);
     }
 
-    await store.favorite('nas-a', Song(api.rows.first), true);
+    api.favoriteRows[api.rows.first['id'] as String] = api.rows.first;
     await state.refreshPersonal();
     native.works['draft'] = {...workFixture(), 'name': '晴天 · 练唱草稿'};
     native.works['saved'] = {
@@ -2390,7 +2390,7 @@ void main() {
     await tester.pumpAndSettle();
     await capture('11-深色点歌');
     await state.setTheme(ThemeMode.light);
-    await store.favorite('nas-a', Song(api.rows.first), true);
+    api.favoriteRows[api.rows.first['id'] as String] = api.rows.first;
     native.works['saved'] = {
       ...workFixture(id: 'saved', status: 'SAVED'),
       'name': '晴天 · 我的版本',

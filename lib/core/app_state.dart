@@ -14,7 +14,7 @@ import 'models.dart';
 
 enum UiMode { standard, senior }
 
-class AppState extends ChangeNotifier {
+class AppState extends ChangeNotifier with WidgetsBindingObserver {
   AppState({
     required this.api,
     required this.store,
@@ -22,6 +22,7 @@ class AppState extends ChangeNotifier {
     LoginStore? loginStore,
     bool listenPlayer = true,
   }) : loginStore = loginStore ?? NativeLoginStore() {
+    WidgetsBinding.instance.addObserver(this);
     themeMode = ThemeMode.values[preferences.getInt('theme')?.clamp(0, 2) ?? 0];
     uiMode = preferences.getString('uiMode') == 'senior'
         ? UiMode.senior
@@ -218,6 +219,7 @@ class AppState extends ChangeNotifier {
           if (automatic != null &&
               (!authenticated || accountName != automatic.username)) {
             authenticated = false;
+            _clearFavorites();
             accountName = '';
             await api.forget();
             final secret = await loginStore.password(automatic);
@@ -261,13 +263,15 @@ class AppState extends ChangeNotifier {
       _checkServer(info);
       if (origin != next) await command('stop');
       _artworkCache.clear();
+      authenticated = false;
+      _clearFavorites();
+      notifyListeners();
       updates.disconnect();
       await api.configure(next);
       origin = next;
       instanceId = info['instanceId'] as String;
       serverName = info['name'] is String ? info['name'] as String : '';
       await preferences.setString('server-instance:$origin', instanceId);
-      authenticated = false;
       mfaRequired = false;
       await refreshPersonal();
       updates.connect(origin);
@@ -314,6 +318,7 @@ class AppState extends ChangeNotifier {
       },
     );
     authenticated = false;
+    _clearFavorites();
     mfaRequired = false;
     accountName = '';
     await setAutomaticLogin(null);
@@ -336,8 +341,10 @@ class AppState extends ChangeNotifier {
       defaultPassword = session['defaultPassword'] == true;
       accountName = session['username'] as String? ?? '';
       updates.connect(origin, connection: false);
+      await refreshFavorites();
     } on ApiFailure {
       authenticated = false;
+      _clearFavorites();
       rethrow;
     }
   }
@@ -357,6 +364,7 @@ class AppState extends ChangeNotifier {
     } on ApiFailure catch (e) {
       if (e.status == 401 && authenticated) {
         authenticated = false;
+        _clearFavorites();
         error = '登录已失效，请重新登录';
         notifyListeners();
       }
@@ -376,6 +384,7 @@ class AppState extends ChangeNotifier {
       updates.disconnect();
       await api.forget();
       authenticated = false;
+      _clearFavorites();
       accountName = '';
       mfaRequired = false;
       error = null;
@@ -406,6 +415,7 @@ class AppState extends ChangeNotifier {
     } on ApiFailure catch (e) {
       if (e.status == 401) {
         authenticated = false;
+        _clearFavorites();
         error = '登录已失效，请重新登录';
         notifyListeners();
       }
@@ -416,28 +426,212 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshPersonal() async {
+  Future<void> refreshPersonal({bool includeFavorites = true}) async {
     final expectedInstance = instanceId;
     final ticket = ++_personalGeneration;
     if (expectedInstance.isEmpty || _disposed) return;
-    final nextFavorites = await store.favorites(expectedInstance);
     final nextHistory = await store.history(expectedInstance);
     if (_disposed ||
         ticket != _personalGeneration ||
         instanceId != expectedInstance) {
       return;
     }
-    favorites = nextFavorites;
-    _favoriteIds = nextFavorites.map((song) => song.id).toSet();
     history = nextHistory;
     notifyListeners();
+    if (includeFavorites) await refreshFavorites();
   }
 
-  bool isFavorite(Song song) => _favoriteIds.contains(song.id);
+  String _favoritesIdentity = '';
+  int _favoritesGeneration = 0, _favoriteWriteGeneration = 0;
   Set<String> _favoriteIds = {};
+  bool favoritesLoading = false, favoriteSaving = false, favoritesReady = false;
+  String? favoritesError;
+  Timer? _favoritesTimer;
+  bool _favoritesForeground = true;
+  String get _favoriteConnection => '$origin|$instanceId';
+  bool isFavorite(Song song) =>
+      _favoritesIdentity == _favoriteConnection &&
+      _favoriteIds.contains(song.id);
+
+  void _clearFavorites() {
+    _favoritesGeneration++;
+    _favoriteWriteGeneration++;
+    _favoritesTimer?.cancel();
+    _favoritesIdentity = _favoriteConnection;
+    favorites = [];
+    _favoriteIds = {};
+    favoritesReady = false;
+    favoritesLoading = false;
+    favoriteSaving = false;
+    favoritesError = null;
+  }
+
+  void _scheduleFavorites() {
+    _favoritesTimer?.cancel();
+    if (!nativeEnabled ||
+        !_favoritesForeground ||
+        !authenticated ||
+        _disposed) {
+      return;
+    }
+    _favoritesTimer = Timer(
+      const Duration(seconds: 30),
+      () => unawaited(refreshFavorites()),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _favoritesForeground = state == AppLifecycleState.resumed;
+    if (_favoritesForeground && authenticated) {
+      unawaited(refreshFavorites());
+    } else {
+      _favoritesTimer?.cancel();
+    }
+  }
+
+  Future<void> refreshFavorites() async {
+    if (_disposed) return;
+    final identity = _favoriteConnection;
+    if (_favoritesIdentity != identity) _clearFavorites();
+    if (!authenticated || instanceId.isEmpty || origin.isEmpty) {
+      _clearFavorites();
+      notifyListeners();
+      return;
+    }
+    if (favoriteSaving) return;
+    final ticket = ++_favoritesGeneration;
+    bool currentRequest() =>
+        !_disposed &&
+        authenticated &&
+        ticket == _favoritesGeneration &&
+        identity == _favoriteConnection;
+    favoritesLoading = true;
+    notifyListeners();
+    try {
+      // Publish only a complete, single-revision snapshot. A concurrent write
+      // between pages causes a bounded retry instead of a truncated collection.
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final rows = <Song>[];
+        int? revision;
+        var changed = false;
+        for (var page = 0; ; page++) {
+          final result = await api.request(
+            '/api/v1/favorites?page=$page&size=100',
+          ) as Json;
+          if (!currentRequest()) return;
+          if (result['revision'] is! int ||
+              result['totalElements'] is! int ||
+              result['items'] is! List) {
+            throw const FormatException('NAS 收藏响应无效，请更新 NAS 服务');
+          }
+          revision ??= result['revision'] as int;
+          if (revision != result['revision']) {
+            changed = true;
+            break;
+          }
+          final next = (result['items'] as List)
+              .map((value) => Song(Map<String, dynamic>.from(value as Map)))
+              .toList();
+          rows.addAll(next);
+          if (rows.length >= (result['totalElements'] as int)) break;
+          if (next.isEmpty) throw const FormatException('收藏列表读取不完整，请重试');
+        }
+        if (changed) continue;
+        favorites = rows;
+        _favoriteIds = rows.map((song) => song.id).toSet();
+        favoritesReady = true;
+        favoritesError = null;
+        return;
+      }
+      throw const FormatException('收藏正在其他终端更新，请重新读取');
+    } catch (e) {
+      if (currentRequest()) {
+        favoritesError = e is FormatException ? e.message : e.toString();
+        if (e is ApiFailure && e.status == 401) {
+          authenticated = false;
+          _clearFavorites();
+          favoritesError = '登录已失效，请重新登录';
+        }
+      }
+    } finally {
+      if (!_disposed &&
+          identity == _favoriteConnection &&
+          ticket == _favoritesGeneration) {
+        favoritesLoading = false;
+        notifyListeners();
+        _scheduleFavorites();
+      } else if (!_disposed && identity == _favoriteConnection) {
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> favorite(Song song) async {
-    await store.favorite(instanceId, song, !isFavorite(song));
-    await refreshPersonal();
+    if (favoriteSaving) return;
+    if (_favoritesIdentity != _favoriteConnection) _clearFavorites();
+    final initialConnection = _favoriteConnection;
+    final initialGeneration = _favoriteWriteGeneration;
+    // Preserve the action shown on the button even if preload discovers an
+    // identical change already completed by another client.
+    final selected = !isFavorite(song);
+    if (!favoritesReady || _favoritesIdentity != _favoriteConnection) {
+      await refreshFavorites();
+    }
+    if (_disposed ||
+        initialConnection != _favoriteConnection ||
+        initialGeneration != _favoriteWriteGeneration) {
+      return;
+    }
+    if (!authenticated || !favoritesReady) {
+      throw ApiFailure(0, favoritesError ?? '请先连接 NAS 并读取收藏');
+    }
+    final identity = _favoriteConnection;
+    final ticket = ++_favoriteWriteGeneration;
+    _favoritesGeneration++;
+    favoritesLoading = false;
+    favoriteSaving = true;
+    notifyListeners();
+    try {
+      final result = await api.request(
+        '/api/v1/favorites',
+        method: 'PUT',
+        body: {
+          'songIds': [song.id],
+          'selected': selected,
+        },
+      ) as Json;
+      if (_disposed ||
+          identity != _favoriteConnection ||
+          ticket != _favoriteWriteGeneration) {
+        return;
+      }
+      _favoriteIds = (result['songIds'] as List).cast<String>().toSet();
+      favorites = favorites
+          .where((row) => _favoriteIds.contains(row.id))
+          .toList();
+      favoriteSaving = false;
+      await refreshFavorites();
+    } on ApiFailure catch (e) {
+      if (!_disposed &&
+          identity == _favoriteConnection &&
+          ticket == _favoriteWriteGeneration) {
+        if (e.status == 401) {
+          authenticated = false;
+          _clearFavorites();
+          notifyListeners();
+        }
+        rethrow;
+      }
+    } finally {
+      if (!_disposed &&
+          identity == _favoriteConnection &&
+          ticket == _favoriteWriteGeneration) {
+        favoriteSaving = false;
+        notifyListeners();
+        _scheduleFavorites();
+      }
+    }
   }
 
   Future<void> setTheme(ThemeMode mode) async {
@@ -548,6 +742,7 @@ class AppState extends ChangeNotifier {
         .toList();
     if (playbackState == 'AUTH_REQUIRED') {
       authenticated = false;
+      _clearFavorites();
       error = playbackError;
     }
     singing = Map<String, dynamic>.from(value['karaoke'] as Map? ?? {});
@@ -589,7 +784,7 @@ class AppState extends ChangeNotifier {
             .then((_) async {
               if (_disposed || playbackInstanceId != instanceId) return;
               if (newPlay) {
-                await refreshPersonal();
+                await refreshPersonal(includeFavorites: false);
               } else {
                 history = history
                     .map(
@@ -626,6 +821,8 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    _favoritesTimer?.cancel();
     updates.dispose();
     _artworkCache.clear();
     unawaited(_events?.cancel());

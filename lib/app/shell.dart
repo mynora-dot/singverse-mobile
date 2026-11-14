@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import '../features/updates/update_page.dart';
 
 import 'package:flutter/material.dart';
 
 import '../core/app_state.dart';
+import '../features/admin/admin_page.dart';
 import '../features/library/connection.dart';
 import '../features/library/library_pages.dart';
 import '../features/library/widgets.dart';
@@ -158,7 +161,12 @@ class _AppShellState extends State<AppShell> {
                                           .onSurfaceVariant,
                                 padding: EdgeInsets.symmetric(vertical: 8),
                               ),
-                              onPressed: () => setState(() => tab = entry.$1),
+                              onPressed: () {
+                                setState(() => tab = entry.$1);
+                                if (entry.$1 == 1) {
+                                  unawaited(state.refreshPersonal());
+                                }
+                              },
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -360,16 +368,48 @@ class _FrequentPageState extends State<FrequentPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
                   child: SectionTitle(
-                    history ? '最近练唱' : '我的收藏',
+                    history ? '最近练唱' : 'NAS 共享收藏',
                     trailing: history && state.history.isNotEmpty
                         ? TextButton(onPressed: clear, child: const Text('清空'))
                         : Text(
-                            '${history ? state.history.length : state.favorites.length} 首',
+                            !history && !state.favoritesReady
+                                ? '待读取'
+                                : '${history ? state.history.length : state.favorites.length} 首',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                   ),
                 ),
-                if (rows.isEmpty)
+                if (!history) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '与此 NAS 的后台、电视共用',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '刷新收藏',
+                        onPressed:
+                            state.favoritesLoading || state.favoriteSaving
+                            ? null
+                            : () => state.refreshFavorites(),
+                        icon: const Icon(Icons.refresh_rounded),
+                      ),
+                    ],
+                  ),
+                  if (state.favoritesLoading) const LinearProgressIndicator(),
+                  if (state.favoritesError != null)
+                    Notice('收藏读取失败：${state.favoritesError}。当前内容可能尚未更新。'),
+                  if (!state.authenticated)
+                    const Notice('连接 NAS 并登录后读取共享收藏。练唱记录仍可在本机查看。'),
+                ],
+                if (rows.isEmpty &&
+                    (history ||
+                        (state.authenticated &&
+                            state.favoritesReady &&
+                            !state.favoritesLoading &&
+                            state.favoritesError == null)))
                   Notice(
                     search.text.isNotEmpty
                         ? '没有匹配的歌曲，试试其他关键词。'
@@ -397,7 +437,9 @@ class _FrequentPageState extends State<FrequentPage> {
                 if (rows.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   Text(
-                    '只保存在此手机 · 按 NAS 分别记录',
+                    history
+                        ? '练唱记录保存在此手机 · 按 NAS 分别记录'
+                        : '收藏保存在此 NAS · 后台、手机和电视共用',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -484,6 +526,21 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Card(
+              child: ListTile(
+                key: const Key('open-admin'),
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('管理端'),
+                subtitle: Text(
+                  state.origin.isEmpty
+                      ? '连接 NAS 后，在 App 内管理曲库和系统设置'
+                      : '在 App 内打开当前 NAS 的管理页面',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => openAdmin(context, state),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -533,7 +590,7 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              '歌曲来自 NAS。收藏、练唱记录和录音作品保存在此手机，不会自动上传。',
+              '歌曲与收藏来自 NAS，后台、手机和电视共用收藏。练唱记录与录音作品保存在此手机。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),

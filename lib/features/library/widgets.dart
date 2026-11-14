@@ -139,7 +139,9 @@ class SongRow extends StatelessWidget {
         : scheme.onSurfaceVariant;
     final favorite = IconButton(
       tooltip: favoriteTooltip,
-      onPressed: () => uiTask(context, () => state.favorite(song)),
+      onPressed: state.favoriteSaving
+          ? null
+          : () => uiTask(context, () => state.favorite(song)),
       icon: Icon(favoriteIcon, color: favoriteColor, size: 20),
     );
     if (state.senior) {
@@ -201,15 +203,16 @@ class SongRow extends StatelessWidget {
                         color: scheme.onSurface.withValues(alpha: .10),
                       ),
                     ),
-                    onPressed: () =>
-                        uiTask(context, () => state.favorite(song)),
+                    onPressed: state.favoriteSaving
+                        ? null
+                        : () => uiTask(context, () => state.favorite(song)),
                     icon: Icon(favoriteIcon, size: 20),
                     label: Text(favoriteLabel),
                   );
                   final startButton = FilledButton.icon(
-                    onPressed: open,
+                    onPressed: song.available ? open : null,
                     icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('开始练唱'),
+                    label: Text(song.available ? '开始练唱' : '暂不可用'),
                   );
                   if (constraints.maxWidth < 320 ||
                       MediaQuery.textScalerOf(context).scale(19) > 24) {
@@ -240,7 +243,7 @@ class SongRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: open,
+        onTap: song.available ? open : null,
         child: Container(
           constraints: const BoxConstraints(minHeight: 72),
           decoration: BoxDecoration(
@@ -286,6 +289,7 @@ class SongRow extends StatelessWidget {
                         Text(
                           [
                             song.artist.isEmpty ? '歌手未知' : song.artist,
+                            if (!song.available) '暂不可用',
                             if (song.data['version'] != null &&
                                 song.data['version'] != 'UNKNOWN')
                               song.version,
@@ -307,7 +311,7 @@ class SongRow extends StatelessWidget {
                     favorite,
                     IconButton(
                       tooltip: '开始练唱 ${song.title}',
-                      onPressed: open,
+                      onPressed: song.available ? open : null,
                       icon: Icon(
                         Icons.play_arrow_rounded,
                         size: 20,
@@ -332,8 +336,9 @@ class SongRow extends StatelessWidget {
                         style: TextButton.styleFrom(
                           foregroundColor: favoriteColor,
                         ),
-                        onPressed: () =>
-                            uiTask(context, () => state.favorite(song)),
+                        onPressed: state.favoriteSaving
+                            ? null
+                            : () => uiTask(context, () => state.favorite(song)),
                         icon: Icon(favoriteIcon, size: 20),
                         label: Text(favoriteLabel),
                       ),
@@ -344,9 +349,9 @@ class SongRow extends StatelessWidget {
                         style: TextButton.styleFrom(
                           foregroundColor: scheme.onSurfaceVariant,
                         ),
-                        onPressed: open,
+                        onPressed: song.available ? open : null,
                         icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                        label: const Text('开始练唱'),
+                        label: Text(song.available ? '开始练唱' : '暂不可用'),
                       ),
                     ),
                   ],

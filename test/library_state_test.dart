@@ -22,16 +22,11 @@ class _DelayedPersonalStore extends LocalStore {
   final historyInstances = <String>[];
 
   @override
-  Future<List<Song>> favorites(String server) async {
-    final rows = await super.favorites(server);
+  Future<List<Song>> history(String server) async {
+    historyInstances.add(server);
+    final rows = await super.history(server);
     if (server == 'nas-a') await nasAGate.future;
     return rows;
-  }
-
-  @override
-  Future<List<Song>> history(String server) {
-    historyInstances.add(server);
-    return super.history(server);
   }
 }
 
@@ -85,7 +80,9 @@ void main() {
       final published = <(String, String)>[];
       racingState.addListener(
         () => published.add((
-          racingState.favorites.single.title,
+          racingState.favorites.isEmpty
+              ? '无本地收藏回退'
+              : racingState.favorites.single.title,
           racingState.history.single.title,
         )),
       );
@@ -93,17 +90,17 @@ void main() {
       final lateA = racingState.refreshPersonal();
       racingState.instanceId = 'nas-b';
       await racingState.refreshPersonal();
-      expect(racingState.favorites.single.title, 'NAS B 歌曲');
+      expect(racingState.favorites, isEmpty);
       expect(racingState.history.single.title, 'NAS B 歌曲');
       expect(racingState.history.single.data['positionMs'], 34000);
 
       delayedStore.nasAGate.complete();
       await lateA;
-      expect(racingState.favorites.single.title, 'NAS B 歌曲');
+      expect(racingState.favorites, isEmpty);
       expect(racingState.history.single.title, 'NAS B 歌曲');
       expect(racingState.history.single.data['positionMs'], 34000);
-      expect(delayedStore.historyInstances, ['nas-b', 'nas-a']);
-      expect(published, [('NAS B 歌曲', 'NAS B 歌曲')]);
+      expect(delayedStore.historyInstances, ['nas-a', 'nas-b']);
+      expect(published.every((row) => row == ('无本地收藏回退', 'NAS B 歌曲')), isTrue);
       expect((await store.favorites('nas-a')).single.title, 'NAS A 歌曲');
       expect((await store.history('nas-a')).single.data['positionMs'], 12000);
     },

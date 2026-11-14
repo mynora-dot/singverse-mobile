@@ -20,6 +20,8 @@ class FakeApi implements NasApi {
   bool deferred = false;
   bool loggedIn = false;
   List<Json> rows = [];
+  final favoriteRows = <String, Json>{};
+  int favoriteRevision = 0;
   List<Json> textTracks = [], tags = [], browseRows = [];
   bool offline = false;
   ApiFailure? loginFailure;
@@ -64,6 +66,41 @@ class FakeApi implements NasApi {
       final next = Completer<dynamic>();
       pending.add(next);
       return next.future;
+    }
+    if (path.startsWith('/api/v1/favorites')) {
+      if (offline) throw ApiFailure(0, 'NAS 不可达');
+      if (method == 'PUT') {
+        final change = body as Json;
+        for (final id in (change['songIds'] as List).cast<String>()) {
+          if (change['selected'] == true) {
+            favoriteRows[id] =
+                rows.where((row) => row['id'] == id).firstOrNull ??
+                {'id': id, 'title': '测试歌曲'};
+          } else {
+            favoriteRows.remove(id);
+          }
+        }
+        favoriteRevision++;
+        return {
+          'songIds': favoriteRows.keys.toList(),
+          'revision': favoriteRevision,
+        };
+      }
+      if (path.endsWith('/ids')) {
+        return {
+          'songIds': favoriteRows.keys.toList(),
+          'revision': favoriteRevision,
+        };
+      }
+      final page =
+          int.tryParse(Uri.parse(path).queryParameters['page'] ?? '') ?? 0;
+      final size =
+          int.tryParse(Uri.parse(path).queryParameters['size'] ?? '') ?? 100;
+      return {
+        'items': favoriteRows.values.skip(page * size).take(size).toList(),
+        'totalElements': favoriteRows.length,
+        'revision': favoriteRevision,
+      };
     }
     if (path == '/api/v1/classification/tags') return tags;
     if (path.endsWith('/text-tracks')) return {'items': textTracks};
@@ -329,7 +366,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   test(
-    'known NAS personal data remains available when NAS is offline',
+    'offline startup preserves history without reading legacy local favorites',
     () async {
       api.origin = 'http://nas.local';
       api.offline = true;
@@ -340,7 +377,8 @@ void main() {
       await store.favorite('nas-a', Song({'id': '1', 'title': '晴天'}), true);
       await state.initialize();
       expect(state.authenticated, isFalse);
-      expect(state.favorites.single.title, '晴天');
+      expect(state.favorites, isEmpty);
+      expect((await store.favorites('nas-a')).single.title, '晴天');
       expect(state.error, contains('NAS 不可达'));
     },
   );
