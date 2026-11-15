@@ -10,6 +10,7 @@ import 'package:singverse_mobile/features/library/library_pages.dart';
 import 'package:singverse_mobile/features/library/widgets.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fixtures/legacy_favorites.dart';
 import 'widget_test.dart' show FakeApi;
 
 void main() {

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:singverse_mobile/core/local_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fixtures/legacy_favorites.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();

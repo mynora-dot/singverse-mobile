@@ -2504,7 +2504,16 @@ class LyricsView extends StatefulWidget {
 class _LyricsViewState extends State<LyricsView> {
   final controller = ScrollController();
   int lastActive = -2;
-  double lastWidth = 0, lastHeight = 0, lastScale = 0;
+  double lastHeight = 0;
+  List<TextLine>? measuredLines;
+  double measuredWidth = 0;
+  TextStyle? measuredStyle;
+  TextScaler? measuredScaler;
+  TextDirection? measuredDirection;
+  bool? measuredSenior;
+  final heights = <double>[];
+  final textHeights = <double>[];
+  final offsets = <double>[];
   DateTime manualUntil = DateTime.fromMillisecondsSinceEpoch(0);
   @override
   void dispose() {
@@ -2592,48 +2601,64 @@ class _LyricsViewState extends State<LyricsView> {
                   : FontWeight.w500)
             : FontWeight.w400,
       );
-      final heights = <double>[];
-      final textHeights = <double>[];
-      for (var index = 0; index < widget.lines.length; index++) {
-        final painter = TextPainter(
-          text: TextSpan(
-            text: widget.lines[index].text.isEmpty
-                ? ' '
-                : widget.lines[index].text,
-            // Reserve the active size for every sentence so highlighting a
-            // wrapped line does not change the scroll geometry underneath it.
-            style: styleFor(active),
-          ),
-          textDirection: Directionality.of(context),
-          textScaler: scaler,
-        )..layout(maxWidth: (size.maxWidth - 48).clamp(1, double.infinity));
-        final padding = widget.senior ? 28 : 20;
-        heights.add(
-          math.max(widget.senior ? 56 : 48, painter.height + padding),
-        );
-        textHeights.add(painter.height);
-        painter.dispose();
+      final measurementStyle = styleFor(active);
+      final direction = Directionality.of(context);
+      final measurementsChanged =
+          !identical(measuredLines, widget.lines) ||
+          measuredWidth != size.maxWidth ||
+          measuredStyle != measurementStyle ||
+          measuredScaler != scaler ||
+          measuredDirection != direction ||
+          measuredSenior != widget.senior;
+      // Parsed timelines are replaced when a track changes. Position updates
+      // reuse their geometry instead of laying out the entire song each tick.
+      if (measurementsChanged) {
+        measuredLines = widget.lines;
+        measuredWidth = size.maxWidth;
+        measuredStyle = measurementStyle;
+        measuredScaler = scaler;
+        measuredDirection = direction;
+        measuredSenior = widget.senior;
+        heights.clear();
+        textHeights.clear();
+        offsets.clear();
+        var offset = 0.0;
+        for (final line in widget.lines) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: line.text.isEmpty ? ' ' : line.text,
+              // Reserve the active size so highlighting keeps stable geometry.
+              style: measurementStyle,
+            ),
+            textDirection: direction,
+            textScaler: scaler,
+          )..layout(maxWidth: (size.maxWidth - 48).clamp(1, double.infinity));
+          final height = math.max(
+            widget.senior ? 56.0 : 48.0,
+            painter.height + (widget.senior ? 28 : 20),
+          );
+          offsets.add(offset);
+          heights.add(height);
+          textHeights.add(painter.height);
+          offset += height;
+          painter.dispose();
+        }
       }
       final topPadding = size.maxHeight * .16;
       if (active != lastActive ||
-          size.maxWidth != lastWidth ||
-          size.maxHeight != lastHeight ||
-          scaler.scale(_lyricFontSize(context, widget.senior)) != lastScale) {
+          measurementsChanged ||
+          size.maxHeight != lastHeight) {
         lastActive = active;
-        lastWidth = size.maxWidth;
         lastHeight = size.maxHeight;
-        lastScale = scaler.scale(_lyricFontSize(context, widget.senior));
-        final offset = heights
-            .take(active < 0 ? 0 : active)
-            .fold<double>(0, (sum, h) => sum + h);
+        final offset = active < 0 ? 0.0 : offsets[active];
+        final activeHeight = active < 0 ? 0.0 : heights[active];
+        final textHeight = active < 0 ? 0.0 : textHeights[active];
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted ||
               !controller.hasClients ||
               DateTime.now().isBefore(manualUntil)) {
             return;
           }
-          final activeHeight = active < 0 ? 0.0 : heights[active];
-          final textHeight = active < 0 ? 0.0 : textHeights[active];
           final target =
               (active < 0
                       ? 0.0

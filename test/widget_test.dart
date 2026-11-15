@@ -12,6 +12,8 @@ import 'package:singverse_mobile/core/local_store.dart';
 import 'package:singverse_mobile/core/models.dart';
 import 'package:singverse_mobile/main.dart';
 
+import 'fixtures/legacy_favorites.dart';
+
 class FakeApi implements NasApi {
   String origin = '';
   String loginState = 'authenticated';

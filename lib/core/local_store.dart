@@ -42,15 +42,6 @@ class LocalStore {
     );
   }
 
-  Future<List<Song>> favorites(String server) async =>
-      (await db.query(
-            'personal_song',
-            where: 'instance_id = ? AND favorite = 1',
-            whereArgs: [server],
-            orderBy: 'song_id',
-          ))
-          .map((row) => Song(jsonDecode(row['snapshot']! as String) as Json))
-          .toList();
   Future<List<Song>> history(String server) async =>
       (await db.query(
             'personal_song',
@@ -66,21 +57,6 @@ class LocalStore {
             }),
           )
           .toList();
-  Future<void> favorite(String server, Song song, bool selected) async {
-    await db.transaction((tx) async {
-      await tx.rawInsert(
-        'INSERT OR IGNORE INTO personal_song(instance_id,song_id,snapshot) VALUES(?,?,?)',
-        [server, song.id, jsonEncode(song.data)],
-      );
-      await tx.update(
-        'personal_song',
-        {'snapshot': jsonEncode(song.data), 'favorite': selected ? 1 : 0},
-        where: 'instance_id = ? AND song_id = ?',
-        whereArgs: [server, song.id],
-      );
-    });
-  }
-
   Future<void> played(
     String server,
     Song song,

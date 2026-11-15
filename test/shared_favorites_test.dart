@@ -11,6 +11,7 @@ import 'package:singverse_mobile/core/local_store.dart';
 import 'package:singverse_mobile/core/models.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fixtures/legacy_favorites.dart';
 import 'widget_test.dart' show FakeApi;
 
 class FavoritesApi extends FakeApi {
