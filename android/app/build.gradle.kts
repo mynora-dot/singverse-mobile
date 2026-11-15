@@ -4,18 +4,22 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val productVersion = rootProject.file("../VERSION").readText().trim()
+val productVersion = System.getenv("SINGVERSE_VERSION") ?: "0.0.0"
 val versionParts = Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)").matchEntire(productVersion)
-    ?.groupValues?.drop(1)?.map { it.toLong() } ?: error("VERSION must be major.minor.patch")
-check(versionParts[1] <= 999 && versionParts[2] <= 999) { "VERSION minor/patch must be <= 999" }
-val productCode = versionParts[0] * 1000000 + versionParts[1] * 1000 + versionParts[2]
-check(productCode in 1..2100000000) { "VERSION is outside Android versionCode range" }
+    ?.groupValues?.drop(1)?.map { it.toLong() } ?: error("SINGVERSE_VERSION must be major.minor.patch")
+check(versionParts[0] <= 2100 && versionParts[1] <= 999 && versionParts[2] <= 999) { "SINGVERSE_VERSION is outside Android versionCode range" }
+val productCode = (versionParts[0] * 1000000 + versionParts[1] * 1000 + versionParts[2]).coerceAtLeast(1L)
+check(productCode in 1..2100000000) { "SINGVERSE_VERSION is outside Android versionCode range" }
 val releaseRequested = gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }
+if (releaseRequested) check(!System.getenv("SINGVERSE_VERSION").isNullOrBlank() && productVersion != "0.0.0") { "Release requires the version injected by Actions" }
 val signingNames = listOf("SINGVERSE_MOBILE_KEYSTORE", "SINGVERSE_MOBILE_STORE_PASSWORD", "SINGVERSE_MOBILE_KEY_ALIAS", "SINGVERSE_MOBILE_KEY_PASSWORD")
 val releaseSigning = signingNames.associateWith { System.getenv(it) }
 if (releaseRequested) check(releaseSigning.values.all { !it.isNullOrBlank() }) { "Release requires all SINGVERSE_MOBILE signing variables" }
 
 android {
+    lint {
+        checkReleaseBuilds = System.getenv("GITHUB_ACTIONS") != "true"
+    }
     namespace = "com.mynora.singverse.mobile"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion

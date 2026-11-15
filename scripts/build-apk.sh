@@ -1,10 +1,15 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-version=$(cat VERSION)
-code=$(python3 -c 'import sys; sys.path.insert(0,"scripts"); from importlib.machinery import SourceFileLoader; print(SourceFileLoader("release","scripts/prepare-release.py").load_module().version_code(sys.argv[1]))' "$version")
 mode=${1:-debug}
 case "$mode" in debug|release) ;; *) echo "Expected debug or release" >&2; exit 1;; esac
+if [ "$mode" = release ]; then
+  version=$(python3 scripts/build_version.py --required)
+else
+  version=$(python3 scripts/build_version.py)
+fi
+export SINGVERSE_VERSION="$version"
+code=$(python3 -c 'import sys; major,minor,patch=map(int,sys.argv[1].split(".")); print(max(1,major*1000000+minor*1000+patch))' "$version")
 # Flutter regenerates the native plugin registrant for the selected build mode
 # only when pub is enabled. Keep dev-only integration_test out of release APKs.
 lock_snapshot=$(mktemp)

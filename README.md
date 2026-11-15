@@ -12,7 +12,7 @@ make build
 
 需要 Flutter 3.47.5、Android SDK 36/Flutter 对应 NDK 及 JDK 21，使用仓库 Gradle Wrapper 与提交的 `pubspec.lock`。SDK 配置保存在忽略的 `android/local.properties`，不提交路径和凭据。`make build` 输出 `build/app/outputs/flutter-apk/app-debug.apk`。业务 API 契约快照和来源记录位于 [contracts](contracts/SOURCE.json)，测试不依赖兄弟仓库。Go 后端是契约权威，更新快照时记录具体 revision 和 SHA-256。
 
-`VERSION` 是唯一产品版本来源；只接受 `major.minor.patch`，minor/patch 最大 999，`versionCode = major*1000000 + minor*1000 + patch`，必须为正且不超过 2100000000。每次正式发布提高版本，不能复用旧码。Flutter 的构建参数和 Android 包版本均从根 VERSION 注入，不在 pubspec 中维护第二份版本。
+正式版本由 GitHub Release 标签 `vMAJOR.MINOR.PATCH` 决定，Actions 自动注入 `SINGVERSE_VERSION`；版本值只接受 `major.minor.patch`，minor/patch 最大 999，`versionCode = major*1000000 + minor*1000 + patch`，必须为正且不超过 2100000000。每次正式发布提高版本，不能复用旧码。Flutter 的构建参数和 Android 包版本均使用注入值，不在 pubspec 中维护第二份版本。本地调试默认 `0.0.0` / versionCode 1；本地正式打包需显式设置 `SINGVERSE_VERSION`。
 
 ## NAS 登录
 
@@ -49,12 +49,12 @@ make build
 发行方长期保管固定签名，不把密钥放入仓库。设置 `SINGVERSE_MOBILE_KEYSTORE`、`SINGVERSE_MOBILE_STORE_PASSWORD`、`SINGVERSE_MOBILE_KEY_ALIAS`、`SINGVERSE_MOBILE_KEY_PASSWORD` 后执行：
 
 ```sh
-make release
+SINGVERSE_VERSION=0.0.2 make release
 ```
 
-缺少正式签名立即失败，不回退 debug。输出 `build/mobile-release/singverse-mobile.apk`（通用 APK）、`release.json`、`SHA256SUMS`。元数据来自真实 APK 的 aapt/apksigner 结果，包含 versionCode/versionName、packageName、minSdk、abis、size、sha256、certificateSha256、notes；证书摘要为小写 64 位十六进制。APK 的源版本必须匹配根 VERSION。更新说明默认读取 `RELEASE_NOTES`，CI 使用 GitHub Release 正文；可用 `scripts/prepare-release.py --notes <文本文件>` 覆盖。说明最多 16000 UTF-8 字节。
+缺少正式签名立即失败，不回退 debug。输出 `build/mobile-release/singverse-mobile.apk`（通用 APK）、`release.json`、`SHA256SUMS`。元数据来自真实 APK 的 aapt/apksigner 结果，包含 versionCode/versionName、packageName、minSdk、abis、size、sha256、certificateSha256、notes；证书摘要为小写 64 位十六进制。APK 的版本必须匹配 Actions 注入的版本。更新说明默认读取 `RELEASE_NOTES`，CI 使用 GitHub Release 正文；可用 `scripts/prepare-release.py --notes <文本文件>` 覆盖。说明最多 16000 UTF-8 字节。
 
-GitHub Actions 在正式 GitHub Release `v<VERSION>` 发布后验证和构建上传资产；排除 draft/prerelease，普通 push/PR 只验证。仓库 Secrets：`MOBILE_KEYSTORE_BASE64`、`MOBILE_STORE_PASSWORD`、`MOBILE_KEY_ALIAS`、`MOBILE_KEY_PASSWORD`。签名文件仅暂存在 runner 临时目录并清理。发布前排除当前 tag、比较上一正式版本的元数据，拒绝版本不递增、缺失/损坏元数据或签名证书变化。无历史正式版本才允许首次发布。重试逐字节比对已上传资产，相同文件复用，仅上传缺失文件；不同内容失败，标签不可重用。管理平台镜像构建会下载并锁定正式 Release 中的 APK，用户从 NAS 下载，无需运行时访问 GitHub。
+GitHub Actions 仅在正式 GitHub Release（如 `v0.0.2`）发布后构建和上传资产；排除 draft/prerelease，普通 push/PR 不触发。工作流不运行测试、格式检查或静态分析，只保留发布版本、APK 签名和已有资产保护。仓库 Secrets：`MOBILE_KEYSTORE_BASE64`、`MOBILE_STORE_PASSWORD`、`MOBILE_KEY_ALIAS`、`MOBILE_KEY_PASSWORD`。签名文件仅暂存在 runner 临时目录并清理。发布前排除当前 tag、比较上一正式版本的元数据，拒绝版本不递增、缺失/损坏元数据或签名证书变化。无历史正式版本才允许首次发布。重试逐字节比对已上传资产，相同文件复用，仅上传缺失文件；不同内容失败，标签不可重用。管理平台镜像构建会下载并锁定正式 Release 中的 APK，用户从 NAS 下载，无需运行时访问 GitHub。
 
 ## 工程与验证
 
