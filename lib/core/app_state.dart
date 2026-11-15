@@ -173,6 +173,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool isPlaying = false, loop = false;
   List<Json> tracks = [];
   String playbackInstanceId = '';
+  String? _playbackKey;
   int _lastSaved = -1;
   String _lastPlayingKey = '';
   bool _disposed = false;
@@ -717,15 +718,34 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   void _onPlayback(dynamic event) {
     if (_disposed) return;
-    final previous = _playbackStructure;
-    final previousProgress = [
-      positionMs,
-      durationMs,
-      singing['level'],
-      singing['clipped'],
-      singing['recordedMs'],
-    ].toString();
     final value = Map<String, dynamic>.from(event as Map);
+    final previousProgress = _playbackProgress;
+    if (value['progressOnly'] == true) {
+      // A queued tick from an older source/service must not update a new song.
+      if (_playbackKey == null || value['playbackKey'] != _playbackKey) return;
+      final karaoke = value['karaoke'] as Map? ?? const {};
+      if (karaoke['phase'] != singingPhase || karaoke['takeId'] != takeId) {
+        return;
+      }
+      positionMs = (value['positionMs'] as num? ?? positionMs).toInt();
+      durationMs = (value['durationMs'] as num? ?? durationMs).toInt();
+      for (final key in ['level', 'clipped', 'recordedMs']) {
+        if (karaoke.containsKey(key)) singing[key] = karaoke[key];
+      }
+      // AudioTrack can choose its actual route after the initial player event.
+      final output = value['output'] as String? ?? outputRoute;
+      final routeChanged = output != outputRoute;
+      outputRoute = output;
+      _savePlaybackHistory();
+      if (routeChanged) {
+        notifyListeners();
+      } else if (previousProgress != _playbackProgress) {
+        playback.notifyListeners();
+      }
+      return;
+    }
+    final previous = _playbackStructure;
+    _playbackKey = value['playbackKey'] as String?;
     if (value['openSinging'] == true) stageRequests++;
     final raw = jsonDecode(value['song'] as String) as Json;
     current = raw['id'] == null ? null : Song(raw);
@@ -767,6 +787,23 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         unawaited(refreshWorks());
       }
     }
+    _savePlaybackHistory();
+    if (previous != _playbackStructure) {
+      notifyListeners();
+    } else if (previousProgress != _playbackProgress) {
+      playback.notifyListeners();
+    }
+  }
+
+  (int, int, Object?, Object?, Object?) get _playbackProgress => (
+    positionMs,
+    durationMs,
+    singing['level'],
+    singing['clipped'],
+    singing['recordedMs'],
+  );
+
+  void _savePlaybackHistory() {
     final song = current;
     final key = '${playbackInstanceId}_${song?.id}';
     final newPlay = isPlaying && _lastPlayingKey != key;
@@ -804,18 +841,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       );
     }
     if (current == null) _lastPlayingKey = '';
-    if (previous != _playbackStructure) {
-      notifyListeners();
-    } else if (previousProgress !=
-        [
-          positionMs,
-          durationMs,
-          singing['level'],
-          singing['clipped'],
-          singing['recordedMs'],
-        ].toString()) {
-      playback.notifyListeners();
-    }
   }
 
   @override

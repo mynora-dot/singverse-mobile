@@ -222,6 +222,8 @@ class KaraokeEngine(private val context: Context, private val track: () -> Audio
         if (id == takeId) { takeId = ""; phase = "IDLE"; meta = JSONObject(); error = ""; level = 0.0 }
         changed()
     }
+    fun progressSnapshot(): Map<String, Any?> = mapOf("phase" to phase, "takeId" to takeId,
+        "level" to level, "clipped" to clipped, "recordedMs" to voiceFrames * 1000 / KaraokePcm.RATE)
     fun snapshot(): Map<String, Any?> = mapOf("phase" to phase, "takeId" to takeId, "level" to level, "clipped" to clipped,
         "songId" to meta.optJSONObject("song")?.optString("id").orEmpty(), "instanceId" to meta.optString("instanceId"),
         "freeBytes" to works.root.usableSpace, "recordedMs" to voiceFrames * 1000 / KaraokePcm.RATE, "error" to error,

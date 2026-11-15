@@ -13,7 +13,7 @@ class MiniPlayer extends StatelessWidget {
   final NavigatorState? navigator;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: state.performance,
+    listenable: state,
     builder: (context, _) => _build(context),
   );
 
@@ -100,28 +100,33 @@ class MiniPlayer extends StatelessWidget {
                                             fontWeight: FontWeight.w600,
                                           ),
                               ),
-                              Text(
-                                state.recording
-                                    ? '正在录音 · ${durationLabel((state.singing['recordedMs'] as num? ?? 0).toInt())}'
-                                    : state.countdown > 0
-                                    ? '录音倒数 ${state.countdown}'
-                                    : state.singingPhase == 'FINALIZING'
-                                    ? '正在保留录音'
-                                    : state.pendingReviewId.isNotEmpty
-                                    ? '录音已保留 · 点击回听'
-                                    : state.workId.isNotEmpty
-                                    ? '返回作品回听'
-                                    : '$playbackLabel · ${durationLabel(state.positionMs)}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: state.taking
-                                          ? Theme.of(context).colorScheme.error
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                    ),
+                              ListenableBuilder(
+                                listenable: state.playback,
+                                builder: (context, _) => Text(
+                                  state.recording
+                                      ? '正在录音 · ${durationLabel((state.singing['recordedMs'] as num? ?? 0).toInt())}'
+                                      : state.countdown > 0
+                                      ? '录音倒数 ${state.countdown}'
+                                      : state.singingPhase == 'FINALIZING'
+                                      ? '正在保留录音'
+                                      : state.pendingReviewId.isNotEmpty
+                                      ? '录音已保留 · 点击回听'
+                                      : state.workId.isNotEmpty
+                                      ? '返回作品回听'
+                                      : '$playbackLabel · ${durationLabel(state.positionMs)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: state.taking
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .error
+                                            : Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                      ),
+                                ),
                               ),
                             ],
                           ),
@@ -172,15 +177,18 @@ class MiniPlayer extends StatelessWidget {
                     ),
                   ),
                   ExcludeSemantics(
-                    child: LinearProgressIndicator(
-                      minHeight: 2,
-                      value: state.durationMs > 0
-                          ? (state.positionMs / state.durationMs).clamp(0, 1)
-                          : 0,
-                      color: state.recording
-                          ? Theme.of(context).colorScheme.error
-                          : null,
-                      backgroundColor: Colors.transparent,
+                    child: ListenableBuilder(
+                      listenable: state.playback,
+                      builder: (context, _) => LinearProgressIndicator(
+                        minHeight: 2,
+                        value: state.durationMs > 0
+                            ? (state.positionMs / state.durationMs).clamp(0, 1)
+                            : 0,
+                        color: state.recording
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                        backgroundColor: Colors.transparent,
+                      ),
                     ),
                   ),
                 ],

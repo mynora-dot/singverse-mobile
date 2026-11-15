@@ -47,7 +47,10 @@ class PlaybackService : MediaSessionService() {
         override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) { routeChanged() }
         override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) { routeChanged() }
     }
-    private fun routeChanged() { if (::karaoke.isInitialized && karaoke.phase == "RECORDING") finishRecording("音频设备已改变，录音片段已保留") }
+    private fun routeChanged() {
+        if (::karaoke.isInitialized && karaoke.phase == "RECORDING") finishRecording("音频设备已改变，录音片段已保留")
+        if (::player.isInitialized && ::karaoke.isInitialized) publish()
+    }
     private lateinit var transport: NasTransport
     private val main = Handler(Looper.getMainLooper())
     private val requests = PlaybackRequests()
@@ -61,6 +64,8 @@ class PlaybackService : MediaSessionService() {
     private var historyLastReportAt = 0L
     private var requestScope = NasRequestScope()
     @Volatile private var generation = 0
+    private val eventStreamId = UUID.randomUUID().toString()
+    private fun playbackKey() = "$eventStreamId:$generation"
     private var leaseId = ""
     private var offsetMs = 0L
     private var sharedRoles = JSONObject()
@@ -490,7 +495,7 @@ class PlaybackService : MediaSessionService() {
                 else if (countdown == 0) command("seek", rangeA)
             }
             reportHistory()
-            if (player.isPlaying || karaoke.phase in listOf("RECORDING", "TESTING") || countdown > 0) publish()
+            if (player.isPlaying || karaoke.phase in listOf("RECORDING", "TESTING") || countdown > 0) publishProgress()
             main.postDelayed(this, 100)
         }
     }
@@ -549,17 +554,25 @@ class PlaybackService : MediaSessionService() {
         }
         val videoSize = player.videoSize
         val videoAspect = if (videoSize.width > 0 && videoSize.height > 0) videoSize.width.toDouble() * videoSize.pixelWidthHeightRatio / videoSize.height else 16.0 / 9.0
-        val duration = if (originalDuration > 0) originalDuration else player.duration.takeIf { it != C.TIME_UNSET && it > 0 }?.plus(offsetMs) ?: 0L
-        return mapOf("song" to song.toString(), "instanceId" to server, "state" to state, "message" to message,
+        val duration = playbackDuration()
+        return mapOf("playbackKey" to playbackKey(), "song" to song.toString(), "instanceId" to server, "state" to state, "message" to message,
             "positionMs" to (if (resourceReady) player.currentPosition + offsetMs else requestedPosition), "durationMs" to duration,
             "isPlaying" to player.isPlaying, "loop" to (player.repeatMode == Player.REPEAT_MODE_ONE), "mode" to resourceMode, "tracks" to tracks, "workId" to workId,
             "karaoke" to karaoke.snapshot(), "countdown" to countdown, "pitch" to pitch, "speed" to speed,
             "volume" to player.volume, "channel" to chain.channels.mode, "rangeA" to rangeA, "rangeB" to rangeB,
             "originalMapped" to (sharedRoles.optString("originalId").isNotBlank() || sourceAudioIds.size == 1), "backingMapped" to (sharedRoles.optString("backingId").isNotBlank() || sharedRoles.has("backingResource") || roles.contains(roleKey("backing"))),
             "audioRole" to audioRole, "videoAspect" to videoAspect,
-            "output" to (chain.audioTrack?.routedDevice?.productName?.toString() ?: "播放后显示实际输出设备"))
+            "output" to playbackOutput())
     }
     private fun publish() { if (!destroyed) { reportHistory(); listener?.invoke(snapshot()) } }
+    private fun playbackOutput() = chain.audioTrack?.routedDevice?.productName?.toString() ?: "播放后显示实际输出设备"
+    private fun playbackDuration() = if (originalDuration > 0) originalDuration else player.duration.takeIf { it != C.TIME_UNSET && it > 0 }?.plus(offsetMs) ?: 0L
+    private fun publishProgress() {
+        if (destroyed) return
+        listener?.invoke(mapOf("progressOnly" to true, "playbackKey" to playbackKey(),
+            "positionMs" to (if (resourceReady) player.currentPosition + offsetMs else requestedPosition),
+            "durationMs" to playbackDuration(), "output" to playbackOutput(), "karaoke" to karaoke.progressSnapshot()))
+    }
     private fun beginHistory() {
         if (workId.isNotEmpty() || song.optString("id").isBlank()) return
         val connection = transport.connectionIdentity()
