@@ -21,8 +21,9 @@ import javax.crypto.spec.GCMParameterSpec
 
 class NasFailure(val status: Int, message: String, val retryAfter: String = "") : Exception(message)
 internal data class NasConnection(val origin: String, val generation: Long)
+internal data class NasAdminSession(val connection: NasConnection, val cookie: String?)
 
-/** Native-only cookie store, never shared with android.webkit.CookieManager. */
+/** Native cookie store; only an explicitly opened admin page receives its current session. */
 class NasTransport internal constructor(context: Context) {
     private val preferences = context.getSharedPreferences("nas-session", Context.MODE_PRIVATE)
     private val jar = CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER)
@@ -59,6 +60,30 @@ class NasTransport internal constructor(context: Context) {
     }
 
     @Synchronized fun forget() { generation++; jar.cookieStore.removeAll(); persist() }
+
+    internal fun adminSession(expectedOrigin: String, username: String?): NasAdminSession {
+        val connection = session()
+        if (connection.origin != normalize(expectedOrigin)) throw NasFailure(409, "NAS 连接已切换")
+        if (username != null) {
+            val account = JSONObject(request(connection, "/api/v1/auth/session", "GET", null, null))
+            if (account.optString("username") != username) throw NasFailure(409, "App 登录账号已变化，请重新打开管理端")
+        }
+        return synchronized(this) {
+            checkSession(connection)
+            val cookie = if (username == null) null else {
+                adminCookie(connection) ?: throw NasFailure(401, "App 登录已失效，请返回设置重新登录")
+            }
+            NasAdminSession(connection, cookie)
+        }
+    }
+
+    @Synchronized internal fun isCurrentAdminSession(value: NasAdminSession): Boolean =
+        value.connection == session() && (value.cookie == null || value.cookie == adminCookie(value.connection))
+
+    private fun adminCookie(connection: NasConnection): String? = jar.cookieStore
+        .get(URI("${connection.origin}/api/v1/auth/session"))
+        .firstOrNull { it.name == "singverse_session" && !it.hasExpired() && (!it.secure || connection.origin.startsWith("https://")) }
+        ?.value
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

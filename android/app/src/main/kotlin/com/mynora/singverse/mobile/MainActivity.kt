@@ -65,6 +65,23 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
         val transport = NasTransport.get(this)
+        val adminSession = AdminWebSession(transport::adminSession, transport::isCurrentAdminSession)
+        MethodChannel(engine.dartExecutor.binaryMessenger, "singverse/admin-session").setMethodCallHandler { call, result ->
+            worker.execute {
+                try {
+                    when (call.method) {
+                        "prepare" -> adminSession.prepare(call.argument<String>("id")!!,
+                            call.argument<String>("origin")!!, call.argument<String>("username"))
+                        "clear" -> adminSession.clear(call.argument<String>("id")!!)
+                        else -> { main.post { result.notImplemented() }; return@execute }
+                    }
+                    main.post { result.success(null) }
+                } catch (failure: Exception) {
+                    main.post { result.error(if (failure is NasFailure) "${failure.status}" else "admin-session",
+                        if (failure is NasFailure) failure.message else "无法同步管理端登录，请重试", null) }
+                }
+            }
+        }
         val pairing = TvPairingClient(transport)
         tvPairing = pairing
         MethodChannel(engine.dartExecutor.binaryMessenger, "singverse/tv-pairing").setMethodCallHandler { call, result ->
@@ -157,6 +174,11 @@ class MainActivity : FlutterActivity() {
             }
             try { executor.execute {
                 try {
+                    if (call.method in listOf("configure", "forget") || call.method == "request" &&
+                        call.argument<String>("path") in listOf("/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/mfa/verify", "/api/v1/auth/password/reset")) {
+                        // WebView cleanup must not prevent native logout, login or switching NAS.
+                        runCatching { adminSession.clear() }
+                    }
                     val value: Any? = when (call.method) {
                         "restore" -> transport.origin
                         "configure" -> transport.configure(call.argument<String>("origin")!!)

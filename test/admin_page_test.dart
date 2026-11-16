@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:singverse_mobile/app/design.dart';
@@ -8,6 +9,7 @@ import 'package:singverse_mobile/app/shell.dart';
 import 'package:singverse_mobile/core/app_state.dart';
 import 'package:singverse_mobile/core/local_store.dart';
 import 'package:singverse_mobile/features/admin/admin_page.dart';
+import 'package:singverse_mobile/features/admin/admin_session.dart';
 import 'package:singverse_mobile/features/library/connection.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 // Replace only the WebView platform boundary; production widgets and routing
@@ -156,6 +158,9 @@ void main() {
   late AppState state;
   late TestWebViewPlatform platform;
   late WebViewPlatform previousPlatform;
+  late List<MethodCall> sessionCalls;
+  Completer<void>? pendingSession;
+  PlatformException? sessionFailure;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -175,11 +180,25 @@ void main() {
     previousPlatform = WebViewPlatform.instance ?? TestWebViewPlatform();
     platform = TestWebViewPlatform();
     WebViewPlatform.instance = platform;
+    sessionCalls = [];
+    pendingSession = null;
+    sessionFailure = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(NativeAdminSession.channel, (call) async {
+          sessionCalls.add(call);
+          if (call.method == 'prepare') {
+            await pendingSession?.future;
+            if (sessionFailure != null) throw sessionFailure!;
+          }
+          return null;
+        });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(AppState.player, (call) async => null);
   });
 
   tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(NativeAdminSession.channel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(AppState.player, null);
     WebViewPlatform.instance = previousPlatform;
@@ -194,7 +213,7 @@ void main() {
   }
 
   testWidgets(
-    'settings opens current NAS admin inside the app without native credentials',
+    'signed-out app opens current NAS admin with an empty web session',
     (tester) async {
       await open(tester);
       expect(find.byType(AdminPage), findsOneWidget);
@@ -209,6 +228,12 @@ void main() {
       expect(request.body, isNull);
       expect(state.authenticated, isFalse);
       expect((state.api as FakeApi).requests, isEmpty);
+      expect(sessionCalls.single.method, 'prepare');
+      expect(sessionCalls.single.arguments, {
+        'id': isNotEmpty,
+        'origin': state.origin,
+        'username': null,
+      });
       platform.navigation.progress(60);
       await tester.pump();
       expect(
@@ -226,8 +251,109 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);
       expect(platform.web.html, hasLength(1));
+      expect(sessionCalls.last.method, 'clear');
+      expect(
+        sessionCalls.last.arguments['id'],
+        sessionCalls.first.arguments['id'],
+      );
     },
   );
+
+  testWidgets('current app account is synchronized before loading admin', (
+    tester,
+  ) async {
+    state.authenticated = true;
+    state.accountName = 'family';
+    pendingSession = Completer<void>();
+    await open(tester);
+    expect(platform.controllers, isEmpty);
+    expect(sessionCalls.single.arguments['username'], 'family');
+    expect(sessionCalls.single.arguments['origin'], state.origin);
+    expect(
+      sessionCalls.single.arguments.keys,
+      unorderedEquals(['id', 'origin', 'username']),
+    );
+    pendingSession!.complete();
+    await tester.pumpAndSettle();
+    expect(
+      platform.web.requests.single.uri.toString(),
+      '${state.origin}/admin/#/overview',
+    );
+    expect(platform.web.requests.single.headers, isEmpty);
+    await tester.tap(find.byTooltip('刷新'));
+    await tester.pumpAndSettle();
+    expect(
+      sessionCalls.where((call) => call.method == 'prepare'),
+      hasLength(1),
+    );
+  });
+
+  testWidgets('expired app session blocks old web accounts and can retry', (
+    tester,
+  ) async {
+    state.authenticated = true;
+    state.accountName = 'admin';
+    sessionFailure = PlatformException(code: '401', message: '请先登录');
+    await open(tester);
+    expect(platform.controllers, isEmpty);
+    expect(find.text('App 登录已失效，请返回设置重新登录后再打开管理端。'), findsOneWidget);
+    sessionFailure = null;
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(platform.web.requests, hasLength(1));
+  });
+
+  testWidgets('closing during account sync never loads the late session', (
+    tester,
+  ) async {
+    pendingSession = Completer<void>();
+    await open(tester);
+    await tester.tap(find.byTooltip('关闭管理端'));
+    await tester.pumpAndSettle();
+    expect(sessionCalls.last.method, 'clear');
+    pendingSession!.complete();
+    await tester.pumpAndSettle();
+    expect(platform.controllers, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('switching NAS during account sync discards the old page', (
+    tester,
+  ) async {
+    pendingSession = Completer<void>();
+    await open(tester);
+    await state.connect('http://nas-b.test:18080');
+    await tester.pumpAndSettle();
+    pendingSession!.complete();
+    await tester.pumpAndSettle();
+    expect(platform.controllers, isEmpty);
+    expect(find.text('NAS 连接已切换，请返回设置后重新打开管理端。'), findsOneWidget);
+    expect(sessionCalls.last.method, 'clear');
+  });
+
+  testWidgets('logging out or changing app account unloads the admin session', (
+    tester,
+  ) async {
+    for (final logout in [true, false]) {
+      state.authenticated = true;
+      state.accountName = 'admin';
+      await open(tester);
+      if (logout) {
+        await state.logout();
+      } else {
+        state.accountName = 'family';
+        await state.setAutomaticLogin(null);
+      }
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('admin-webview')), findsNothing);
+      expect(find.text('App 登录账号已变化，请返回设置后重新打开管理端。'), findsOneWidget);
+      expect(platform.web.html, hasLength(1));
+      expect(sessionCalls.last.method, 'clear');
+      await tester.tap(find.byTooltip('关闭管理端'));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
 
   testWidgets(
     'missing NAS opens connection first and cancellation opens no webpage',

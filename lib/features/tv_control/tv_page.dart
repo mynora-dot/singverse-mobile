@@ -24,7 +24,8 @@ class TvSession {
       await old.runJavaScript(
         "sessionStorage.removeItem('singverse-party'); location.replace('/party/');",
       );
-      await old.clearLocalStorage();
+      // Keep the remembered nickname for the next scan. Only the temporary
+      // participant credential belongs to the connection being closed.
       await old.loadHtmlString('<html><body></body></html>');
     }
     controller = null;

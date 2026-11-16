@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../app/design.dart';
 import '../../core/api.dart';
 import '../../core/app_state.dart';
 import '../library/connection.dart';
+import 'admin_session.dart';
 
 Future<void> openAdmin(BuildContext context, AppState state) => uiTask(
   context,
@@ -38,9 +40,14 @@ class AdminPage extends StatefulWidget {
 class _AdminPageState extends State<AdminPage> {
   late final String origin;
   late final String instanceId;
+  late final String accountName;
+  late final bool authenticated;
+  final sessionId = DateTime.now().microsecondsSinceEpoch.toString();
   late Uri lastUrl;
   WebViewController? controller;
   bool connectionChanged = false, loadingRequest = false, goingBack = false;
+  bool sessionReady = false;
+  String connectionMessage = 'NAS 连接已切换，请返回设置后重新打开管理端。';
   int progress = 0;
   String? error;
 
@@ -51,6 +58,8 @@ class _AdminPageState extends State<AdminPage> {
     super.initState();
     origin = widget.state.origin;
     instanceId = widget.state.instanceId;
+    accountName = widget.state.accountName;
+    authenticated = widget.state.authenticated;
     widget.state.addListener(checkConnection);
     unawaited(load());
   }
@@ -65,23 +74,34 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   void checkConnection() {
-    if (!active ||
-        (widget.state.origin == origin &&
-            widget.state.instanceId == instanceId)) {
-      return;
-    }
-    setState(() => connectionChanged = true);
+    if (!active) return;
+    final sameNas =
+        widget.state.origin == origin && widget.state.instanceId == instanceId;
+    final sameAccount =
+        widget.state.authenticated == authenticated &&
+        widget.state.accountName == accountName;
+    if (sameNas && sameAccount) return;
+    setState(() {
+      connectionChanged = true;
+      if (sameNas) {
+        connectionMessage = 'App 登录账号已变化，请返回设置后重新打开管理端。';
+      }
+    });
     unawaited(stopWebView(controller));
   }
 
   Future<void> stopWebView(WebViewController? web) async {
-    if (web == null) return;
     try {
-      // Unload the document, including any media it started. Web cookies stay
-      // independent of the native NAS session and remembered passwords.
-      await web.loadHtmlString('<html><body></body></html>');
+      // Unload any media before removing the WebView's copy of the session.
+      await web?.loadHtmlString('<html><body></body></html>');
     } catch (_) {
       // The platform view may already have been removed while closing.
+    } finally {
+      try {
+        await NativeAdminSession.clear(sessionId);
+      } catch (_) {
+        // The next open replaces all admin cookies before loading a document.
+      }
     }
   }
 
@@ -97,6 +117,18 @@ class _AdminPageState extends State<AdminPage> {
       progress = 0;
     });
     try {
+      if (!sessionReady) {
+        await NativeAdminSession.prepare(
+          id: sessionId,
+          origin: origin,
+          username: authenticated ? accountName : null,
+        );
+        if (!active) {
+          await NativeAdminSession.clear(sessionId);
+          return;
+        }
+        sessionReady = true;
+      }
       final alreadyOpen = controller != null;
       if (controller == null) {
         lastUrl = Uri.parse('${normalizeOrigin(origin)}/admin/#/overview');
@@ -166,6 +198,12 @@ class _AdminPageState extends State<AdminPage> {
       } else {
         await controller!.loadRequest(lastUrl);
       }
+    } on PlatformException catch (failure) {
+      fail(
+        failure.code == '401'
+            ? 'App 登录已失效，请返回设置重新登录后再打开管理端。'
+            : failure.message ?? '无法同步 App 登录，请重试。',
+      );
     } catch (_) {
       fail('无法打开管理端，请检查 NAS 连接后重试。');
     } finally {
@@ -229,7 +267,7 @@ class _AdminPageState extends State<AdminPage> {
         child: connectionChanged
             ? SingleChildScrollView(
                 child: Notice(
-                  'NAS 连接已切换，请返回设置后重新打开管理端。',
+                  connectionMessage,
                   label: '返回设置',
                   action: () => Navigator.of(context).pop(),
                 ),
