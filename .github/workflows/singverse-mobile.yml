@@ -14,7 +14,7 @@ jobs:
     if: github.event_name == 'release' && !github.event.release.prerelease && !github.event.release.draft
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +33,17 @@ jobs:
         with:
           packages: 'platform-tools'
           log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+      - name: Limit Gradle memory and cache build outputs on the runner
+        run: |
+          mkdir -p "$HOME/.gradle"
+          printf '%s\n' \
+            'org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -XX:ReservedCodeCacheSize=256m -Dfile.encoding=UTF-8' \
+            'org.gradle.workers.max=2' \
+            'kotlin.daemon.jvmargs=-Xmx1g' \
+            'org.gradle.caching=true' >> "$HOME/.gradle/gradle.properties"
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.5'

@@ -58,6 +58,8 @@ GitHub Actions 仅在正式 GitHub Release（如 `v0.0.2`）发布后构建和�
 
 ## 工程与验证
 
+CI 固定使用 Ubuntu 24.04，保留 Android SDK/JDK，复用 Flutter 与 Gradle 依赖缓存。runner 中限制 Gradle 堆为 3 GiB、Kotlin daemon 堆为 1 GiB、并行 worker 为 2，不改变本地 Gradle 配置。GitHub Actions 缓存受 tag 访问范围限制，主要帮助同一 Release 的重跑，不保证不同版本之间命中。
+
 `lib/app` 提供标准/长辈布局、主题和迷你播放器，`lib/core` 管理 NAS、个人索引和更新状态，`features` 提供曲库、舞台、作品、电视及更新界面。Android 原生 `NasTransport` 管理加密 Cookie，`PlaybackService` 和 `KaraokeEngine` 提供 Media3 播放、AudioRecord、混音与作品导出；更新使用独立 `MobileUpdater`。平台唱录契约见 [mobile-karaoke](contracts/mobile-karaoke.md)。
 
 「常唱 → NAS 共享收藏」与后台「曲库 → 收藏」、电视收藏共用服务端数据。按钮提交明确的目标状态，收到 NAS 成功响应后才改变收藏状态；分页读取完整且修订一致的集合。页面进入、应用回到前台、写入后及前台约 30 秒重新读取；切 NAS、退出或登录失效清空旧集合，丢弃迟到响应。读取失败保留上次成功内容并标明，缺失歌曲可取消且不能播放。不读取、导入或上传旧 SQLite 收藏，也不持久化新收藏或建立离线写队列；同表练唱历史及录音作品保留。详见 [共享收藏契约](contracts/favorites.md)。
