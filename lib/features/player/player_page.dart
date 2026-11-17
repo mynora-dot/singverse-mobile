@@ -31,7 +31,7 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  static const stageColor = Color(0xFF14161B);
+  static const stageColor = Color(0xFF101318);
   List<TextLine> lines = [];
   List<(String, String)> lyricCredits = [];
   String? lyricsSong, lyricError, openError, recordingError;
@@ -144,14 +144,28 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  ThemeData? cachedTheme;
+  (bool, bool, AppMotionLevel)? cachedThemeKey;
   ThemeData get _theme {
+    final key = (
+      widget.state.senior,
+      MediaQuery.sizeOf(context).width < 375,
+      widget.state.performanceMode
+          ? AppMotionLevel.none
+          : AppMotionScope.levelOf(context),
+    );
+    if (cachedThemeKey == key && cachedTheme != null) return cachedTheme!;
+    cachedThemeKey = key;
     final theme = singVerseTheme(
       Brightness.dark,
       senior: widget.state.senior,
       compact: MediaQuery.sizeOf(context).width < 375,
+      motion: widget.state.performanceMode
+          ? AppMotionLevel.none
+          : AppMotionScope.levelOf(context),
     );
-    const accent = Color(0xFF9AB4FF);
-    return theme.copyWith(
+    const accent = Color(0xFF91B9FF);
+    return cachedTheme = theme.copyWith(
       scaffoldBackgroundColor: stageColor,
       colorScheme: theme.colorScheme.copyWith(
         primary: accent,
@@ -172,7 +186,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Color get pageColor => stageColor;
 
-  Color get recordingColor => const Color(0xFFFF9AAA);
+  Color get recordingColor => coral;
 
   bool get largeControls =>
       widget.state.senior || MediaQuery.textScalerOf(context).scale(16) > 22;
@@ -389,7 +403,7 @@ class _PlayerPageState extends State<PlayerPage> {
     int? startLine;
     bool selectingEnd = false;
     await panel(
-      () => showModalBottomSheet<void>(
+      () => showAppSheet<void>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -537,7 +551,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> more() => panel(
-    () => showModalBottomSheet<void>(
+    () => showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -967,110 +981,64 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Widget roles({bool compact = false, bool stage = false}) {
     final state = widget.state;
-    final choices = DecoratedBox(
-      decoration: BoxDecoration(
-        color: _theme.colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(12),
-        border: stage
-            ? Border.all(color: _theme.colorScheme.outlineVariant)
-            : null,
+    final choices = AppSegments<String>(
+      values: const [('original', '原唱'), ('backing', '伴奏')],
+      selected:
+          (state.audioRole == 'original' && state.originalMapped ||
+              state.audioRole == 'backing' && state.backingMapped)
+          ? state.audioRole
+          : '',
+      senior: state.senior,
+      accent: stage,
+      enabled: ready && !state.taking,
+      disabled: {
+        if (!state.originalMapped) 'original',
+        if (!state.backingMapped) 'backing',
+      },
+      keyFor: (role) => ValueKey('player-role-$role'),
+      glass:
+          stage &&
+          (state.current ?? widget.song)?.mediaType != 'VIDEO' &&
+          !state.senior &&
+          !state.reduceTransparency &&
+          !state.performanceMode,
+      textStyle: _theme.textTheme.labelLarge?.copyWith(
+        fontSize: state.senior
+            ? 19
+            : compact
+            ? 13
+            : 15,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final role in [
-              ('original', '原唱', state.originalMapped),
-              ('backing', '伴奏', state.backingMapped),
-            ])
-              Expanded(
-                child: MergeSemantics(
-                  child: Semantics(
-                    selected: role.$3 && state.audioRole == role.$1,
-                    child: Tooltip(
-                      message: role.$3 ? role.$2 : '${role.$2}暂不可用',
-                      child: TextButton(
-                        key: ValueKey('player-role-${role.$1}'),
-                        style: TextButton.styleFrom(
-                          minimumSize: Size(48, state.senior ? 56 : 48),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 8,
-                          ),
-                          textStyle: _theme.textTheme.labelLarge?.copyWith(
-                            fontSize: state.senior
-                                ? 19
-                                : compact
-                                ? 13
-                                : stage
-                                ? 15
-                                : 14,
-                            fontWeight: role.$3 && state.audioRole == role.$1
-                                ? FontWeight.w500
-                                : FontWeight.w400,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          backgroundColor: role.$3 && state.audioRole == role.$1
-                              ? stage
-                                    ? const Color(0xFFD6E0FF)
-                                    : _theme.colorScheme.surface
-                              : Colors.transparent,
-                          side: BorderSide(
-                            color: role.$3 && state.audioRole == role.$1
-                                ? _theme.colorScheme.onSurface.withValues(
-                                    alpha: .08,
-                                  )
-                                : Colors.transparent,
-                          ),
-                          foregroundColor: role.$3 && state.audioRole == role.$1
-                              ? stage
-                                    ? const Color(0xFF18294D)
-                                    : _theme.colorScheme.primary
-                              : _theme.colorScheme.onSurfaceVariant,
-                          disabledForegroundColor: _theme.colorScheme.onSurface
-                              .withValues(alpha: .38),
-                        ),
-                        onPressed: ready && !state.taking && role.$3
-                            ? () => uiTask(
-                                context,
-                                () => state.command('useRole', role.$1),
-                              )
-                            : null,
-                        child: stage
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    role.$1 == 'original'
-                                        ? Icons.mic_none_rounded
-                                        : Icons.music_note_rounded,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(role.$2, maxLines: 1, softWrap: false),
-                                ],
-                              )
-                            : Text(role.$2, maxLines: 1, softWrap: false),
-                      ),
-                    ),
+      labelBuilder: (role, label) => Tooltip(
+        message:
+            (role == 'original' ? state.originalMapped : state.backingMapped)
+            ? label
+            : '$label暂不可用',
+        child: stage
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    role == 'original'
+                        ? Icons.mic_none_rounded
+                        : Icons.music_note_rounded,
+                    size: 18,
                   ),
-                ),
-              ),
-          ],
-        ),
+                  const SizedBox(width: 6),
+                  Text(label, maxLines: 1, softWrap: false),
+                ],
+              )
+            : Text(label, maxLines: 1, softWrap: false),
       ),
+      onChanged: (role) =>
+          uiTask(context, () => state.command('useRole', role)),
     );
-    return stage
-        ? Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: '播放音轨',
-            child: choices,
-          )
-        : choices;
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: '播放音轨',
+      child: choices,
+    );
   }
 
   Widget playButton({
@@ -1191,19 +1159,15 @@ class _PlayerPageState extends State<PlayerPage> {
               : 16,
           fontWeight: FontWeight.w500,
         ),
-        backgroundColor: state.taking
-            ? recordingColor
-            : _theme.colorScheme.primary,
-        foregroundColor: state.taking
-            ? const Color(0xFF410009)
-            : _theme.colorScheme.onPrimary,
+        backgroundColor: recordingControl,
+        foregroundColor: Colors.white,
         disabledBackgroundColor: _theme.colorScheme.onSurface.withValues(
           alpha: .05,
         ),
         disabledForegroundColor: _theme.colorScheme.onSurface.withValues(
           alpha: .38,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: const StadiumBorder(),
       ),
       onPressed: enabled ? record : null,
       icon: Icon(
@@ -1480,7 +1444,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget stageHeader(Song song) => SizedBox(
-    height: 52,
+    height: widget.state.senior ? 64 : 52,
     child: Row(
       children: [
         const SizedBox(width: 12),
@@ -1717,24 +1681,72 @@ class _PlayerPageState extends State<PlayerPage> {
           ),
         );
       }
-      final artwork = size.maxHeight >= 400
-          ? 132.0
-          : size.maxHeight >= 340
-          ? 112.0
-          : 80.0;
       return Column(
         children: [
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(artwork * .2),
-            child: Artwork(
-              state: widget.state,
-              path: song.cover,
-              label: song.title,
-              size: artwork,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 12, 20),
+            child: Row(
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: .2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Artwork(
+                    state: widget.state,
+                    path: song.cover,
+                    label: song.title,
+                    size: 72,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        song.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _theme.textTheme.titleLarge?.copyWith(
+                          fontSize: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        song.artist.isEmpty ? '歌手未知' : song.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _theme.textTheme.bodySmall?.copyWith(
+                          color: _theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: widget.state.isFavorite(song) ? '取消收藏' : '收藏歌曲',
+                  onPressed: () =>
+                      uiTask(context, () => widget.state.favorite(song)),
+                  icon: Icon(
+                    widget.state.isFavorite(song)
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: widget.state.isFavorite(song)
+                        ? recordingColor
+                        : _theme.colorScheme.onSurfaceVariant,
+                    size: 22,
+                  ),
+                ),
+              ],
             ),
           ),
-          stageSong(song, centered: true),
           status(song),
           Expanded(child: lyrics(stage: true)),
         ],
@@ -2143,9 +2155,10 @@ class _PlayerPageState extends State<PlayerPage> {
       excluding: !controlsVisible,
       child: AnimatedOpacity(
         opacity: controlsVisible ? 1 : 0,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
+        duration: AppMotionScope.durationOf(
+          context,
+          const Duration(milliseconds: 180),
+        ),
         child: child,
       ),
     ),
@@ -2318,25 +2331,41 @@ class _PlayerPageState extends State<PlayerPage> {
                         ? SystemUiOverlayStyle.light
                         : SystemUiOverlayStyle.dark,
                   ),
-                  body: SafeArea(
-                    child: song == null
-                        ? Notice('还没有正在演唱的歌曲。', action: close, label: '返回曲库')
-                        : LayoutBuilder(
-                            builder: (context, size) {
-                              final wide = size.maxWidth > size.maxHeight;
-                              accessibleControls =
-                                  MediaQuery.accessibleNavigationOf(context) ||
-                                  MediaQuery.viewInsetsOf(context).bottom > 0;
-                              if (accessibleControls) {
-                                controlsVisible = true;
-                                controlsTimer?.cancel();
-                              }
-                              updateLayout(wide);
-                              if (wide) return immersive(song, size);
-                              measureChrome(size.maxHeight);
-                              return portrait(song, size);
-                            },
-                          ),
+                  body: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (song != null && song.mediaType != 'VIDEO')
+                        Positioned.fill(
+                          child: AmbientArtwork(state: state, song: song),
+                        ),
+                      SafeArea(
+                        child: song == null
+                            ? Notice(
+                                '还没有正在演唱的歌曲。',
+                                action: close,
+                                label: '返回曲库',
+                              )
+                            : LayoutBuilder(
+                                builder: (context, size) {
+                                  final wide = size.maxWidth > size.maxHeight;
+                                  accessibleControls =
+                                      MediaQuery.accessibleNavigationOf(
+                                        context,
+                                      ) ||
+                                      MediaQuery.viewInsetsOf(context).bottom >
+                                          0;
+                                  if (accessibleControls) {
+                                    controlsVisible = true;
+                                    controlsTimer?.cancel();
+                                  }
+                                  updateLayout(wide);
+                                  if (wide) return immersive(song, size);
+                                  measureChrome(size.maxHeight);
+                                  return portrait(song, size);
+                                },
+                              ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -2670,7 +2699,7 @@ class _LyricsViewState extends State<LyricsView> {
                   .clamp(0.0, controller.position.maxScrollExtent);
           if (widget.senior ||
               scaler.scale(16) > 23 ||
-              MediaQuery.disableAnimationsOf(context)) {
+              AppMotionScope.levelOf(context) != AppMotionLevel.full) {
             controller.jumpTo(target);
           } else {
             controller.animateTo(
@@ -2736,7 +2765,7 @@ class _LyricsViewState extends State<LyricsView> {
                         : TextAlign.start,
                     style: styleFor(index).copyWith(
                       color: index == active
-                          ? scheme.primary
+                          ? (widget.stage ? scheme.onSurface : scheme.primary)
                           : scheme.onSurfaceVariant,
                     ),
                   ),

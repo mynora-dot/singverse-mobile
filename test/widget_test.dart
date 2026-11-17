@@ -155,6 +155,10 @@ void main() {
       expect(find.text('作品'), findsOneWidget);
       expect(find.byTooltip('扫一扫'), findsOneWidget);
       expect(find.text('录音'), findsNothing);
+      await tester.tap(find.text('查看本机作品'));
+      await tester.pumpAndSettle();
+      expect(find.text('搜索作品和草稿'), findsOneWidget);
+      expect(state.authenticated, isFalse);
       await tester.tap(find.byKey(const Key('nav-frequent')));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('设置'));
@@ -348,7 +352,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('今天，\n想唱哪首？'), findsNothing);
     expect(find.text('全部歌曲'), findsOneWidget);
-    expect(find.text('3 首'), findsOneWidget);
+    expect(find.text('3 首歌曲'), findsOneWidget);
     for (final title in ['晴天', '富士山下', '慢慢喜欢你']) {
       expect(tester.getBottomLeft(find.text(title).first).dy, lessThan(690));
     }

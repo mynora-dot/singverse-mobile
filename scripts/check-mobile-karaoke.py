@@ -16,7 +16,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--suite', choices=('flow', 'visual'), default='flow')
+parser.add_argument('--suite', choices=('flow', 'visual', 'profile'), default='flow')
 parser.add_argument('--nas', default='http://10.0.2.2:18181')
 parser.add_argument('--device', default='emulator-5554')
 parser.add_argument('--voice-sample', type=Path, required=True)
@@ -29,7 +29,7 @@ if not args.voice_sample.is_file():
     parser.error('Provide the original generated host voice sample.')
 repo = Path(__file__).resolve().parents[1]
 artifacts = repo / 'build/reports/karaoke-emulator'
-if args.suite == 'visual': artifacts = artifacts / 'visual'
+if args.suite in ('visual', 'profile'): artifacts = artifacts / args.suite
 if args.output:
     artifacts = args.output.resolve()
     if artifacts.exists() and any(artifacts.iterdir()):
@@ -40,6 +40,7 @@ video = None
 video_index = 0
 remote_video = f'/sdcard/singverse-karaoke-{os.getpid()}.mp4'
 summary = {'suite': args.suite, 'uiFlowCompleted': False, 'hostMicrophonePeak': None}
+profile_report = {'mode': 'profile', 'frameBudgetMs': 16.667, 'scenarios': {}}
 original_settings = {}
 
 
@@ -117,15 +118,22 @@ def deny_microphone():
     raise RuntimeError('Actual Android microphone denial dialog missing.')
 
 
-adb('emu', 'avd', 'hostmicon')
 adb('shell', 'am', 'force-stop', package, check=False)
-adb('shell', 'pm', 'revoke', package, 'android.permission.RECORD_AUDIO', check=False)
-adb('shell', 'run-as', package, 'rm', '-f', 'shared_prefs/mic-permission.xml', check=False)
+if args.suite != 'profile':
+    adb('emu', 'avd', 'hostmicon')
+    adb('shell', 'pm', 'revoke', package, 'android.permission.RECORD_AUDIO', check=False)
+    adb('shell', 'run-as', package, 'rm', '-f', 'shared_prefs/mic-permission.xml', check=False)
 environment = os.environ.copy()
 environment['ORG_GRADLE_PROJECT_singverseE2e'] = 'true'
-process = subprocess.Popen(['flutter', '--no-version-check', 'test', 'integration_test/karaoke_' + args.suite + '_test.dart',
-                            '-d', args.device, '--dart-define=TEST_NAS=' + args.nas],
-                           cwd=repo, env=environment, stdout=subprocess.PIPE,
+if args.suite == 'profile':
+    environment['SINGVERSE_PROFILE_REPORT'] = str(artifacts.resolve() / 'frame-timings.json')
+    command = ['flutter', '--no-version-check', 'drive', '--profile',
+               '--driver=test_driver/liquid_glass_driver.dart',
+               '--target=integration_test/karaoke_profile_test.dart']
+else:
+    command = ['flutter', '--no-version-check', 'test', 'integration_test/karaoke_' + args.suite + '_test.dart']
+command += ['-d', args.device, '--dart-define=TEST_NAS=' + args.nas]
+process = subprocess.Popen(command, cwd=repo, env=environment, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
 try:
     with (artifacts / 'integration.log').open('w') as log:
@@ -135,6 +143,17 @@ try:
             if 'KARAOKE_SCREEN:' in line:
                 check_video()
                 screenshot(re.search(r'KARAOKE_SCREEN:([\w-]+)', line).group(1))
+            elif 'LIQUID_GLASS_PROFILE:' in line:
+                try:
+                    profile = json.loads(line.split('LIQUID_GLASS_PROFILE:', 1)[1].strip())
+                except json.JSONDecodeError:
+                    summary.setdefault('profileWarnings', []).append('Truncated timing event; see integration.log.')
+                    continue
+                if 'scenario' in profile:
+                    profile_report['scenarios'][profile['scenario']] = profile['timings']
+                elif 'scenarios' in profile:
+                    profile_report = profile
+                (artifacts / 'frame-timings.json').write_text(json.dumps(profile_report, indent=2))
             elif 'KARAOKE_DENY_MIC' in line:
                 deny_microphone()
             elif 'KARAOKE_MIC_GRANT' in line:
@@ -192,6 +211,12 @@ try:
             elif 'KARAOKE_UI_FLOW_PASS:' in line:
                 summary['uiFlowCompleted'] = True
     summary['exitCode'] = process.wait()
+    if args.suite == 'profile' and summary['exitCode'] == 0:
+        completed = json.loads((artifacts / 'frame-timings.json').read_text())
+        summary['profileScenarios'] = len(completed['scenarios'])
+        if summary['profileScenarios'] != 10:
+            summary['exitCode'] = 1
+            summary['failure'] = 'Expected ten complete default/performance timing scenarios.'
 finally:
     if process.poll() is None:
         process.terminate()

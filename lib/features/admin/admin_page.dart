@@ -242,7 +242,7 @@ class _AdminPageState extends State<AdminPage> {
       if (!didPop) unawaited(back());
     },
     child: Scaffold(
-      appBar: AppBar(
+      appBar: AppToolbar(
         leading: IconButton(
           tooltip: '返回',
           onPressed: back,

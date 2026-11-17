@@ -13,7 +13,7 @@ Future<bool> microphonePermission(BuildContext context, AppState state) async {
   final result = await state.sing('permission');
   if (result == 'granted') return true;
   if (!context.mounted) return false;
-  await showDialog<void>(
+  await showAppDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('需要麦克风才能录音'),
@@ -41,7 +41,7 @@ Future<bool> microphonePermission(BuildContext context, AppState state) async {
 
 Future<bool> keepCurrentRecording(BuildContext context, AppState state) async {
   if (state.taking) {
-    final yes = await showDialog<bool>(
+    final yes = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('先结束当前录音？'),
@@ -131,7 +131,7 @@ class _SoundValue extends StatelessWidget {
 Future<void> singingSettings(
   BuildContext context,
   AppState state,
-) => showModalBottomSheet<void>(
+) => showAppSheet<void>(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
@@ -211,7 +211,7 @@ Future<void> singingSettings(
             subtitle: const Text('检查声音是否能录到，不保存录音'),
             onTap: state.taking
                 ? null
-                : () => showModalBottomSheet<void>(
+                : () => showAppSheet<void>(
                     context: context,
                     isScrollControlled: true,
                     useSafeArea: true,
@@ -235,7 +235,7 @@ Future<void> singingSettings(
 Future<void> audioSettings(
   BuildContext context,
   AppState state,
-) => showModalBottomSheet<void>(
+) => showAppSheet<void>(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
@@ -248,7 +248,7 @@ Future<void> audioSettings(
       Future<void> mark(String role) => uiTask(context, () async {
         final local =
             audio.length == 1 && ['LEFT', 'RIGHT'].contains(state.channelMode);
-        final yes = await showDialog<bool>(
+        final yes = await showAppDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: Text(role == 'backing' ? '标记为伴奏？' : '标记为原唱？'),
@@ -420,7 +420,7 @@ Future<bool> confirmRecording(BuildContext context, AppState state) async {
         'INSTRUMENTAL',
       ].contains(state.current?.data['version'])) {
     if (!context.mounted) return false;
-    final choice = await showDialog<String>(
+    final choice = await showAppDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('录音前听一下伴奏'),

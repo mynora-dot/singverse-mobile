@@ -264,6 +264,8 @@ void main() {
   testWidgets('update page supports large text, skip and manual download', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await updates.check();
     await tester.pumpWidget(
       MaterialApp(
@@ -276,10 +278,15 @@ void main() {
         ),
       ),
     );
+    await tester.scrollUntilVisible(find.text('下载更新'), 160);
+    await tester.pumpAndSettle();
     expect(find.text('下载更新'), findsOneWidget);
-    await tester.ensureVisible(find.text('跳过此版本'));
+    await tester.scrollUntilVisible(find.text('跳过此版本'), 120);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('跳过此版本'));
     await tester.pump();
+    await tester.scrollUntilVisible(find.text('已跳过自动提醒，仍可手动更新'), 120);
+    await tester.pumpAndSettle();
     expect(find.text('已跳过自动提醒，仍可手动更新'), findsOneWidget);
     expect(tester.takeException(), isNull);
     updates.didChangeAppLifecycleState(AppLifecycleState.paused);

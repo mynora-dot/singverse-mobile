@@ -1,0 +1,141 @@
+# Liquid Glass 设计与验证
+
+## 视觉层级
+
+2026-11-17 第二轮重新调整了页面构图。点歌页以曲库第一首实际歌曲作为开唱卡片，该歌曲不在列表重复显示，搜索和筛选时恢复完整结果列表；歌手、分类与家庭歌单收为紧凑的同行入口。常唱页使用实际收藏封面与数量；作品草稿以原始录音波形呈现，缺失音频单独标记。未加入虚构推荐、封面或波形。
+
+顶部扫码 / 设置共用玻璃工具栏，底部导航在普通模式下限制到 360dp，保留原点击区域。导航仅使用一层玻璃外壳，选中态以清蓝图标和较粗文字呈现，取消内部胶囊和边框。设置按家庭曲库、外观、使用体验分组。竖屏音频练唱采用横向封面与歌曲信息，扩大歌词阅读区域；视频和长辈模式保持原有安全布局。录音按钮采用高对比度红色与白字。
+
+未连接时使用同一深蓝材质的连接引导，保留 NAS 错误提示并提供本机作品快捷入口，支持离线进入原有作品页面。冷启动与已连接状态分别保存验证截图。
+
+NAS 登录页取消介绍段落、端口说明、自动登录说明和底部说明文字，仅保留必要标签、操作及错误反馈。左右留白 24dp，标题 28sp，输入框至少 60dp、圆角 18dp；协议与地址标签同行，账号和密码使用外置标签。无额外表单外框。
+
+2026-11-17 NAS 材质升级增加 `GlassVariant.field` / `liquid`。`AppEnvironment` 在点歌、导航、表单、播放器之间共享背景坐标，以低饱和蓝紫环境光和一条宽阔光带提供透射信息。返回按钮悬浮、导航背景透明；状态栏根据主题选择图标明暗。输入框使用轻薄标准材质、6px 局部模糊和细内外高光，没有扩散阴影；`GlassField` 观察子输入框焦点，过渡蓝色边缘光，不改变控制器、自动填充或键盘行为。
+
+返回按钮、HTTP / HTTPS 选中块、迷你播放器使用光学透镜。`shaders/liquid_lens.frag` 通过 Flutter `ImageFilter.shader` 采样实际背景，圆角 SDF 法线将 9dp 边缘范围内的采样位置向内偏移、中心保持稳定；内层局部高斯散射先柔化背景，再由单次位移采样形成边缘透镜并按亮度调整底色，避免文字重影及重复纹理读取。`RenderLiquidLens` 使用绘制后的全局位置与设备像素比，避免把整个背景缩进控件，也不重复采样前景文字。边缘反射与内侧光线独立绘制；按压与指针只短暂改变高光，没有常驻动画。
+
+这是 Flutter Android 的光学模拟，不是 iOS 26 原生 Liquid Glass API。Impeller 支持真实背景位移；Skia 或着色器加载失败时使用局部模糊与相同的反射边缘。程序仅加载一次，每个透镜独立持有并释放着色器。液态透镜不与重叠材质共享滤镜输入；原生视频、相机和 WebView 不进入采样层。
+
+协议选中透镜沿轨道使用 340ms Spring 移动。重复点击已选协议不改变已保存凭据；切换协议、保存密码、自动登录、历史、发现、找回密码和二次验证仍沿用原行为。蓝色主按钮使用细渐变和按压光泽，禁用与加载条件不变。播放器使用轻玻璃播放键与内嵌进度条，保留独立底部空间，表单不会被遮挡。浮层淡入并调整自身高度；Reduce Motion 仅淡入，键盘出现时立即隐藏，退出阶段禁止点击与语义焦点。
+
+性能模式、长辈模式、减少透明效果与高对比度使用不透明材质和可辨边缘，同时移除实时模糊与背景折射。系统减少动态效果和高对比度来自 Flutter `MediaQuery`；Android 没有跨版本统一的系统 Reduce Transparency 信号，透明度沿用应用现有的“减少透明效果”偏好。
+
+开唱卡片的深蓝、白色文字和次要文字属于 `AppSurfaces` 语义 tokens；玻璃常规浓度为 84%，配合单独校验的次要文字颜色，确保黑 / 白极端背景上的对比度至少 4.5:1。长辈模式和 200% 字号不展示密集开唱卡片，继续使用可换行、至少 56dp 的明确操作。
+
+`AppSurfaces` 定义雾银 / 午夜背景、内容分组、玻璃染色、反光边缘和阴影；`singVerseTheme` 定义字体、清蓝操作色、录音红色、间距与圆角。正文基准 16，沿用系统字体与字号缩放。内容最大宽度 720dp，小屏和大字号允许换行、滚动。
+
+`GlassSurface` 用于导航、工具栏、迷你播放器和弹层，模糊严格裁切到组件范围，浓度由静态渐变覆盖。标准交互材质与悬浮透镜共用同一个光学绘制实现；相同 6dp 模糊且互不重叠的输入框和快捷入口在 BackdropGroup 中合并滤镜。每个透镜独立采样，玻璃前景内容与静态环境背景分别独立重绘。常规材质按压和指针触发短暂高光，结束后没有持续动画；光学透镜采用独立滤镜。歌曲列表和歌词不叠加模糊。封面环境色通过低分辨率图片与 `ImageFiltered` 实现，不采样原生画面。
+
+视频、扫码和管理端路由保持原生视图比例；页面过渡只淡入，弹层使用不透明表面，确认对话框不采样其背景。WebView 内部页面仍由 NAS 提供。
+
+## 全局三层设计系统
+
+内容层不使用玻璃：连续歌曲列表、清晰原始封面、深蓝练唱卡、歌词和长文本依靠排版建立结构。搜索、快捷入口和表单使用标准玻璃；顶部工具栏、底部导航、迷你播放器和操作弹层使用悬浮透镜。不会为每一首歌创建滤镜或卡片。
+
+`lib/app/tokens.dart` 是统一的几何与材质入口：
+
+| Token | 用途 |
+| --- | --- |
+| `AppPalette` / `AppSurfaces` | 原有品牌蓝、录音红、雾银 / 午夜背景、蓝紫环境光、分组底色、反射、深蓝内容卡 |
+| `AppSpace` | 4 / 8 / 12 / 16 / 24 / 28 / 32dp；页面边距 24dp |
+| `AppRadii` | 封面 12、普通控件 18、内容卡 24、悬浮玻璃 28dp |
+| `AppSizes` | 普通触控 48、长辈 56、输入区 60、列表封面 52、最大内容宽 720dp |
+| `GlassMaterialSpec` | `standard`、`field`、`onColor`、`floating`、`sheet`；可配置浅深染色、模糊、高光、阴影、折射和单独底色 |
+| `singVerseTheme.textTheme` | 系统字体，正文 16sp，主要标题 32sp；保留系统字号与长辈模式 |
+| `AppMotion` / `AppMotionScope` | Spring、时长、手势反馈及普通 / 简化 / 关闭三档策略 |
+
+复用关系：`GlassSurface` / `Glass` 统一材质；`GlassToolbar` 统一扫码 / 设置工具栏；`GlassField` 与 `GlassSearchField` 统一输入焦点；`AppSegments(liquid: true)` 统一滑动选择；`MiniPlayer` 在主框架与次级页面共用；`showAppSheet` 统一弹层。底部导航沿用主框架的状态与回调，仅更换同一套悬浮材质，不增加内部选中胶囊。
+
+NAS、点歌、常唱、作品、设置、练唱详情、歌手、分类与家庭歌单直接导入 `app/design.dart` 即可复用这些组件。已有共享工具栏、弹层与播放器随材质入口同步更新；没有为每个页面复制一份玻璃绘制代码。视频、相机、WebView 的原生 Surface 仍保持稳定、不透明的专用保护路径。
+
+点歌页保持原搜索控制器、350ms 防抖、筛选请求、收藏调用和练唱入口。推荐卡沿用第一首实际曲目与封面，白色练唱主按钮不变；收藏按钮使用低浓度玻璃，关闭透明效果时保留深蓝底色与白色图标。歌曲行连续排布，底部内容空间读取 Scaffold 实际传入的悬浮控件高度；键盘出现时立即隐藏迷你播放器，避免挤压搜索结果。
+
+## 动效策略
+
+`AppMotionScope` 是 UI 策略入口，媒体时钟、歌词时间同步、网络请求与录音状态不依赖动画完成。
+
+| 状态 | 界面动效 | 材质 |
+| --- | --- | --- |
+| 默认 | Spring、轻量淡入 / 位移与按压反馈 | 局部玻璃 |
+| 系统 Reduce Motion / 辅助导航 | 取消位移、缩放、弹性与交错，必要淡入至多 100ms | 保留透明度偏好 |
+| 长辈模式 | 简化反馈 | 不透明 |
+| 高对比度 / 减少透明效果 | 遵循当前动态策略 | 不透明 |
+| 性能模式 | 立即停止界面动画 | 无实时模糊，保留静态光影 |
+
+长辈模式触控区域至少 56dp，普通模式至少 48dp。`performanceMode` 默认关闭，单独持久保存，切换时立即通知界面，不覆盖主题和透明度设置。
+
+`AppMotion` 集中定义按下 100ms、恢复 220ms、导航 340ms、页面 320ms、弹层 360ms / 退出 220ms、展开 280ms。Spring 使用 Flutter 内置物理模型。内容仅前六项首次入场交错 24ms，PageStorage 保证滚动返回不重复入场。离屏标签页关闭 Ticker，保留页面和滚动状态。Android 预测返回继续使用 Flutter 原生手势处理。
+
+共享弹层保留系统取消、返回、拖动和焦点行为。弹层动画控制器在路由退出 Overlay 后释放；中途开启性能模式会立即收束，避免残留遮罩。
+
+## 自动化验证
+
+```sh
+make check
+make build
+```
+
+`test/app_motion_test.dart` 覆盖快速反向切换、稳定点击区域、禁用操作、Reduce Motion、原生视图背景策略、动画中开启性能模式、弹层取消、动画中返回和偏好隔离。现有业务回归继续覆盖 NAS 登录 / 身份隔离、收藏同步、录音保护、作品处理、电视登录及应用更新。
+
+`test/mobile_redesign_test.dart` 的布局矩阵覆盖 320、375、390、430dp 手机与平板横竖屏，浅深色及 200% 字号，共 72 个主页面场景。主题测试检查正文、次要文字、品牌主按钮和标准材质在实际环境底色上的对比度至少 4.5:1。另有 24 组浅深色、尺寸和字号组合验证带播放器时的最后一首歌与操作按钮能够滚动到悬浮控件上方。
+
+生成受控样本截图：
+
+```sh
+flutter --no-version-check test --no-pub test/mobile_redesign_test.dart \
+  --plain-name 'capture refined' \
+  --dart-define=CAPTURE_APP_UI=true \
+  --dart-define=CAPTURE_PLAYER_UI=true \
+  --dart-define=CAPTURE_NAS_UI=true \
+  --dart-define=UI_ROUND=nas-form-refined
+flutter --no-version-check test --no-pub test/mobile_redesign_test.dart \
+  --plain-name 'liquid glass main pages adapt' \
+  --dart-define=CAPTURE_GLASS_MATRIX=true
+```
+
+截图写入 `build/reports/mobile-ui-unslop/`、`build/reports/mobile-player-unslop/` 和 `build/reports/liquid-glass/matrix/`。截图测试使用可控封面、波形与数据，不能替代原生设备验收。
+
+## Android profile 验收
+
+沿用 README 中的独立 NAS 样本流程，服务必须使用新建临时数据目录和 `18181` 端口。为滚动场景提供足够的独立歌曲。只使用 `.e2e` 包；脚本拒绝连接日常 NAS。已有录音不允许被 profile 中断。
+
+```sh
+python3 scripts/check-mobile-karaoke.py --suite profile \
+  --device emulator-5554 \
+  --voice-sample /absolute/path/to/generated/voice-test.wav \
+  --output build/reports/liquid-glass/profile-new-run
+```
+
+输出目录必须全新，历史数据不被覆盖。profile 使用 `flutter drive --profile`，读取预热后的真实 `FrameTiming`，分别记录默认 / 性能模式下的导航、滚动、弹层、按压及原生播放歌词场景，输出 `frame-timings.json`、`integration.log`、截图和录屏。通过既有 NAS 数据 API 选定自制样本，在真实 `PlayerPage` 准备原生播放场景；准备和截图等待不计入帧采样窗口。日志逐场景输出，完整报告由 driver 写入文件，并校验十个场景齐全，避免 Android 日志截断误报。脚本的 `--suite flow` 与 `--suite visual` 保留原有流程。
+
+60Hz 验收目标为 UI / Raster 各自 P95 ≤16.7ms、任一线程超预算的帧占比 <1%。报告必须注明设备、分辨率、渲染器、构建模式及采样数。软件渲染模拟器只能用于布局和行为检查；代表性真机数据才可用于 60 FPS 结论。真实麦克风、蓝牙、中断、相机扫码、WebView 登录和系统覆盖安装仍需设备验收。
+
+## NAS 光学材质设备验证
+
+```sh
+ORG_GRADLE_PROJECT_singverseE2e=true \
+SINGVERSE_NAS_GLASS_OUTPUT=build/reports/nas-liquid-optics-v2/android \
+flutter --no-version-check drive --profile --no-pub --enable-impeller \
+  --driver=test_driver/nas_glass_driver.dart \
+  --target=integration_test/nas_glass_test.dart -d emulator-5554
+```
+
+仅使用隔离的 `.e2e` 包。该用例使用内存数据库、内存偏好、空密码库和受控曲目状态，不连接 NAS、不操作真实音频或凭据。它检查实际透镜渲染对象、浅深色、键盘焦点、减少透明效果、动画中切换性能模式以及播放数据保持。预热后记录默认 / 性能模式协议快速反向切换的真实 FrameTiming，按 buildStart 剔除采样窗口之前的批量回调。帧统计只代表此场景和设备，不能替代真机 60 FPS 验收。
+
+测试日志的 `NAS_GLASS_SCREEN:<name>` 标记供宿主机 `adb -s emulator-5554 exec-out screencap -p` 截图，避免 Android ImageView 截图转换对原生 Surface 与帧数据的影响。界面录屏须在帧采样前停止，镜像轮询也应暂停。
+
+设计依据：Apple [Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)；Flutter [Fragment shaders](https://docs.flutter.dev/ui/design/graphics/fragment-shaders)。SDK 能力以仓库当前 Flutter 3.47.5 的 `dart:ui` 源码为准。
+
+## 点歌设计系统 Android 验证
+
+```sh
+ORG_GRADLE_PROJECT_singverseE2e=true \
+SINGVERSE_LIBRARY_GLASS_OUTPUT=build/reports/singverse-design-system-v3/android \
+flutter --no-version-check drive --profile --no-pub --enable-impeller \
+  --driver=test_driver/library_glass_driver.dart \
+  --target=integration_test/library_glass_test.dart -d emulator-5554
+```
+
+该用例仅在 `.e2e` 隔离包使用受控曲库、内存偏好、内存数据库和测试方法通道，不替换正式客户端数据来源，不连接真实 NAS 或麦克风。验证实际 Impeller 透镜、浅深色、有播放器的列表末尾、键盘、搜索请求与结果、筛选弹层、收藏、播放暂停、详情、Tab 和设置入口；扫码入口可点击，实际摄像头识别继续列为设备验收项。宿主机在 `LIBRARY_GLASS_SCREEN` 标记截取原生画面，`LIBRARY_GLASS_SAMPLE` 前停止录屏和镜像，分别采集普通 / 性能模式滚动的 FrameTiming。连续手势逐帧移动并至少采集 100 帧，避免将只有两个绘制帧的瞬时拖动误作持续滚动性能。
+
+24 组带播放器截图可通过 `--name 'floating library controls leave' --dart-define=CAPTURE_DESIGN_SYSTEM=true` 生成，位于 `build/reports/singverse-design-system-v3/matrix/`。这些是 Flutter 布局截图；与 Android 原生实拍分开展示，不能用来声称已验证系统原生 Liquid Glass 或真机 60 FPS。

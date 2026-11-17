@@ -4,21 +4,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_state.dart';
+import 'motion.dart';
+import 'surfaces.dart';
 
-const berry = Color(0xFF3159D9);
-const coral = Color(0xFFFF5F6D);
-const ink = Color(0xFF1C1C1E);
+export 'motion.dart';
+export 'surfaces.dart';
+
+const berry = AppPalette.brand;
+const coral = Color(0xFFFF8497);
+const recordingControl = AppPalette.recording;
+const ink = AppPalette.ink;
 
 ThemeData singVerseTheme(
   Brightness brightness, {
   bool senior = false,
   bool compact = false,
+  AppMotionLevel motion = AppMotionLevel.full,
 }) {
   final dark = brightness == Brightness.dark;
   final compactText = !senior && compact;
+  final surfaces = AppSurfaces.forBrightness(brightness);
+  final animated = motion == AppMotionLevel.full;
   final scheme = ColorScheme.fromSeed(seedColor: berry, brightness: brightness)
       .copyWith(
-        primary: dark ? const Color(0xFF8CA9FF) : berry,
+        primary: dark ? const Color(0xFF91B9FF) : berry,
         onPrimary: dark ? const Color(0xFF101D40) : Colors.white,
         primaryContainer: dark
             ? const Color(0xFF27344E)
@@ -26,55 +35,52 @@ ThemeData singVerseTheme(
         onPrimaryContainer: dark
             ? const Color(0xFFDCE5FF)
             : const Color(0xFF2547B2),
-        surface: dark ? const Color(0xFF1C1C1E) : Colors.white,
+        surface: dark ? const Color(0xFF1C222C) : Colors.white,
         onSurface: dark ? const Color(0xFFF7F7F9) : ink,
         onSurfaceVariant: dark
-            ? const Color(0xFFBEBEC4)
-            : const Color(0xFF66666B),
-        secondaryContainer: dark
-            ? const Color(0xFF2C2C2E)
-            : const Color(0xFFECECF0),
+            ? const Color(0xFFC6CEDB)
+            : const Color(0xFF4D5765),
+        secondaryContainer: surfaces.group,
         onSecondaryContainer: dark ? const Color(0xFFF7F7F9) : ink,
         outline: dark ? const Color(0xFF5A5A60) : const Color(0xFF8E8E93),
         outlineVariant: dark
-            ? const Color(0xFF38383A)
-            : const Color(0xFFD9D9DE),
+            ? const Color(0xFF353E4A)
+            : const Color(0xFFDCE2EB),
         error: dark ? coral : const Color(0xFFC81E3C),
         onError: dark ? const Color(0xFF3B0712) : Colors.white,
       );
-  final background = dark ? const Color(0xFF14161B) : const Color(0xFFFAFAFC);
-  final target = senior ? 56.0 : 48.0;
+  final background = surfaces.background;
+  final target = senior ? AppSizes.seniorTouch : AppSizes.touch;
   final typography = Typography.material2021();
   final textTheme = (dark ? typography.white : typography.black)
       .merge(
         TextTheme(
           headlineLarge: TextStyle(
-            fontSize: senior ? 32 : (compactText ? 28 : 30),
+            fontSize: senior ? 34 : (compactText ? 30 : 32),
             height: 1.18,
             fontWeight: FontWeight.w600,
+            letterSpacing: -.8,
           ),
           headlineSmall: TextStyle(
-            fontSize: senior ? 26 : (compactText ? 20 : 22),
+            fontSize: senior ? 26 : (compactText ? 22 : 24),
             height: 1.24,
             fontWeight: FontWeight.w600,
           ),
           titleLarge: TextStyle(
-            fontSize: senior ? 23 : (compactText ? 15 : 16),
+            fontSize: senior ? 23 : (compactText ? 19 : 20),
             height: 1.28,
             fontWeight: FontWeight.w600,
+            letterSpacing: -.35,
           ),
           titleMedium: TextStyle(
-            fontSize: senior ? 20 : (compactText ? 14 : 15),
+            fontSize: senior ? 20 : 16,
             height: 1.3,
             fontWeight: FontWeight.w600,
           ),
-          bodyLarge: TextStyle(
-            fontSize: senior ? 21 : (compactText ? 14 : 15),
-            height: 1.4,
-          ),
-          bodyMedium: TextStyle(fontSize: senior ? 19 : 14, height: 1.4),
+          bodyLarge: TextStyle(fontSize: senior ? 21 : 16, height: 1.4),
+          bodyMedium: TextStyle(fontSize: senior ? 19 : 16, height: 1.45),
           bodySmall: TextStyle(
-            fontSize: senior ? 17 : 12,
+            fontSize: senior ? 17 : 13,
             height: 1.4,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
@@ -96,8 +102,9 @@ ThemeData singVerseTheme(
     colorScheme: scheme,
     scaffoldBackgroundColor: background,
     textTheme: textTheme,
+    extensions: [surfaces],
     visualDensity: VisualDensity.standard,
-    splashFactory: InkRipple.splashFactory,
+    splashFactory: NoSplash.splashFactory,
     appBarTheme: AppBarTheme(
       backgroundColor: background,
       surfaceTintColor: Colors.transparent,
@@ -116,12 +123,26 @@ ThemeData singVerseTheme(
       elevation: 0,
       color: scheme.surface,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.content),
+        side: BorderSide(
+          color: scheme.outlineVariant.withValues(alpha: .6),
+          width: .6,
+        ),
+      ),
     ),
     dividerTheme: DividerThemeData(
       color: scheme.outlineVariant,
       space: 1,
       thickness: .5,
+    ),
+    expansionTileTheme: ExpansionTileThemeData(
+      expansionAnimationStyle: AnimationStyle(
+        duration: animated ? AppMotion.expand : Duration.zero,
+        reverseDuration: animated ? AppMotion.release : Duration.zero,
+        curve: animated ? AppMotion.softSpring : Curves.linear,
+        reverseCurve: Curves.easeInCubic,
+      ),
     ),
     listTileTheme: ListTileThemeData(
       minVerticalPadding: senior ? 16 : 12,
@@ -139,57 +160,80 @@ ThemeData singVerseTheme(
       prefixIconColor: scheme.onSurfaceVariant,
       suffixIconColor: scheme.onSurfaceVariant,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadii.control),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadii.control),
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadii.control),
         borderSide: BorderSide(color: scheme.primary, width: 1.4),
       ),
       contentPadding: EdgeInsets.symmetric(
         horizontal: 16,
-        vertical: senior ? 20 : 12,
+        vertical: senior ? 20 : 16,
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        minimumSize: Size(target, target),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        textStyle: textTheme.labelLarge,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+      style:
+          FilledButton.styleFrom(
+            minimumSize: Size(target, target),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            textStyle: textTheme.labelLarge,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.control),
+            ),
+          ).copyWith(
+            animationDuration: animated ? AppMotion.press : Duration.zero,
+            foregroundBuilder: AppMotion.buttonLayer,
+          ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        minimumSize: Size(target, target),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        textStyle: textTheme.labelLarge,
-        backgroundColor: scheme.secondaryContainer,
-        foregroundColor: scheme.onSurface,
-        side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+      style:
+          OutlinedButton.styleFrom(
+            minimumSize: Size(target, target),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            textStyle: textTheme.labelLarge,
+            backgroundColor: scheme.secondaryContainer,
+            foregroundColor: scheme.onSurface,
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.control),
+            ),
+          ).copyWith(
+            animationDuration: animated ? AppMotion.press : Duration.zero,
+            foregroundBuilder: AppMotion.buttonLayer,
+          ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        minimumSize: Size(target, target),
-        textStyle: textTheme.labelLarge,
-        foregroundColor: scheme.onSurfaceVariant,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+      style:
+          TextButton.styleFrom(
+            minimumSize: Size(target, target),
+            textStyle: textTheme.labelLarge,
+            foregroundColor: scheme.onSurfaceVariant,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ).copyWith(
+            animationDuration: animated ? AppMotion.press : Duration.zero,
+            foregroundBuilder: AppMotion.buttonLayer,
+          ),
     ),
     iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(minimumSize: Size(target, target)),
+      style: IconButton.styleFrom(minimumSize: Size(target, target)).copyWith(
+        animationDuration: animated ? AppMotion.press : Duration.zero,
+        foregroundBuilder: AppMotion.buttonLayer,
+      ),
     ),
     chipTheme: ChipThemeData(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: senior ? 12 : 8),
       labelStyle: textTheme.labelLarge,
       side: BorderSide.none,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.control),
+      ),
       selectedColor: scheme.primaryContainer,
       checkmarkColor: scheme.onPrimaryContainer,
     ),
@@ -210,13 +254,13 @@ ThemeData singVerseTheme(
       surfaceTintColor: Colors.transparent,
       showDragHandle: !senior,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       titleTextStyle: textTheme.titleLarge,
       contentTextStyle: textTheme.bodyMedium,
     ),
@@ -229,9 +273,7 @@ ThemeData singVerseTheme(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     pageTransitionsTheme: const PageTransitionsTheme(
-      builders: {
-        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-      },
+      builders: {TargetPlatform.android: AppPageTransitionsBuilder()},
     ),
   );
 }
@@ -242,11 +284,173 @@ class ContentWidth extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Align(
     alignment: Alignment.topCenter,
+    heightFactor: 1,
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 720),
+      constraints: const BoxConstraints(maxWidth: AppSizes.contentWidth),
       child: child,
     ),
   );
+}
+
+/// Stable toolbar material, including camera and WebView containers.
+class AppToolbar extends AppBar {
+  AppToolbar({
+    super.key,
+    super.title,
+    super.leading,
+    super.actions,
+    super.bottom,
+    super.automaticallyImplyLeading,
+    super.foregroundColor,
+    Color? backgroundColor,
+  }) : super(
+         backgroundColor: backgroundColor ?? Colors.transparent,
+         flexibleSpace: backgroundColor == null
+             ? const GlassSurface(
+                 radius: 0,
+                 variant: GlassVariant.toolbar,
+                 child: SizedBox.expand(),
+               )
+             : ColoredBox(color: backgroundColor),
+       );
+}
+
+class AppSegments<T> extends StatelessWidget {
+  const AppSegments({
+    super.key,
+    required this.values,
+    required this.selected,
+    required this.onChanged,
+    this.senior = false,
+    this.enabled = true,
+    this.disabled = const {},
+    this.keyFor,
+    this.labelBuilder,
+    this.textStyle,
+    this.glass = false,
+    this.accent = false,
+    this.liquid = false,
+  });
+  final List<(T, String)> values;
+  final T selected;
+  final ValueChanged<T> onChanged;
+  final bool senior, enabled, glass, accent, liquid;
+  final Set<T> disabled;
+  final Key Function(T)? keyFor;
+  final Widget Function(T, String)? labelBuilder;
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final index = values.indexWhere((value) => value.$1 == selected);
+    final content = Padding(
+      padding: const EdgeInsets.all(4),
+      child: Stack(
+        children: [
+          if (index >= 0)
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: AppMotionScope.levelOf(context) == AppMotionLevel.full
+                    ? AppMotion.navigation
+                    : Duration.zero,
+                curve: AppMotionScope.levelOf(context) == AppMotionLevel.full
+                    ? AppMotion.spring
+                    : Curves.linear,
+                alignment: Alignment(
+                  values.length < 2 ? 0 : 2 * index / (values.length - 1) - 1,
+                  0,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / values.length,
+                  heightFactor: 1,
+                  child: liquid
+                      ? GlassSurface(
+                          radius: 12,
+                          enabled: enabled,
+                          variant: GlassVariant.liquid,
+                          child: SizedBox.expand(),
+                        )
+                      : DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: accent ? scheme.primary : scheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppSurfaces.of(context).shadow,
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          Row(
+            children: [
+              for (final value in values)
+                Expanded(
+                  child: MergeSemantics(
+                    child: Semantics(
+                      selected: value.$1 == selected,
+                      child: TextButton(
+                        key: keyFor?.call(value.$1),
+                        style: TextButton.styleFrom(
+                          textStyle: textStyle,
+                          minimumSize: Size(48, senior ? 56 : 48),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 12,
+                          ),
+                          foregroundColor: value.$1 == selected
+                              ? (accent
+                                    ? scheme.onPrimary
+                                    : liquid
+                                    ? scheme.primary
+                                    : scheme.onSurface)
+                              : scheme.onSurfaceVariant,
+                        ),
+                        onPressed: enabled && !disabled.contains(value.$1)
+                            ? () => onChanged(value.$1)
+                            : null,
+                        child:
+                            labelBuilder?.call(value.$1, value.$2) ??
+                            Text(value.$2, textAlign: TextAlign.center),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (liquid) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppMotionScope.solidOf(context)
+              ? scheme.secondaryContainer
+              : scheme.secondaryContainer.withValues(alpha: .42),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: .30),
+            width: .5,
+          ),
+        ),
+        child: content,
+      );
+    }
+    return glass
+        ? GlassSurface(radius: 22, child: content)
+        : DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: content,
+          );
+  }
 }
 
 class SectionTitle extends StatelessWidget {
@@ -286,35 +490,364 @@ class Glass extends StatelessWidget {
     super.key,
     required this.state,
     required this.child,
-    this.radius = 20,
+    this.radius = AppRadii.control,
+    this.variant = GlassVariant.regular,
+    this.focused = false,
+    this.material,
+    this.tint,
+    this.enabled = true,
   });
   final AppState state;
   final Widget child;
   final double radius;
+  final GlassVariant variant;
+  final bool focused;
+  final bool enabled;
+  final GlassMaterialSpec? material;
+  final Color? tint;
   @override
   Widget build(BuildContext context) {
     final solid =
         state.reduceTransparency ||
         state.senior ||
-        MediaQuery.disableAnimationsOf(context) ||
+        state.performanceMode ||
         MediaQuery.highContrastOf(context);
-    final scheme = Theme.of(context).colorScheme;
-    final surface = DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: solid ? 1 : .98),
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: scheme.onSurface.withValues(alpha: .08)),
-      ),
-      child: Material(type: MaterialType.transparency, child: child),
+    return GlassSurface(
+      radius: radius,
+      solid: solid,
+      variant: variant,
+      focused: focused,
+      material: material,
+      tint: tint,
+      enabled: enabled,
+      child: child,
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: solid
-          ? surface
-          : BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: surface,
+  }
+}
+
+/// Descendant focus is observed without changing TextField controllers,
+/// traversal, autofill, validation, or the field's own keyboard behavior.
+class GlassField extends StatefulWidget {
+  const GlassField({
+    super.key,
+    required this.state,
+    required this.child,
+    this.enabled = true,
+  });
+  final AppState state;
+  final Widget child;
+  final bool enabled;
+  @override
+  State<GlassField> createState() => _GlassFieldState();
+}
+
+class _GlassFieldState extends State<GlassField> {
+  bool focused = false;
+  @override
+  Widget build(BuildContext context) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onFocusChange: (value) => setState(() => focused = value),
+    child: Glass(
+      state: widget.state,
+      radius: AppRadii.control,
+      variant: GlassVariant.field,
+      focused: focused && widget.enabled,
+      enabled: widget.enabled,
+      child: widget.child,
+    ),
+  );
+}
+
+/// A shared functional layer; the content underneath stays unfiltered.
+class GlassToolbar extends StatelessWidget {
+  const GlassToolbar({super.key, required this.state, required this.children});
+  final AppState state;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Glass(
+    state: state,
+    radius: AppRadii.floating,
+    variant: GlassVariant.liquid,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0)
+            SizedBox(
+              height: 18,
+              child: VerticalDivider(
+                width: 1,
+                thickness: .5,
+                color: Theme.of(context).colorScheme.onSurfaceVariant
+                    .withValues(alpha: .22),
+              ),
             ),
+          children[i],
+        ],
+      ],
+    ),
+  );
+}
+
+/// The same focus lighting as NAS inputs, without changing search timing,
+/// editing state or focus ownership.
+class GlassSearchField extends StatelessWidget {
+  const GlassSearchField({
+    super.key,
+    required this.state,
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+    required this.onSubmitted,
+    this.suffix,
+    this.fieldKey,
+  });
+  final AppState state;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged, onSubmitted;
+  final Widget? suffix;
+  final Key? fieldKey;
+
+  @override
+  Widget build(BuildContext context) => GlassField(
+    state: state,
+    child: TextField(
+      key: fieldKey,
+      controller: controller,
+      focusNode: focusNode,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: '搜索歌名、歌手或拼音',
+        prefixIcon: const Icon(Icons.search_rounded, size: 23),
+        suffixIcon: suffix,
+        filled: false,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        constraints: BoxConstraints(
+          minHeight: state.senior ? 64 : AppSizes.field,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: AppSpace.md,
+        ),
+      ),
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+    ),
+  );
+}
+
+Future<T?> showAppSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool isScrollControlled = false,
+  bool useSafeArea = false,
+}) {
+  // Native video, camera and WebView layers cannot be sampled reliably.
+  final nativeSurface = const {
+    'player',
+    'tv',
+    'scan',
+    'admin',
+  }.contains(ModalRoute.of(context)?.settings.name);
+  final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: full ? AppMotion.sheet : Duration.zero,
+    reverseDuration: full ? AppMotion.release : Duration.zero,
+  );
+  final navigator = Navigator.of(context);
+  final localizations = MaterialLocalizations.of(context);
+  final route = ModalBottomSheetRoute<T>(
+    capturedThemes: InheritedTheme.capture(
+      from: context,
+      to: navigator.context,
+    ),
+    barrierLabel: localizations.scrimLabel,
+    barrierOnTapHint: localizations.scrimOnTapHint(
+      localizations.bottomSheetLabel,
+    ),
+    modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,
+    isScrollControlled: isScrollControlled,
+    useSafeArea: useSafeArea,
+    showDragHandle: false,
+    backgroundColor: Colors.transparent,
+    transitionAnimationController: controller,
+    sheetAnimationStyle: AppMotion.modalStyle(context),
+    builder: (context) => _SheetMotionGate(
+      controller: controller,
+      child: GlassSurface(
+        variant: GlassVariant.sheet,
+        solid: nativeSurface,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ExcludeSemantics(
+              child: Container(
+                width: 32,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant
+                      .withValues(alpha: .35),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Flexible(child: builder(context)),
+          ],
+        ),
+      ),
+    ),
+  );
+  // A pop result arrives before the reverse animation has left the overlay.
+  // Keep its controller alive until the route itself has finished disposal.
+  final result = navigator.push(route);
+  route.completed.whenComplete(controller.dispose);
+  return result;
+}
+
+/// A running sheet settles immediately when the user disables motion.
+class _SheetMotionGate extends StatefulWidget {
+  const _SheetMotionGate({required this.controller, required this.child});
+  final AnimationController controller;
+  final Widget child;
+  @override
+  State<_SheetMotionGate> createState() => _SheetMotionGateState();
+}
+
+class _SheetMotionGateState extends State<_SheetMotionGate> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotionScope.levelOf(context) != AppMotionLevel.full) {
+      widget.controller.duration = Duration.zero;
+      widget.controller.reverseDuration = Duration.zero;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !widget.controller.isAnimating) return;
+        widget.controller.value =
+            widget.controller.status == AnimationStatus.reverse ? 0 : 1;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+Future<T?> showAppDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) {
+  final nativeSurface = const {
+    'player',
+    'tv',
+    'scan',
+    'admin',
+  }.contains(ModalRoute.of(context)?.settings.name);
+  final themes = InheritedTheme.capture(
+    from: context,
+    to: Navigator.of(context, rootNavigator: true).context,
+  );
+  return Navigator.of(context, rootNavigator: true).push(
+    _AppDialogRoute<T>(
+      initialMotion: AppMotionScope.levelOf(context),
+      barrierDismissible: barrierDismissible,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: AppMotionScope.durationOf(context, AppMotion.sheet),
+      pageBuilder: (context, _, _) => themes.wrap(
+        SafeArea(
+          child: Builder(
+            builder: (context) => ClipRect(
+              child: BackdropFilter(
+                enabled: !nativeSurface && !AppMotionScope.solidOf(context),
+                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                child: builder(context),
+              ),
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (context, animation, _, child) {
+        final level = AppMotionScope.levelOf(context);
+        if (level == AppMotionLevel.none) return child;
+        final fade = FadeTransition(opacity: animation, child: child);
+        if (level == AppMotionLevel.reduced) return fade;
+        return ScaleTransition(
+          scale: animation.drive(
+            Tween(
+              begin: .96,
+              end: 1.0,
+            ).chain(CurveTween(curve: AppMotion.spring)),
+          ),
+          child: fade,
+        );
+      },
+    ),
+  );
+}
+
+/// Also settle the route barrier when the motion policy changes mid-flight.
+class _AppDialogRoute<T> extends RawDialogRoute<T> {
+  _AppDialogRoute({
+    required this.initialMotion,
+    required super.pageBuilder,
+    required super.barrierDismissible,
+    required super.barrierLabel,
+    required super.barrierColor,
+    required super.transitionDuration,
+    required super.transitionBuilder,
+  });
+  final AppMotionLevel initialMotion;
+  AppMotionLevel? previousMotion;
+
+  @override
+  Duration get reverseTransitionDuration => switch (initialMotion) {
+    AppMotionLevel.full => AppMotion.release,
+    AppMotionLevel.reduced => const Duration(milliseconds: 100),
+    AppMotionLevel.none => Duration.zero,
+  };
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final motion = AppMotionScope.levelOf(context);
+    if (previousMotion != motion) {
+      previousMotion = motion;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (navigator == null) return;
+        final current = controller;
+        if (current == null) return;
+        current.duration = switch (motion) {
+          AppMotionLevel.full => AppMotion.sheet,
+          AppMotionLevel.reduced => const Duration(milliseconds: 100),
+          AppMotionLevel.none => Duration.zero,
+        };
+        current.reverseDuration = switch (motion) {
+          AppMotionLevel.full => AppMotion.release,
+          AppMotionLevel.reduced => const Duration(milliseconds: 100),
+          AppMotionLevel.none => Duration.zero,
+        };
+        if (motion != AppMotionLevel.full && current.isAnimating) {
+          current.value = current.status == AnimationStatus.reverse ? 0 : 1;
+        }
+      });
+    }
+    return super.buildTransitions(
+      context,
+      animation,
+      secondaryAnimation,
+      child,
     );
   }
 }

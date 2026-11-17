@@ -136,7 +136,7 @@ class _TvPageState extends State<TvPage> {
         invitation: invite.token,
       ) as Json;
       if (!mounted) return;
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAppDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('连接电视聚会'),
@@ -217,7 +217,7 @@ class _TvPageState extends State<TvPage> {
       if (state.origin != origin || !state.authenticated) {
         throw const FormatException('音乐库已切换，请重新扫码');
       }
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAppDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('连接这台电视？'),
@@ -467,7 +467,7 @@ class _TvPageState extends State<TvPage> {
         },
         child: Scaffold(
           backgroundColor: scanning ? const Color(0xFF111318) : null,
-          appBar: AppBar(
+          appBar: AppToolbar(
             backgroundColor: scanning ? const Color(0xFF111318) : null,
             leading: IconButton(
               tooltip: '关闭',
@@ -494,7 +494,7 @@ class _TvPageState extends State<TvPage> {
                 IconButton(
                   tooltip: '断开电视',
                   onPressed: () => uiTask(context, () async {
-                    final confirmed = await showDialog<bool>(
+                    final confirmed = await showAppDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('结束电视连接？'),

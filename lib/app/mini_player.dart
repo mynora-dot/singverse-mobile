@@ -8,9 +8,15 @@ import '../features/singing/works_page.dart';
 import 'design.dart';
 
 class MiniPlayer extends StatelessWidget {
-  const MiniPlayer({super.key, required this.state, this.navigator});
+  const MiniPlayer({
+    super.key,
+    required this.state,
+    this.navigator,
+    this.inset = true,
+  });
   final AppState state;
   final NavigatorState? navigator;
+  final bool inset;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: state,
@@ -58,140 +64,180 @@ class MiniPlayer extends StatelessWidget {
       top: false,
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        padding: inset
+            ? const EdgeInsets.fromLTRB(12, 8, 12, 8)
+            : const EdgeInsets.only(bottom: 10),
         child: Glass(
           state: state,
-          radius: 16,
-          child: InkWell(
-            key: const Key('mini-player'),
-            onTap: open,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      children: [
-                        Artwork(
-                          state: state,
-                          path: state.current!.cover,
-                          label: state.current!.title,
-                          size: state.senior ? 48 : 40,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                state.current!.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: state.senior
-                                    ? Theme.of(context).textTheme.titleMedium
-                                    : Theme.of(context).textTheme.bodyMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                              ),
-                              ListenableBuilder(
-                                listenable: state.playback,
-                                builder: (context, _) => Text(
-                                  state.recording
-                                      ? '正在录音 · ${durationLabel((state.singing['recordedMs'] as num? ?? 0).toInt())}'
-                                      : state.countdown > 0
-                                      ? '录音倒数 ${state.countdown}'
-                                      : state.singingPhase == 'FINALIZING'
-                                      ? '正在保留录音'
-                                      : state.pendingReviewId.isNotEmpty
-                                      ? '录音已保留 · 点击回听'
-                                      : state.workId.isNotEmpty
-                                      ? '返回作品回听'
-                                      : '$playbackLabel · ${durationLabel(state.positionMs)}',
+          radius: AppRadii.floating,
+          variant: GlassVariant.liquid,
+          child: MotionPress(
+            child: InkWell(
+              key: const Key('mini-player'),
+              onTap: open,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          Artwork(
+                            state: state,
+                            path: state.current!.cover,
+                            label: state.current!.title,
+                            size: state.senior ? 48 : 40,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  state.current!.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: state.taking
-                                            ? Theme.of(context)
-                                                  .colorScheme
-                                                  .error
-                                            : Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                      ),
+                                  style: state.senior
+                                      ? Theme.of(context).textTheme.titleMedium
+                                      : Theme.of(context).textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (state.recording)
-                          TextButton(
-                            onPressed: () => uiTask(context, () async {
-                              final id = state.takeId;
-                              await state.endTake();
-                              if (!context.mounted) return;
-                              await (navigator ?? Navigator.of(context)).push(
-                                MaterialPageRoute<void>(
-                                  settings: const RouteSettings(name: 'review'),
-                                  builder: (_) =>
-                                      ReviewPage(state: state, id: id),
+                                ListenableBuilder(
+                                  listenable: state.playback,
+                                  builder: (context, _) => Text(
+                                    state.recording
+                                        ? '正在录音 · ${durationLabel((state.singing['recordedMs'] as num? ?? 0).toInt())}'
+                                        : state.countdown > 0
+                                        ? '录音倒数 ${state.countdown}'
+                                        : state.singingPhase == 'FINALIZING'
+                                        ? '正在保留录音'
+                                        : state.pendingReviewId.isNotEmpty
+                                        ? '录音已保留 · 点击回听'
+                                        : state.workId.isNotEmpty
+                                        ? '返回作品回听'
+                                        : '$playbackLabel · ${durationLabel(state.positionMs)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: state.taking
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .error
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                        ),
+                                  ),
                                 ),
-                              );
-                            }),
-                            child: const Text('结束'),
-                          )
-                        else if (state.taking)
-                          TextButton(onPressed: open, child: const Text('查看'))
-                        else if (state.senior)
-                          Tooltip(
-                            message: actionLabel,
-                            child: TextButton(
-                              onPressed: playbackAction,
-                              child: Text(
-                                showState
-                                    ? '查看'
-                                    : state.isPlaying
-                                    ? '暂停'
-                                    : '继续',
-                              ),
-                            ),
-                          )
-                        else
-                          IconButton(
-                            tooltip: actionLabel,
-                            onPressed: playbackAction,
-                            icon: Icon(
-                              state.isPlaying
-                                  ? Icons.pause_rounded
-                                  : Icons.play_arrow_rounded,
+                              ],
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                  ExcludeSemantics(
-                    child: ListenableBuilder(
-                      listenable: state.playback,
-                      builder: (context, _) => LinearProgressIndicator(
-                        minHeight: 2,
-                        value: state.durationMs > 0
-                            ? (state.positionMs / state.durationMs).clamp(0, 1)
-                            : 0,
-                        color: state.recording
-                            ? Theme.of(context).colorScheme.error
-                            : null,
-                        backgroundColor: Colors.transparent,
+                          if (state.recording)
+                            TextButton(
+                              onPressed: () => uiTask(context, () async {
+                                final id = state.takeId;
+                                await state.endTake();
+                                if (!context.mounted) return;
+                                await (navigator ?? Navigator.of(context)).push(
+                                  MaterialPageRoute<void>(
+                                    settings: const RouteSettings(
+                                      name: 'review',
+                                    ),
+                                    builder: (_) =>
+                                        ReviewPage(state: state, id: id),
+                                  ),
+                                );
+                              }),
+                              child: const Text('结束'),
+                            )
+                          else if (state.taking)
+                            TextButton(onPressed: open, child: const Text('查看'))
+                          else if (state.senior)
+                            Tooltip(
+                              message: actionLabel,
+                              child: TextButton(
+                                onPressed: playbackAction,
+                                child: Text(
+                                  showState
+                                      ? '查看'
+                                      : state.isPlaying
+                                      ? '暂停'
+                                      : '继续',
+                                ),
+                              ),
+                            )
+                          else
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Theme.of(context).colorScheme.primary
+                                    .withValues(alpha: .045),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withValues(alpha: .23),
+                                    Colors.white.withValues(alpha: .03),
+                                  ],
+                                ),
+                                border: Border.all(
+                                  color: AppSurfaces.of(context).rim
+                                      .withValues(alpha: .48),
+                                  width: .7,
+                                ),
+                              ),
+                              child: IconButton(
+                                tooltip: actionLabel,
+                                onPressed: playbackAction,
+                                iconSize: 26,
+                                icon: Icon(
+                                  state.isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: ExcludeSemantics(
+                          child: ListenableBuilder(
+                            listenable: state.playback,
+                            builder: (context, _) => LinearProgressIndicator(
+                              minHeight: 2,
+                              value: state.durationMs > 0
+                                  ? (state.positionMs / state.durationMs).clamp(
+                                      0,
+                                      1,
+                                    )
+                                  : 0,
+                              color: state.recording
+                                  ? Theme.of(context).colorScheme.error
+                                  : null,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: .065),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

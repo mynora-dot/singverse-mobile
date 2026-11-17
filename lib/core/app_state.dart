@@ -28,6 +28,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         ? UiMode.senior
         : UiMode.standard;
     reduceTransparency = preferences.getBool('reduceTransparency') ?? false;
+    performanceMode = preferences.getBool('performanceMode') ?? false;
     nativeEnabled = listenPlayer;
     updates = AppUpdates(
       api: api,
@@ -87,6 +88,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   UiMode uiMode = UiMode.standard;
   bool get senior => uiMode == UiMode.senior;
   bool reduceTransparency = false;
+  bool performanceMode = false;
   bool nativeEnabled = true;
   Json singing = {};
   List<Json> works = [];
@@ -651,6 +653,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     reduceTransparency = reduced;
     await preferences.setBool('reduceTransparency', reduced);
     notifyListeners();
+  }
+
+  Future<void> setPerformanceMode(bool enabled) async {
+    performanceMode = enabled;
+    notifyListeners();
+    await preferences.setBool('performanceMode', enabled);
   }
 
   Future<void> play(

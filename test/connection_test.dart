@@ -382,7 +382,6 @@ void main() {
     await tap(tester, automatic);
     expect(tester.widget<Checkbox>(automatic).value, true);
     expect(tester.widget<Checkbox>(remember).value, true);
-    expect(find.text('下次打开自动连接此 NAS。'), findsOneWidget);
     await tap(tester, remember);
     expect(tester.widget<Checkbox>(automatic).value, false);
     expect(tester.widget<Checkbox>(remember).value, false);
@@ -458,6 +457,47 @@ void main() {
       expect(state.authenticated, true);
       expect(logins.passwordReads, 0);
       expect(api.loginBodies, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'optical focus follows the active field without changing credentials or sending requests',
+    (tester) async {
+      await open(tester);
+      await enter(tester, 'nas-address-field', 'nas.local:18080');
+      await enter(tester, 'nas-username-field', 'family-admin');
+      await enter(tester, 'nas-password-field', 'test password');
+      Glass surfaceFor(String key) => tester.widget<Glass>(
+        find.descendant(
+          of: find
+              .ancestor(
+                of: find.byKey(ValueKey(key)),
+                matching: find.byType(GlassField),
+              )
+              .first,
+          matching: find.byType(Glass),
+        ),
+      );
+      expect(surfaceFor('nas-password-field').focused, isTrue);
+      expect(surfaceFor('nas-username-field').focused, isFalse);
+      final username = find.byKey(const ValueKey('nas-username-field'));
+      await tap(tester, username);
+      expect(surfaceFor('nas-username-field').focused, isTrue);
+      expect(surfaceFor('nas-password-field').focused, isFalse);
+      expect(
+        tester.widget<TextField>(username).controller!.text,
+        'family-admin',
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('nas-password-field')))
+            .controller!
+            .text,
+        'test password',
+      );
+      expect(api.loginBodies, isEmpty);
+      expect(logins.secrets, isEmpty);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -660,6 +700,20 @@ void main() {
   });
 
   testWidgets(
+    'tapping the selected protocol preserves the remembered credential',
+    (tester) async {
+      logins.seed(record());
+      await open(tester);
+      await tap(tester, find.text('HTTP'));
+      expect(find.text('已保存密码'), findsOneWidget);
+      await submit(tester);
+      expect(logins.passwordReads, 1);
+      expect(api.loginBodies.single['password'], 'remembered password');
+      expect(state.authenticated, isTrue);
+    },
+  );
+
+  testWidgets(
     'unchecking remember deletes the stored secret before another login',
     (tester) async {
       logins.seed(record());
@@ -715,11 +769,11 @@ void main() {
       );
       expect(
         tester
-            .widget<SegmentedButton<String>>(
+            .widget<AppSegments<String>>(
               find.byKey(const ValueKey('nas-protocol')),
             )
             .selected,
-        {'https'},
+        'https',
       );
       expect(api.loginBodies, isEmpty);
     },
@@ -762,13 +816,8 @@ void main() {
             .value,
         false,
       );
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const ValueKey('nas-password-field')))
-            .decoration!
-            .labelText,
-        '密码',
-      );
+      expect(find.text('密码'), findsOneWidget);
+      expect(find.text('已保存密码'), findsNothing);
       expect(logins.secrets, isEmpty);
     },
   );

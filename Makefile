@@ -4,7 +4,7 @@ help:
 setup:
 	flutter --no-version-check pub get --enforce-lockfile
 check: setup
-	dart format --output=none --set-exit-if-changed lib test integration_test
+	dart format --output=none --set-exit-if-changed lib test integration_test test_driver
 	flutter --no-version-check analyze --no-pub
 	flutter --no-version-check test --no-pub
 	$(MAKE) native-check release-check

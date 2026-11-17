@@ -30,7 +30,9 @@ class Waveform extends StatelessWidget {
     height: 80,
     width: double.infinity,
     child: ExcludeSemantics(
-      child: CustomPaint(painter: _WavePainter(values, color, progress)),
+      child: RepaintBoundary(
+        child: CustomPaint(painter: _WavePainter(values, color, progress)),
+      ),
     ),
   );
 }
@@ -98,7 +100,7 @@ class _WorksPageState extends State<WorksPage> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.state.performance,
+    listenable: widget.state,
     builder: (context, _) {
       final state = widget.state;
       final works = state.visibleWorks.where((work) {
@@ -140,11 +142,16 @@ class _WorksPageState extends State<WorksPage> {
               ),
               SliverList.builder(
                 itemCount: rows.length,
-                itemBuilder: (_, index) => _WorkRow(
-                  senior: state.senior,
-                  work: rows[index],
-                  draft: draft,
-                  onTap: () => open(rows[index]),
+                itemBuilder: (_, index) => MotionEntrance(
+                  key: ValueKey('work:${rows[index]['id']}'),
+                  index: index,
+                  child: _WorkRow(
+                    state: state,
+                    senior: state.senior,
+                    work: rows[index],
+                    draft: draft,
+                    onTap: () => open(rows[index]),
+                  ),
                 ),
               ),
             ],
@@ -157,7 +164,15 @@ class _WorksPageState extends State<WorksPage> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                32 +
+                    (widget.embedded
+                        ? MediaQuery.paddingOf(context).bottom
+                        : 0),
+              ),
               sliver: SliverMainAxisGroup(
                 slivers: [
                   SliverToBoxAdapter(
@@ -259,7 +274,7 @@ class _WorksPageState extends State<WorksPage> {
       return widget.embedded
           ? body
           : Scaffold(
-              appBar: AppBar(title: const Text('作品')),
+              appBar: AppToolbar(title: const Text('作品')),
               body: body,
             );
     },
@@ -268,12 +283,14 @@ class _WorksPageState extends State<WorksPage> {
 
 class _WorkRow extends StatelessWidget {
   const _WorkRow({
+    required this.state,
     required this.senior,
     required this.work,
     required this.draft,
     required this.onTap,
   });
   final Json work;
+  final AppState state;
   final bool senior;
   final bool draft;
   final VoidCallback onTap;
@@ -281,82 +298,152 @@ class _WorkRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final missing = work['status'] == 'MISSING';
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: senior ? 16 : 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: scheme.outlineVariant, width: .6),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: senior ? 56 : 44,
-                height: senior ? 56 : 44,
-                decoration: BoxDecoration(
-                  color: scheme.onSurface.withValues(alpha: .05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  missing
-                      ? Icons.file_present_outlined
-                      : Icons.graphic_eq_rounded,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
+    final waveform = (work['waveform'] as List? ?? const [])
+        .whereType<num>()
+        .map((v) => v.toDouble())
+        .toList();
+    final songData = work['song'];
+    final cover = songData is Map ? songData['coverPath'] as String? : null;
+    final status = missing
+        ? '音频文件缺失'
+        : draft
+        ? '待回听与保存'
+        : work['complete'] == true
+        ? '完整演唱'
+        : '演唱片段';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: MotionPress(
+        child: Material(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              padding: EdgeInsets.all(senior ? 20 : 18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: draft && !missing
+                      ? scheme.primary.withValues(alpha: .18)
+                      : scheme.outlineVariant.withValues(alpha: .5),
+                  width: .6,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      work['name'] as String? ?? '我的演唱',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: senior ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      [
-                        durationLabel(
-                          (work['durationMs'] as num? ?? 0).toInt(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (cover?.isNotEmpty == true)
+                        Artwork(
+                          state: state,
+                          path: cover,
+                          size: senior ? 56 : 48,
+                        )
+                      else
+                        Container(
+                          width: senior ? 56 : 48,
+                          height: senior ? 56 : 48,
+                          decoration: BoxDecoration(
+                            color: scheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Icon(
+                            missing
+                                ? Icons.file_present_outlined
+                                : draft
+                                ? Icons.mic_none_rounded
+                                : Icons.graphic_eq_rounded,
+                            color: missing ? scheme.error : scheme.primary,
+                            size: 25,
+                          ),
                         ),
-                        if (work['createdAt'] is num)
-                          _dateLabel((work['createdAt'] as num).toInt()),
-                        if (missing)
-                          '音频文件缺失'
-                        else if (draft)
-                          '待回听与保存'
-                        else
-                          work['complete'] == true ? '完整演唱' : '演唱片段',
-                      ].join(' · '),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: missing ? scheme.error : scheme.onSurfaceVariant,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              work['name'] as String? ?? '我的演唱',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontSize: senior ? 23 : 17,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              [
+                                durationLabel(
+                                  (work['durationMs'] as num? ?? 0).toInt(),
+                                ),
+                                if (work['createdAt'] is num)
+                                  _dateLabel(
+                                    (work['createdAt'] as num).toInt(),
+                                  ),
+                                if (!draft) status,
+                              ].join(' · '),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
+                      if (!draft && !senior)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Icon(
+                            Icons.play_circle_fill_rounded,
+                            color: scheme.primary,
+                            size: 34,
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (draft) ...[
+                    if (!missing && waveform.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: senior ? 64 : 52,
+                        child: Waveform(
+                          values: waveform,
+                          color: scheme.primary,
+                        ),
+                      ),
+                    ] else
+                      const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            missing ? '$status · 无法回听' : status,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: missing
+                                      ? scheme.error
+                                      : scheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          color: missing ? scheme.error : scheme.primary,
+                          size: 20,
+                        ),
+                      ],
                     ),
                   ],
-                ),
+                ],
               ),
-              if (!senior)
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: scheme.onSurfaceVariant,
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text(
-                    '回听',
-                    style: TextStyle(color: scheme.onSurfaceVariant),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
@@ -625,7 +712,7 @@ class _ReviewPageState extends State<ReviewPage> {
   });
   Future<void> rename() async {
     if (working) return;
-    final value = await showDialog<String>(
+    final value = await showAppDialog<String>(
       context: context,
       builder: (_) =>
           _RenameDialog(initial: data?['name'] as String? ?? '我的演唱'),
@@ -667,7 +754,7 @@ class _ReviewPageState extends State<ReviewPage> {
   });
   Future<void> remove() async {
     if (working) return;
-    final yes = await showDialog<bool>(
+    final yes = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除这段录音？'),
@@ -696,7 +783,7 @@ class _ReviewPageState extends State<ReviewPage> {
     });
   }
 
-  Future<void> adjustSound() => showModalBottomSheet<void>(
+  Future<void> adjustSound() => showAppSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -784,7 +871,7 @@ class _ReviewPageState extends State<ReviewPage> {
   String get _alignmentLabel =>
       shift == 0 ? '原始对齐' : '人声${shift < 0 ? '提前' : '延后'} ${shift.abs()} 毫秒';
 
-  Future<void> adjustAlignment() => showModalBottomSheet<void>(
+  Future<void> adjustAlignment() => showAppSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -902,7 +989,7 @@ class _ReviewPageState extends State<ReviewPage> {
           ? '录音已中断，已有内容已保留'
           : '草稿已自动保留';
       return Scaffold(
-        appBar: AppBar(
+        appBar: AppToolbar(
           title: Text(
             missing
                 ? '录音文件缺失'
@@ -1017,14 +1104,9 @@ class _ReviewPageState extends State<ReviewPage> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: scheme.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: scheme.onSurface.withValues(alpha: .08),
-                          ),
-                        ),
+                      Glass(
+                        state: state,
+                        radius: 28,
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
                           child: Column(

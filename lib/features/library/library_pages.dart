@@ -22,7 +22,7 @@ Future<void> showSong(
   AppState state,
   Song song, {
   List<(String, String)> credits = const [],
-}) => showModalBottomSheet<void>(
+}) => showAppSheet<void>(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
@@ -94,16 +94,24 @@ class _SongsPageState extends State<SongsPage> {
     }
     final selected = {...query.tagIds};
     if (!mounted) return;
-    final result = await showModalBottomSheet<List<String>>(
+    final result = await showAppSheet<List<String>>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) => StatefulBuilder(
-        builder: (context, update) => SizedBox(
-          height: MediaQuery.sizeOf(context).height * .78,
+        builder: (context, update) => ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .78,
+          ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.page,
+              AppSpace.xs,
+              AppSpace.page,
+              AppSpace.md,
+            ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
@@ -121,8 +129,9 @@ class _SongsPageState extends State<SongsPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Expanded(
+                Flexible(
                   child: ListView(
+                    shrinkWrap: true,
                     children: [
                       if (tags.isEmpty) const Notice('曲库还没有可用分类。'),
                       for (final dimension in {
@@ -170,6 +179,7 @@ class _SongsPageState extends State<SongsPage> {
                 Wrap(
                   alignment: WrapAlignment.spaceBetween,
                   spacing: 12,
+                  runSpacing: 12,
                   children: [
                     TextButton(
                       onPressed: () => update(selected.clear),
@@ -203,84 +213,49 @@ class _SongsPageState extends State<SongsPage> {
           searchFocus.hasFocus ||
           search.text.isNotEmpty ||
           query.tagIds.isNotEmpty;
+      final spotlight =
+          widget.showBrowse &&
+          !searching &&
+          !state.senior &&
+          MediaQuery.sizeOf(context).width >= 360 &&
+          MediaQuery.textScalerOf(context).scale(16) <= 21 &&
+          query.items.isNotEmpty;
+      final rows = spotlight ? query.items.skip(1).toList() : query.items;
       final header = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (widget.browseItem != null)
             _BrowseIntroduction(state: state, item: widget.browseItem!),
-          if (widget.showBrowse && !searching)
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 16),
-              child: Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (query.error != null) ...[
-                        Icon(
-                          Icons.wifi_off_rounded,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Text(
-                        query.error == null ? '家里的曲库' : '曲库暂不可读',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    query.loading && query.total == 0
-                        ? '正在读取歌曲…'
-                        : '${query.total} 首歌曲',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          TextField(
-            key: const ValueKey('song-search'),
+          GlassSearchField(
+            state: state,
+            fieldKey: const ValueKey('song-search'),
             controller: search,
             focusNode: searchFocus,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: '搜索歌名、歌手或拼音',
-              prefixIcon: const Icon(Icons.search_rounded),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (search.text.isNotEmpty)
-                    IconButton(
-                      tooltip: '清除搜索',
-                      onPressed: () {
-                        debounce?.cancel();
-                        search.clear();
-                        query.query = '';
-                        query.load();
-                        setState(() {});
-                      },
-                      icon: const Icon(Icons.cancel_rounded),
-                    ),
+            suffix: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (search.text.isNotEmpty)
                   IconButton(
-                    tooltip: '筛选歌曲',
-                    onPressed: filters,
-                    icon: Badge(
-                      isLabelVisible: query.tagIds.isNotEmpty,
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      child: const Icon(Icons.tune_rounded),
-                    ),
+                    tooltip: '清除搜索',
+                    onPressed: () {
+                      debounce?.cancel();
+                      search.clear();
+                      query.query = '';
+                      query.load();
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.cancel_rounded),
                   ),
-                ],
-              ),
+                IconButton(
+                  tooltip: '筛选歌曲',
+                  onPressed: filters,
+                  icon: Badge(
+                    isLabelVisible: query.tagIds.isNotEmpty,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    child: const Icon(Icons.tune_rounded),
+                  ),
+                ),
+              ],
             ),
             onChanged: (text) {
               query.query = text;
@@ -298,7 +273,7 @@ class _SongsPageState extends State<SongsPage> {
             },
           ),
           if (widget.showBrowse && !searching) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             _BrowseLinks(state: state),
           ],
           if (query.tagIds.isNotEmpty)
@@ -329,11 +304,21 @@ class _SongsPageState extends State<SongsPage> {
                 ],
               ),
             ),
-          const SizedBox(height: 24),
+          if (spotlight) ...[
+            const SizedBox(height: AppSpace.page),
+            MotionEntrance(
+              key: ValueKey(
+                'spotlight:${state.instanceId}:${query.items.first.id}',
+              ),
+              index: 0,
+              child: SongSpotlight(state: state, song: query.items.first),
+            ),
+          ],
+          const SizedBox(height: AppSpace.section),
           SectionTitle(
             searching ? '搜索结果' : '全部歌曲',
             trailing: Text(
-              '${query.total} 首',
+              '${query.total} 首歌曲',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -353,22 +338,37 @@ class _SongsPageState extends State<SongsPage> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.page,
+                AppSpace.xs,
+                AppSpace.page,
+                0,
+              ),
               sliver: SliverToBoxAdapter(child: header),
             ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
               sliver: SliverList.builder(
-                itemCount: query.items.length,
-                itemBuilder: (context, index) => SongRow(
-                  key: ValueKey(query.items[index].id),
-                  state: state,
-                  song: query.items[index],
+                itemCount: rows.length,
+                itemBuilder: (context, index) => MotionEntrance(
+                  key: ValueKey(
+                    'songs:${state.instanceId}:${widget.artistId}:${rows[index].id}',
+                  ),
+                  index: index,
+                  child: SongRow(state: state, song: rows[index]),
                 ),
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.page,
+                0,
+                AppSpace.page,
+                AppSpace.large +
+                    (widget.embedded
+                        ? MediaQuery.paddingOf(context).bottom
+                        : 0),
+              ),
               sliver: SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -403,7 +403,7 @@ class _SongsPageState extends State<SongsPage> {
       return widget.embedded
           ? body
           : Scaffold(
-              appBar: AppBar(title: Text(widget.title)),
+              appBar: AppToolbar(title: Text(widget.title)),
               body: ContentWidth(child: body),
             );
     },
@@ -476,87 +476,84 @@ class _BrowseLinks extends StatelessWidget {
       final stacked =
           constraints.maxWidth < 280 ||
           MediaQuery.textScalerOf(context).scale(15) > 20;
+      final scheme = Theme.of(context).colorScheme;
       final links = [
         for (final item in [
           (Icons.person_outline_rounded, '歌手', '歌手'),
-          (Icons.grid_view_rounded, '分类', '分类'),
+          (Icons.grid_view_outlined, '分类', '分类'),
           (Icons.queue_music_rounded, '家庭歌单', '共享歌单'),
         ])
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
-              padding: EdgeInsets.symmetric(
-                horizontal: stacked ? 12 : 4,
-                vertical: 8,
+          Glass(
+            state: state,
+            radius: AppRadii.control,
+            variant: GlassVariant.control,
+            child: TextButton(
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: scheme.onSurface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.control),
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: stacked ? 16 : 8,
+                  vertical: 10,
+                ),
+                minimumSize: Size(
+                  AppSizes.touch,
+                  state.senior ? AppSizes.seniorTouch : 52,
+                ),
               ),
-              minimumSize: Size(48, state.senior ? 72 : 48),
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => BrowsePage(state: state, kind: item.$3),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => BrowsePage(state: state, kind: item.$3),
+                ),
               ),
-            ),
-            child: state.senior && !stacked
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        item.$1,
-                        size: 24,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item.$2,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  )
-                : Row(
-                    mainAxisAlignment: stacked
-                        ? MainAxisAlignment.start
-                        : MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        item.$1,
-                        size: 20,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          item.$2,
-                          style: state.senior
-                              ? null
-                              : Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      if (stacked) ...[
-                        const Spacer(),
+              child: stacked
+                  ? Row(
+                      children: [
+                        Icon(item.$1, size: 24, color: scheme.primary),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(item.$2)),
                         const Icon(Icons.chevron_right_rounded, size: 20),
                       ],
-                    ],
-                  ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(item.$1, size: 19, color: scheme.primary),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            item.$2,
+                            maxLines: 1,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
       ];
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .04),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: stacked
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: links,
-                )
-              : Row(
-                  children: [for (final link in links) Expanded(child: link)],
-                ),
-        ),
-      );
+      return stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < links.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  links[i],
+                ],
+              ],
+            )
+          : Row(
+              children: [
+                for (var i = 0; i < links.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(child: links[i]),
+                ],
+              ],
+            );
     },
   );
 }
@@ -748,7 +745,9 @@ class _BrowsePageState extends State<BrowsePage> {
       rows.addAll(items.map((item) => (heading: null, item: item)));
     }
     return Scaffold(
-      appBar: AppBar(title: Text(widget.kind == '共享歌单' ? '家庭歌单' : widget.kind)),
+      appBar: AppToolbar(
+        title: Text(widget.kind == '共享歌单' ? '家庭歌单' : widget.kind),
+      ),
       body: ContentWidth(
         child: RefreshIndicator(
           onRefresh: load,
@@ -890,7 +889,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
   );
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('家庭歌单')),
+    appBar: AppToolbar(title: const Text('家庭歌单')),
     body: FutureBuilder<dynamic>(
       future: data,
       builder: (context, result) {

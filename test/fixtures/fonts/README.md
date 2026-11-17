@@ -20,6 +20,8 @@
 
 ## 重新生成
 
+2026-11-17 Liquid Glass 验收补全：按 `lib`、`test`、`integration_test` 与 `test_driver` 源码重新核对，从上述同版本源字体加入 24 个缺失字形，保留旧码位和全部版权 / OFL name records。当前覆盖源码所需 664 个码位，子集含 673 个码位，缺字为 0，大小 123,000 字节；SHA-256 为 `f7aab2cc84cd39213d4742cc5e9079129aa7442ecf5366add709f8021be49508`。仅测试字体发生变化，Android 仍使用系统字体。
+
 2026-11-12 登录功能补全：沿用上述同一完整源字体和提取方法，再加入登录、发现与密码重置页面所需的 55 个字形，保留旧子集全部码位。补全后包含 649 个码位、651 个字形、117,244 字节，覆盖当前源码所需 643 个码位，缺字为 0。源文件 SHA-256 保持不变；当前子集 SHA-256 为 `72e70e4128900f44ff8deeda9875c8f9cbfb7a0474a42dd6f47bc7b071c76366`，版权与许可证记录保持原内容。
 
 在手机工程目录执行，`SINGVERSE_TEST_FONT` 指向合法获得、许可证相同的完整源字体。命令只读取本机字体，不下载或安装字体；保留旧子集的码位，避免已有截图丢字。控制字符及换行没有视觉字形，不纳入覆盖要求。
@@ -34,7 +36,7 @@ from fontTools.ttLib import TTFont
 target = Path('test/fixtures/fonts/UiCapture.ttf')
 previous = TTFont(target, recalcTimestamp=False)
 required = set(range(0x20, 0x7f))
-for directory in ('lib', 'test', 'integration_test'):
+for directory in ('lib', 'test', 'integration_test', 'test_driver'):
     for path in Path(directory).rglob('*.dart'):
         required.update(ord(c) for c in path.read_text() if not c.isspace())
 needed = required | set(previous.getBestCmap())

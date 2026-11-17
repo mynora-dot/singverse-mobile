@@ -602,6 +602,8 @@ void main() {
       );
       final entry = find.byKey(const Key('open-admin'));
       await tester.scrollUntilVisible(entry, 300);
+      await tester.pumpAndSettle();
+      expect(entry.hitTestable(), findsOneWidget);
       await tester.tap(entry);
       await tester.pumpAndSettle();
       for (final tooltip in ['返回', '刷新', '关闭管理端']) {

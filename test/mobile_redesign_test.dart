@@ -317,12 +317,56 @@ void main() {
     for (final brightness in Brightness.values) {
       final theme = singVerseTheme(brightness);
       final scheme = theme.colorScheme;
+      final material = AppSurfaces.forBrightness(brightness);
+      final worstBackdrop = brightness == Brightness.dark
+          ? AppPalette.darkEnvironmentBlue
+          : AppPalette.lightEnvironmentBlue;
+      final glass = Color.alphaBlend(
+        material.glass.withValues(
+          alpha: brightness == Brightness.dark
+              ? GlassMaterialSpec.standard.darkTint
+              : GlassMaterialSpec.standard.lightTint,
+        ),
+        worstBackdrop,
+      );
+      final controlGlass = Color.alphaBlend(
+        material.glass.withValues(
+          alpha: brightness == Brightness.dark
+              ? GlassMaterialSpec.field.darkTint
+              : GlassMaterialSpec.field.lightTint,
+        ),
+        worstBackdrop,
+      );
       for (final colors in [
         (scheme.onSurface, scheme.surface),
+        (scheme.onPrimary, Color.lerp(scheme.primary, Colors.white, .06)!),
+        (scheme.onSurfaceVariant, glass),
+        (scheme.onSurfaceVariant, controlGlass),
+        (
+          scheme.onSurfaceVariant,
+          Color.alphaBlend(
+            material.rim.withValues(
+              alpha: brightness == Brightness.dark ? .095 : .5,
+            ),
+            controlGlass,
+          ),
+        ),
+        (
+          scheme.onSurfaceVariant,
+          Color.alphaBlend(
+            material.rim.withValues(
+              alpha: brightness == Brightness.dark ? .095 : .5,
+            ),
+            glass,
+          ),
+        ),
         (scheme.onSurfaceVariant, theme.scaffoldBackgroundColor),
         (scheme.onSurfaceVariant, scheme.secondaryContainer),
         (scheme.onPrimary, scheme.primary),
         (scheme.onPrimaryContainer, scheme.primaryContainer),
+        (material.onSpotlight, material.spotlight),
+        (material.spotlightMuted, material.spotlight),
+        (Colors.white, recordingControl),
       ]) {
         final foreground = colors.$1.computeLuminance();
         final background = colors.$2.computeLuminance();
@@ -884,6 +928,47 @@ void main() {
     expect(api.requests.any((p) => p.contains('tagIds=lang')), isTrue);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'filter sheet fits its content and keeps large type actions reachable',
+    (tester) async {
+      api.tags = [
+        {
+          'id': 'lang',
+          'name': '国语',
+          'dimension': 'LANGUAGE',
+          'active': true,
+          'count': 2,
+        },
+      ];
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      for (final scale in [1.0, 2.0]) {
+        await size(
+          tester,
+          scale == 1 ? const Size(390, 844) : const Size(320, 568),
+        );
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        await app(tester);
+        await tester.tap(find.byTooltip('筛选歌曲'));
+        await tester.pumpAndSettle();
+        final sheet = find.byWidgetPredicate(
+          (widget) =>
+              widget is GlassSurface && widget.variant == GlassVariant.sheet,
+        );
+        if (scale == 1) {
+          expect(tester.getSize(sheet).height, lessThan(844 * .6));
+        }
+        expect(find.text('应用筛选 (0)').hitTestable(), findsOneWidget);
+        await tester.tap(find.text('国语 · 2'));
+        await tester.pump();
+        expect(find.text('应用筛选 (1)').hitTestable(), findsOneWidget);
+        await tester.tap(find.text('取消'));
+        await tester.pumpAndSettle();
+        expect(api.requests.any((path) => path.contains('tagIds=')), isFalse);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
   testWidgets(
     'artist browsing renders rows and mini player reserves page space',
     (tester) async {
@@ -1807,6 +1892,15 @@ void main() {
             await tester.pumpAndSettle();
             await tester.tap(change);
             await tester.pumpAndSettle();
+            final login = find.byKey(const ValueKey('nas-submit'));
+            await tester.ensureVisible(login);
+            await tester.pumpAndSettle();
+            final mini = find.byKey(const Key('mini-player'));
+            expect(mini.hitTestable(), findsOneWidget);
+            expect(
+              tester.getRect(login).bottom,
+              lessThanOrEqualTo(tester.getRect(mini).top),
+            );
             final address = find.byKey(const ValueKey('nas-address-field'));
             await tester.scrollUntilVisible(
               address,
@@ -1837,6 +1931,7 @@ void main() {
             // Editing alone must neither replace the NAS nor disturb playback.
             tester.view.viewInsets = const FakeViewPadding(bottom: 160);
             await tester.pumpAndSettle();
+            expect(find.byKey(const Key('mini-player')), findsNothing);
             final submit = find.byKey(const ValueKey('nas-submit'));
             await tester.scrollUntilVisible(
               submit,
@@ -1894,13 +1989,13 @@ void main() {
       expect(media.devicePixelRatio, 3.5);
       expect(media.padding.top, 40);
       expect(media.textScaler.scale(14), 14);
-      expect(Theme.of(pageContext()).textTheme.headlineSmall!.fontSize, 20);
-      expect(Theme.of(pageContext()).textTheme.bodyMedium!.fontSize, 14);
+      expect(Theme.of(pageContext()).textTheme.headlineSmall!.fontSize, 22);
+      expect(Theme.of(pageContext()).textTheme.bodyMedium!.fontSize, 16);
       final songTitle = find.descendant(
         of: find.byType(SongRow).first,
-        matching: find.text('晴天'),
+        matching: find.text('测试歌曲 2'),
       );
-      expect(tester.widget<Text>(songTitle).style!.fontSize, 14);
+      expect(tester.widget<Text>(songTitle).style!.fontSize, 16);
       for (final key in ['open-tv', 'open-settings', 'nav-songs']) {
         final button = find.byKey(Key(key));
         expect(button.hitTestable(), findsOneWidget);
@@ -1912,14 +2007,14 @@ void main() {
       tester.view.physicalSize = const Size(1365, 2954);
       await tester.pumpAndSettle();
       expect(MediaQuery.sizeOf(pageContext()).width, 390);
-      expect(Theme.of(pageContext()).textTheme.headlineSmall!.fontSize, 22);
-      expect(tester.widget<Text>(songTitle).style!.fontSize, 15);
+      expect(Theme.of(pageContext()).textTheme.headlineSmall!.fontSize, 24);
+      expect(tester.widget<Text>(songTitle).style!.fontSize, 16);
       tester.view.physicalSize = const Size(1260, 2800);
       await state.setTheme(ThemeMode.dark);
       tester.platformDispatcher.textScaleFactorTestValue = 1.8;
       await tester.pumpAndSettle();
       expect(Theme.of(pageContext()).brightness, Brightness.dark);
-      expect(Theme.of(pageContext()).textTheme.headlineSmall!.fontSize, 20);
+      expect(Theme.of(pageContext()).textTheme.headlineSmall!.fontSize, 22);
       expect(
         MediaQuery.textScalerOf(pageContext()).scale(14),
         closeTo(25.2, .01),
@@ -1938,10 +2033,175 @@ void main() {
     },
   );
 
+  testWidgets(
+    'liquid glass main pages adapt across viewports themes and 200 percent text',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      state.works = [workFixture()];
+      native.works['draft'] = workFixture();
+      api.favoriteRows[api.rows.first['id'] as String] = api.rows.first;
+      await state.refreshPersonal();
+      final capture = const bool.fromEnvironment('CAPTURE_GLASS_MATRIX');
+      final shadows = debugDisableShadows;
+      if (capture) {
+        debugDisableShadows = false;
+        addTearDown(() => debugDisableShadows = shadows);
+      }
+      final output = Directory('build/reports/liquid-glass/matrix');
+      if (capture) output.createSync(recursive: true);
+      final boundary = GlobalKey();
+      for (final brightness in [ThemeMode.light, ThemeMode.dark]) {
+        await state.setTheme(brightness);
+        for (final dimensions in [
+          const Size(320, 568),
+          const Size(375, 812),
+          const Size(390, 844),
+          const Size(430, 932),
+          const Size(768, 1024),
+          const Size(1024, 768),
+        ]) {
+          for (final scale in [1.0, 2.0]) {
+            await tester.binding.setSurfaceSize(dimensions);
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            await tester.pumpWidget(
+              RepaintBoundary(
+                key: boundary,
+                child: SingVerseApp(
+                  key: ValueKey('$brightness:$dimensions:$scale'),
+                  state: state,
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            for (final tab in ['songs', 'frequent', 'works']) {
+              await section(tester, tab);
+              final label =
+                  '${brightness.name}-${dimensions.width.toInt()}x${dimensions.height.toInt()}-${scale}x-$tab';
+              expect(tester.takeException(), isNull, reason: label);
+              final target = find.byKey(Key('nav-$tab'));
+              expect(target.hitTestable(), findsOneWidget, reason: label);
+              expect(
+                tester.getSize(target).height,
+                greaterThanOrEqualTo(48),
+                reason: label,
+              );
+              if (capture) {
+                await tester.runAsync(() async {
+                  final render =
+                      boundary.currentContext!.findRenderObject()!
+                          as RenderRepaintBoundary;
+                  final image = await render.toImage(pixelRatio: 1);
+                  final bytes = await image.toByteData(
+                    format: ui.ImageByteFormat.png,
+                  );
+                  await File('${output.path}/$label.png')
+                      .writeAsBytes(bytes!.buffer.asUint8List());
+                  image.dispose();
+                });
+              }
+            }
+          }
+        }
+      }
+      debugDisableShadows = shadows;
+    },
+  );
+
+  testWidgets(
+    'floating library controls leave the last song reachable at every size',
+    (tester) async {
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final capture = const bool.fromEnvironment('CAPTURE_DESIGN_SYSTEM');
+      final boundary = GlobalKey();
+      final directory = Directory(
+        'build/reports/singverse-design-system-v3/matrix',
+      );
+      final shadows = debugDisableShadows;
+      if (capture) {
+        directory.createSync(recursive: true);
+        debugDisableShadows = false;
+        addTearDown(() => debugDisableShadows = shadows);
+      }
+      state.current = Song(api.rows.first);
+      state.positionMs = 30000;
+      state.durationMs = 240000;
+      state.playbackState = 'PAUSED';
+      for (final brightness in [ThemeMode.light, ThemeMode.dark]) {
+        await state.setTheme(brightness);
+        for (final viewport in [
+          const Size(320, 568),
+          const Size(375, 812),
+          const Size(390, 844),
+          const Size(430, 932),
+          const Size(768, 1024),
+          const Size(1024, 768),
+        ]) {
+          await size(tester, viewport);
+          for (final scale in [1.0, 2.0]) {
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            await tester.pumpWidget(
+              RepaintBoundary(
+                key: boundary,
+                child: SingVerseApp(
+                  key: ValueKey('$brightness:$viewport:$scale'),
+                  state: state,
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            if (capture) {
+              await tester.runAsync(() async {
+                final render =
+                    boundary.currentContext!.findRenderObject()!
+                        as RenderRepaintBoundary;
+                final image = await render.toImage(pixelRatio: 2);
+                final bytes = await image.toByteData(
+                  format: ui.ImageByteFormat.png,
+                );
+                await File(
+                  '${directory.path}/${brightness.name}-${viewport.width.toInt()}x${viewport.height.toInt()}-${scale}x.png',
+                ).writeAsBytes(bytes!.buffer.asUint8List());
+                image.dispose();
+              });
+            }
+            final scroll = tester
+                .state<ScrollableState>(find.byType(Scrollable).first)
+                .position;
+            scroll.jumpTo(scroll.maxScrollExtent);
+            await tester.pumpAndSettle();
+            final last = find.byWidgetPredicate(
+              (widget) => widget is SongRow && widget.song.id == '30',
+            );
+            final player = tester.getRect(find.byKey(const Key('mini-player')));
+            expect(
+              tester.getRect(last).bottom,
+              lessThanOrEqualTo(player.top),
+              reason: '$brightness $viewport $scale',
+            );
+            expect(
+              find.byTooltip('开始练唱 测试歌曲 30').hitTestable(),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const Key('nav-songs')).hitTestable(),
+              findsOneWidget,
+            );
+            expect(tester.takeException(), isNull);
+          }
+        }
+      }
+      debugDisableShadows = shadows;
+    },
+  );
+
   testWidgets('capture refined app screens with controlled fixtures', (
     tester,
   ) async {
     if (!const bool.fromEnvironment('CAPTURE_APP_UI')) return;
+    final shadows = debugDisableShadows;
+    debugDisableShadows = false;
+    addTearDown(() => debugDisableShadows = shadows);
     final round = const String.fromEnvironment(
       'UI_ROUND',
       defaultValue: 'round-1',
@@ -1955,7 +2215,7 @@ void main() {
       await tester.runAsync(() async {
         final context = boundary.currentContext!;
         await precacheImage(MemoryImage(fixtureCover), context);
-        for (final size in [48, 60, 64, 80]) {
+        for (final size in [48, 52, 60, 64, 80, 106]) {
           await precacheImage(
             ResizeImage(
               MemoryImage(fixtureCover),
@@ -2001,23 +2261,41 @@ void main() {
     await state.setTheme(ThemeMode.light);
     await section(tester, 'frequent');
     await capture('03-frequent');
+    await state.setTheme(ThemeMode.dark);
+    await capture('03-frequent-dark');
+    await state.setTheme(ThemeMode.light);
     await section(tester, 'works');
     await capture('04-works');
+    await state.setTheme(ThemeMode.dark);
+    await capture('04-works-dark');
+    await state.setTheme(ThemeMode.light);
     await tester.tap(find.text('晴天 · 练唱草稿'));
     await tester.pumpAndSettle();
     await capture('05-review');
+    await state.setTheme(ThemeMode.dark);
+    await capture('05-review-dark');
+    await state.setTheme(ThemeMode.light);
     await tester.tap(find.text('调整声音'));
     await tester.pumpAndSettle();
     await capture('06-adjustment');
+    await state.setTheme(ThemeMode.dark);
+    await capture('06-adjustment-dark');
+    await state.setTheme(ThemeMode.light);
     final nav = tester.state<NavigatorState>(find.byType(Navigator).first);
     nav.popUntil((route) => route.isFirst);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('open-settings')));
     await tester.pumpAndSettle();
     await capture('07-settings');
+    await state.setTheme(ThemeMode.dark);
+    await capture('07-settings-dark');
+    await state.setTheme(ThemeMode.light);
     await tester.tap(find.text('NAS 连接与账号'));
     await tester.pumpAndSettle();
     await capture('08-nas-connected');
+    await state.setTheme(ThemeMode.dark);
+    await capture('08-nas-connected-dark');
+    await state.setTheme(ThemeMode.light);
     nav.popUntil((route) => route.isFirst);
     await tester.pumpAndSettle();
     await state.setUiMode(UiMode.senior);
@@ -2030,19 +2308,124 @@ void main() {
     tester.platformDispatcher.clearTextScaleFactorTestValue();
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await state.setUiMode(UiMode.standard);
+    await state.setPerformanceMode(true);
+    await capture('12-performance-library');
+    await state.setPerformanceMode(false);
     state.authenticated = false;
+    if (const bool.fromEnvironment('CAPTURE_NAS_UI')) {
+      state
+        ..current = Song({'id': api.rows.first['id'], 'title': 'All Night'})
+        ..playbackInstanceId = 'nas-a'
+        ..workId = ''
+        ..positionMs = 30000
+        ..durationMs = 240000
+        ..isPlaying = false
+        ..playbackState = 'PAUSED';
+    }
     nav.push(
-      MaterialPageRoute<void>(builder: (_) => ConnectionPage(state: state)),
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'connection'),
+        builder: (_) => ConnectionPage(state: state),
+      ),
     );
     await tester.pumpAndSettle();
     await capture('11-nas-login');
+    await state.setTheme(ThemeMode.dark);
+    await capture('11-nas-login-dark');
+    if (const bool.fromEnvironment('CAPTURE_NAS_UI')) {
+      final current = state.current;
+      final origin = state.origin;
+      for (final theme in [ThemeMode.light, ThemeMode.dark]) {
+        await state.setTheme(theme);
+        for (final viewport in [
+          const Size(320, 568),
+          const Size(375, 812),
+          const Size(390, 844),
+          const Size(430, 932),
+          const Size(768, 1024),
+          const Size(1024, 768),
+        ]) {
+          await tester.binding.setSurfaceSize(viewport);
+          for (final scale in [1.0, 2.0]) {
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            await tester.pumpAndSettle();
+            final scrollable = tester.state<ScrollableState>(
+              find
+                  .descendant(
+                    of: find.byKey(const ValueKey('nas-page-scroll')),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            );
+            scrollable.position.jumpTo(0);
+            await capture(
+              '14-nas-${theme.name}-${viewport.width.toInt()}x'
+              '${viewport.height.toInt()}-text${scale.toInt()}',
+            );
+            final button = find.byKey(const ValueKey('nas-submit'));
+            await tester.ensureVisible(button);
+            await tester.pumpAndSettle();
+            expect(button.hitTestable(), findsOneWidget);
+            expect(
+              tester.getRect(button).bottom,
+              lessThanOrEqualTo(
+                tester.getRect(find.byKey(const Key('mini-player'))).top,
+              ),
+            );
+            if (viewport == const Size(390, 844) && scale == 1) {
+              await capture('15-nas-${theme.name}-actions');
+            }
+            expect(state.current, same(current));
+            expect(state.origin, origin);
+          }
+        }
+      }
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await state.setTheme(ThemeMode.light);
+      await state.setPerformanceMode(true);
+      await tester.pumpAndSettle();
+      tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byKey(const ValueKey('nas-page-scroll')),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position
+          .jumpTo(0);
+      await capture('16-nas-performance');
+      expect(find.byType(BackdropFilter), findsNothing);
+      await state.setPerformanceMode(false);
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await state.setTheme(ThemeMode.light);
+    nav.popUntil((route) => route.isFirst);
+    state
+      ..origin = ''
+      ..current = null;
+    state.notifyListeners();
+    await capture('13-disconnected');
+    await state.setTheme(ThemeMode.dark);
+    await capture('13-disconnected-dark');
+    debugDisableShadows = shadows;
   });
 
   testWidgets('capture refined player screens with controlled fixtures', (
     tester,
   ) async {
     if (!const bool.fromEnvironment('CAPTURE_PLAYER_UI')) return;
-    final directory = Directory('build/reports/mobile-player-unslop')
+    final shadows = debugDisableShadows;
+    debugDisableShadows = false;
+    addTearDown(() => debugDisableShadows = shadows);
+    final round = const String.fromEnvironment(
+      'UI_ROUND',
+      defaultValue: 'round-1',
+    );
+    final directory = Directory('build/reports/mobile-player-unslop/$round')
       ..createSync(recursive: true);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -2242,6 +2625,7 @@ void main() {
       });
       expect(tester.takeException(), isNull, reason: sample.$1);
     }
+    debugDisableShadows = shadows;
   });
 
   testWidgets('capture redesign reference screens with controlled fixtures', (
