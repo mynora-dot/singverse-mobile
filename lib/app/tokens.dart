@@ -8,6 +8,12 @@ abstract final class AppPalette {
   static const darkEnvironmentBlue = Color(0xFF244777);
   static const lightEnvironmentViolet = Color(0xFFDEDDF1);
   static const darkEnvironmentViolet = Color(0xFF302D54);
+  static const stage = Color(0xFF10151D);
+  static const stageAccent = Color(0xFF9ABEFF);
+  static const stageOnAccent = Color(0xFF152849);
+  static const stageText = Color(0xFFF0F3F8);
+  static const stageMuted = Color(0xFFABB7C9);
+  static const stageTrack = Color(0xFF343E4F);
 }
 
 /// Geometry shared by content, standard controls and floating glass.
@@ -18,6 +24,7 @@ abstract final class AppSpace {
 
 abstract final class AppRadii {
   static const double artwork = 12, control = 18, content = 24, floating = 28;
+  static const double featured = 20;
 }
 
 abstract final class AppSizes {
@@ -30,10 +37,10 @@ abstract final class AppSizes {
 @immutable
 class GlassMaterialSpec {
   const GlassMaterialSpec({
-    this.lightTint = .44,
-    this.darkTint = .78,
-    this.blur = 6,
-    this.highlight = 1,
+    this.lightTint = .22,
+    this.darkTint = .70,
+    this.blur = 3,
+    this.highlight = .42,
     this.shadow = 0,
     this.refraction = false,
     this.grouped = false,
@@ -44,22 +51,57 @@ class GlassMaterialSpec {
        assert(shadow >= 0 && shadow <= 1);
 
   static const standard = GlassMaterialSpec(grouped: true);
-  static const field = GlassMaterialSpec(
-    lightTint: .40,
+  static const search = GlassMaterialSpec(
+    lightTint: .46,
     darkTint: .80,
+    highlight: .32,
+    grouped: true,
+  );
+  static const shortcut = GlassMaterialSpec(
+    lightTint: .32,
+    darkTint: .72,
+    highlight: .24,
+    grouped: true,
+  );
+  static const field = GlassMaterialSpec(
+    lightTint: .28,
+    darkTint: .76,
+    highlight: .48,
     grouped: true,
   );
   static const onColor = GlassMaterialSpec(
-    lightTint: .03,
-    darkTint: .03,
-    blur: 4,
-    highlight: .65,
+    lightTint: .07,
+    darkTint: .07,
+    blur: 2,
+    highlight: .50,
+  );
+  static const stageControl = GlassMaterialSpec(
+    darkTint: .48,
+    blur: 3,
+    highlight: .30,
+  );
+  // Native video cannot be sampled. Its small overlay uses the same optical
+  // edge and touch light, with no backdrop filter or displacement.
+  static const mediaOverlay = GlassMaterialSpec(
+    darkTint: .76,
+    blur: 0,
+    highlight: .36,
   );
   static const floating = GlassMaterialSpec(
-    lightTint: .58,
+    lightTint: .34,
+    darkTint: .78,
+    blur: 4,
+    highlight: .56,
+    shadow: .40,
+    refraction: true,
+  );
+  // A little more diffusion behind song metadata; the navigation stays clearer.
+  static const player = GlassMaterialSpec(
+    lightTint: .50,
     darkTint: .84,
-    blur: 10,
-    shadow: 1,
+    blur: 5,
+    highlight: .60,
+    shadow: .50,
     refraction: true,
   );
   static const sheet = GlassMaterialSpec(

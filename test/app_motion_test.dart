@@ -1,6 +1,8 @@
 import 'dart:ui' show Tristate;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -39,6 +41,80 @@ class MotionTestApp extends StatelessWidget {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets(
+    'floating fallback quiets backdrop detail without tinting controls',
+    (tester) async {
+      final boundary = GlobalKey();
+      for (final brightness in [Brightness.light, Brightness.dark]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: singVerseTheme(brightness),
+            home: Center(
+              child: RepaintBoundary(
+                key: boundary,
+                child: SizedBox(
+                  width: 200,
+                  height: 100,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Row(
+                        children: const [
+                          Expanded(child: ColoredBox(color: Colors.black)),
+                          Expanded(child: ColoredBox(color: Colors.white)),
+                        ],
+                      ),
+                      const GlassSurface(
+                        variant: GlassVariant.liquid,
+                        child: Center(
+                          child: SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: ColoredBox(color: AppPalette.brand),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final bytes = await tester.runAsync(() async {
+          final image =
+              await (boundary.currentContext!.findRenderObject()!
+                      as RenderRepaintBoundary)
+                  .toImage();
+          try {
+            return await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+          } finally {
+            image.dispose();
+          }
+        });
+        Color pixel(int x) {
+          final offset = (50 * 200 + x) * 4;
+          return Color.fromARGB(
+            bytes!.getUint8(offset + 3),
+            bytes.getUint8(offset),
+            bytes.getUint8(offset + 1),
+            bytes.getUint8(offset + 2),
+          );
+        }
+
+        final left = pixel(50).computeLuminance();
+        final right = pixel(150).computeLuminance();
+        final contrast =
+            ((left > right ? left : right) + .05) /
+            ((left < right ? left : right) + .05);
+        expect(contrast, inInclusiveRange(1, 1.5), reason: '$brightness');
+        expect(pixel(100), AppPalette.brand);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 
   testWidgets(
     'native view routes use stable opaque sheets and unsampled dialog backdrops',

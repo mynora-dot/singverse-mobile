@@ -36,6 +36,7 @@ class NativeFixture {
   NativeFixture(this.state);
   final AppState state;
   final commands = <Json>[];
+  final playerOpens = <Json>[];
   final calls = <String>[];
   final works = <String, Json>{};
   String permission = 'granted';
@@ -54,6 +55,7 @@ class NativeFixture {
           throw PlatformException(code: 'offline', message: 'NAS 不可达');
         }
         final args = Map<String, dynamic>.from(call.arguments as Map);
+        playerOpens.add(args);
         state.current = Song(jsonDecode(args['song'] as String) as Json);
         state.playbackInstanceId = args['instanceId'] as String;
         state.workId = '';
@@ -382,8 +384,12 @@ void main() {
     }
   });
   Future<void> size(WidgetTester tester, Size dimensions) async {
+    tester.view.physicalSize = dimensions * tester.view.devicePixelRatio;
     await tester.binding.setSurfaceSize(dimensions);
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    addTearDown(() async {
+      tester.view.resetPhysicalSize();
+      await tester.binding.setSurfaceSize(null);
+    });
   }
 
   Future<void> app(WidgetTester tester) async {
@@ -1038,7 +1044,7 @@ void main() {
             const Size(844, 390),
             const Size(320, 568),
           ]) {
-            await tester.binding.setSurfaceSize(dimensions);
+            await size(tester, dimensions);
             tester.platformDispatcher.textScaleFactorTestValue =
                 dimensions.width == 320 ? 1.8 : 1;
             await tester.pumpWidget(
@@ -1061,6 +1067,94 @@ void main() {
       }
       tester.platformDispatcher.clearTextScaleFactorTestValue();
       await tester.binding.setSurfaceSize(null);
+    },
+  );
+  testWidgets(
+    'featured banner keeps long metadata artwork and accessible actions at every size',
+    (tester) async {
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final song = Song({
+        ...api.rows.first,
+        'title': '齐天 · 一首名字很长的现场演唱版本',
+        'artists': ['扎西平措与一位名字很长的合作歌手'],
+        'revision': 'original-cover',
+      });
+      for (final brightness in Brightness.values) {
+        for (final width in [320.0, 390.0, 430.0, 768.0]) {
+          for (final scale in [1.0, 1.3, 2.0]) {
+            await size(tester, Size(width, 844));
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: singVerseTheme(brightness),
+                home: Scaffold(
+                  body: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpace.page),
+                    child: SongSpotlight(state: state, song: song),
+                  ),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final artwork = tester.widget<Artwork>(find.byType(Artwork));
+            expect(artwork.path, song.cover);
+            expect(artwork.revision, 'original-cover');
+            expect(tester.getSize(find.byType(Artwork)).aspectRatio, 1);
+            for (final action in [
+              find.widgetWithText(FilledButton, '开始练唱'),
+              find.byWidgetPredicate(
+                (widget) =>
+                    widget is IconButton &&
+                    widget.tooltip == '收藏 ${song.title}',
+              ),
+            ]) {
+              expect(action.hitTestable(), findsOneWidget);
+              expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+              expect(tester.getSize(action).width, greaterThanOrEqualTo(48));
+            }
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: '$brightness ${width}dp $scale',
+            );
+          }
+        }
+      }
+    },
+  );
+  testWidgets(
+    'featured favorite stays independent and compact practice target opens once',
+    (tester) async {
+      await size(tester, const Size(390, 844));
+      await app(tester);
+      final banner = find.byType(SongSpotlight);
+      await tester.tap(
+        find.descendant(of: banner, matching: find.byTooltip('收藏 晴天')),
+      );
+      await tester.pumpAndSettle();
+      expect(state.favorites.single.id, api.rows.first['id']);
+      expect(api.favoriteRevision, 1);
+      expect(native.playerOpens, isEmpty);
+      await tester.tap(
+        find.descendant(of: banner, matching: find.byTooltip('取消收藏 晴天')),
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await state.setPerformanceMode(true);
+      await tester.pumpAndSettle();
+      expect(state.favorites, isEmpty);
+      expect(api.favoriteRevision, 2);
+      final button = find.descendant(
+        of: banner,
+        matching: find.widgetWithText(FilledButton, '开始练唱'),
+      );
+      final target = tester.getRect(button);
+      // The visual button is compact; its outer tap padding is still active.
+      await tester.tapAt(Offset(target.center.dx, target.top + 1));
+      await tester.pumpAndSettle();
+      expect(find.byType(PlayerPage), findsOneWidget);
+      expect(native.playerOpens, hasLength(1));
+      expect(state.current?.id, api.rows.first['id']);
+      expect(tester.takeException(), isNull);
     },
   );
   testWidgets('senior favorite label saves without starting practice', (
@@ -1369,6 +1463,65 @@ void main() {
       expect(state.recording, isTrue);
       expect(native.calls.where((method) => method == 'end'), isEmpty);
       expect(native.calls.where((method) => method == 'play'), isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'restored mini player survives tabs keyboard and material changes',
+    (tester) async {
+      await size(tester, const Size(390, 844));
+      addTearDown(tester.view.resetViewInsets);
+      await app(tester);
+      final mini = find.byKey(const Key('mini-player'));
+      expect(mini, findsNothing);
+      final current = Song({...api.rows.first, 'title': 'All Night'});
+      state
+        ..current = current
+        ..playbackInstanceId = 'nas-a'
+        ..positionMs = 30000
+        ..durationMs = 240000
+        ..playbackState = 'PAUSED';
+      state.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: mini, matching: find.text('All Night')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: mini, matching: find.text('已暂停 · 0:30')),
+        findsOneWidget,
+      );
+      for (final tab in ['frequent', 'works', 'songs', 'frequent', 'songs']) {
+        await tester.tap(find.byKey(Key('nav-$tab')));
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      await tester.pumpAndSettle();
+      expect(mini.hitTestable(), findsOneWidget);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 200);
+      await tester.pumpAndSettle();
+      expect(mini, findsNothing);
+      await state.setPerformanceMode(true);
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      expect(mini.hitTestable(), findsOneWidget);
+      await state.setTheme(ThemeMode.dark);
+      await state.setTransparency(true);
+      await tester.pumpAndSettle();
+      expect(state.current, same(current));
+      expect(state.positionMs, 30000);
+      expect(native.calls, isNot(contains('open')));
+      await tester.tap(
+        find.descendant(of: mini, matching: find.byTooltip('继续播放')),
+      );
+      await tester.pumpAndSettle();
+      expect(state.isPlaying, isTrue);
+      await tester.tap(
+        find.descendant(of: mini, matching: find.byTooltip('暂停播放')),
+      );
+      await tester.pumpAndSettle();
+      expect(state.isPlaying, isFalse);
+      expect(native.commands.map((c) => c['action']), ['play', 'pause']);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2062,7 +2215,7 @@ void main() {
           const Size(1024, 768),
         ]) {
           for (final scale in [1.0, 2.0]) {
-            await tester.binding.setSurfaceSize(dimensions);
+            await size(tester, dimensions);
             tester.platformDispatcher.textScaleFactorTestValue = scale;
             await tester.pumpWidget(
               RepaintBoundary(
@@ -2114,9 +2267,11 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final capture = const bool.fromEnvironment('CAPTURE_DESIGN_SYSTEM');
       final boundary = GlobalKey();
-      final directory = Directory(
-        'build/reports/singverse-design-system-v3/matrix',
+      final round = const String.fromEnvironment(
+        'DESIGN_ROUND',
+        defaultValue: 'singverse-design-system-v3',
       );
+      final directory = Directory('build/reports/$round/matrix');
       final shadows = debugDisableShadows;
       if (capture) {
         directory.createSync(recursive: true);
@@ -2150,6 +2305,12 @@ void main() {
               ),
             );
             await tester.pumpAndSettle();
+            expect(
+              MediaQuery.sizeOf(
+                tester.element(find.byKey(const Key('song-search'))),
+              ),
+              viewport,
+            );
             if (capture) {
               await tester.runAsync(() async {
                 final render =
@@ -2247,6 +2408,15 @@ void main() {
       'name': '晴天 · 我的演唱',
     };
     state.works = native.works.values.toList();
+    // Keep the main preview in the same resumed-media state as the NAS preview.
+    // Empty playback is covered separately; no sample track is added to the app.
+    state
+      ..current = Song({...api.rows.first, 'title': 'All Night'})
+      ..playbackInstanceId = 'nas-a'
+      ..positionMs = 30000
+      ..durationMs = 240000
+      ..isPlaying = false
+      ..playbackState = 'PAUSED';
     await tester.pumpWidget(
       RepaintBoundary(
         key: boundary,
@@ -2543,7 +2713,7 @@ void main() {
     ];
     for (final sample in scenarios) {
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.binding.setSurfaceSize(sample.$3);
+      await size(tester, sample.$3);
       tester.platformDispatcher.textScaleFactorTestValue = sample.$6;
       api.textTracks = sample.$7
           ? [

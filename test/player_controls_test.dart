@@ -66,9 +66,13 @@ void main() {
     double scale = 1,
     Brightness brightness = Brightness.light,
   }) async {
+    tester.view.physicalSize = size * tester.view.devicePixelRatio;
     await tester.binding.setSurfaceSize(size);
     tester.platformDispatcher.textScaleFactorTestValue = scale;
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    addTearDown(() async {
+      tester.view.resetPhysicalSize();
+      await tester.binding.setSurfaceSize(null);
+    });
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.pumpWidget(
       MaterialApp(
@@ -78,6 +82,281 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'native ticks update clocks and lyrics without rebuilding controls',
+    (tester) async {
+      (state.api as FakeApi).textTracks = [
+        {'format': 'lrc', 'text': '[00:00.00]第一句\n[00:06.00]第二句'},
+      ];
+      await player(tester, const Size(390, 844));
+      final title = tester.widget<Text>(find.text('正在练唱'));
+      final play = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('player-play')),
+      );
+      final role = tester.widget<TextButton>(
+        find.byKey(const ValueKey('player-role-backing')),
+      );
+      state.positionMs = 6500;
+      state.playback.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(identical(title, tester.widget<Text>(find.text('正在练唱'))), isTrue);
+      expect(
+        identical(
+          play,
+          tester.widget<FilledButton>(
+            find.byKey(const ValueKey('player-play')),
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          role,
+          tester.widget<TextButton>(
+            find.byKey(const ValueKey('player-role-backing')),
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<Slider>(find.byKey(const ValueKey('player-progress')))
+            .value,
+        6500,
+      );
+      expect(
+        tester.widget<LyricsView>(find.byType(LyricsView)).positionMs,
+        6500,
+      );
+      state.singing = {
+        'phase': 'RECORDING',
+        'takeId': 'clock-take',
+        'recordedMs': 1000,
+      };
+      state.notifyListeners();
+      await tester.pumpAndSettle();
+      final record = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('player-record')),
+      );
+      state.singing['recordedMs'] = 12000;
+      state.playback.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.text('正在录音 · 0:12'), findsOneWidget);
+      expect(find.text('0:12'), findsOneWidget);
+      expect(
+        identical(
+          record,
+          tester.widget<FilledButton>(
+            find.byKey(const ValueKey('player-record')),
+          ),
+        ),
+        isTrue,
+      );
+      state.singing['clipped'] = true;
+      state.playback.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.text('声音偏大，请稍微远离麦克风'), findsOneWidget);
+      state.singing['clipped'] = false;
+      state.playback.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.text('声音偏大，请稍微远离麦克风'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('dark console keeps native media clear and actions balanced', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 32, bottom: 16);
+    tester.view.viewPadding = tester.view.padding;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    state.current = Song({
+      ...state.current!.data,
+      'title': '我和你',
+      'artists': ['刘欢', '扎西平措'],
+      'mediaType': 'VIDEO',
+    });
+    await player(tester, const Size(360, 800));
+    expect(
+      MediaQuery.sizeOf(tester.element(find.byType(PlayerPage))),
+      const Size(360, 800),
+    );
+    final title = tester.getRect(find.text('正在练唱'));
+    expect(title.center.dx, 180);
+    for (final tooltip in ['收起演唱', '歌曲信息', '全屏视频', '收藏歌曲']) {
+      final button = find.ancestor(
+        of: find.byTooltip(tooltip),
+        matching: find.byType(IconButton),
+      );
+      expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(48));
+    }
+    final overlay = find.byWidgetPredicate(
+      (w) => w is Glass && w.material == GlassMaterialSpec.mediaOverlay,
+    );
+    expect(overlay, findsOneWidget);
+    expect(
+      find.descendant(of: overlay, matching: find.byType(BackdropFilter)),
+      findsNothing,
+    );
+    final frame = tester.getSize(find.byKey(const ValueKey('player-video')));
+    expect(frame.aspectRatio, closeTo(state.videoAspect, .001));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('player-play'))).height,
+      56,
+    );
+    final record = tester.getRect(find.byKey(const ValueKey('player-record')));
+    expect(record.height, 54);
+    expect(record.bottom, lessThanOrEqualTo(784));
+    final widths = <double>[];
+    for (final label in ['调音', '重唱', '选段', '更多']) {
+      final button = find.ancestor(
+        of: find.text(label),
+        matching: find.byType(TextButton),
+      );
+      widths.add(tester.getSize(button).width);
+      expect(button.hitTestable(), findsOneWidget);
+    }
+    expect(widths.toSet(), hasLength(1));
+    expect(native.commands, isEmpty);
+    expect(native.calls, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'console state follows native recording time and locks source controls',
+    (tester) async {
+      state.current = Song({...state.current!.data, 'mediaType': 'VIDEO'});
+      await player(tester, const Size(390, 844));
+      expect(find.text('尚未录音'), findsOneWidget);
+      state.singing = {
+        'phase': 'RECORDING',
+        'takeId': 'console-take',
+        'recordedMs': 9000,
+      };
+      native.emit();
+      await tester.pumpAndSettle();
+      expect(find.text('正在录音 · 0:09'), findsOneWidget);
+      expect(find.text('0:09'), findsOneWidget);
+      for (final role in ['original', 'backing']) {
+        expect(
+          tester
+              .widget<TextButton>(find.byKey(ValueKey('player-role-$role')))
+              .onPressed,
+          isNull,
+        );
+      }
+      expect(
+        tester
+            .widget<Slider>(find.byKey(const ValueKey('player-progress')))
+            .onChanged,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('player-play')))
+            .onPressed,
+        isNull,
+      );
+      state.singing['recordedMs'] = 12000;
+      native.emit();
+      await tester.pumpAndSettle();
+      expect(find.text('正在录音 · 0:12'), findsOneWidget);
+      expect(find.text('0:12'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('player-record')))
+            .onPressed,
+        isNotNull,
+      );
+      expect(native.commands, isEmpty);
+      expect(native.calls, isEmpty);
+    },
+  );
+
+  testWidgets('console remains usable at 200 percent type and tablet sizes', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+    tester.view.viewPadding = tester.view.padding;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    for (final dimensions in [
+      const Size(320, 568),
+      const Size(390, 844),
+      const Size(430, 932),
+      const Size(768, 1024),
+      const Size(1024, 768),
+    ]) {
+      for (final scale in [1.0, 2.0]) {
+        for (final senior in [false, true]) {
+          for (final media in ['VIDEO', 'AUDIO']) {
+            await tester.pumpWidget(const SizedBox.shrink());
+            state.uiMode = senior ? UiMode.senior : UiMode.standard;
+            state.current = Song({
+              ...state.current!.data,
+              'mediaType': media,
+              'title': '夜色里的远航，这是一首很长很长的歌曲名称',
+            });
+            await player(tester, dimensions, scale: scale);
+            final reason = '$dimensions scale=$scale senior=$senior $media';
+            for (final key in ['player-play', 'player-record']) {
+              final control = find.byKey(ValueKey(key));
+              expect(control.hitTestable(), findsOneWidget, reason: reason);
+              final rect = tester.getRect(control);
+              expect(
+                rect.bottom,
+                lessThanOrEqualTo(dimensions.height - 24),
+                reason: reason,
+              );
+              expect(rect.top, greaterThanOrEqualTo(24), reason: reason);
+              expect(
+                rect.shortestSide,
+                greaterThanOrEqualTo(senior ? 56 : 48),
+                reason: reason,
+              );
+            }
+            expect(tester.takeException(), isNull, reason: reason);
+          }
+        }
+      }
+    }
+  });
+
+  testWidgets('timeline gesture respects its padding and sends a single seek', (
+    tester,
+  ) async {
+    state.current = Song({...state.current!.data, 'mediaType': 'VIDEO'});
+    state.durationMs = 90000;
+    await player(tester, const Size(360, 800));
+    final finder = find.byKey(const ValueKey('player-progress'));
+    final slider = tester.widget<Slider>(finder);
+    final theme = SliderTheme.of(tester.element(finder))
+        .copyWith(padding: slider.padding);
+    final track = theme.trackShape!.getPreferredRect(
+      parentBox: tester.renderObject<RenderBox>(finder),
+      offset: tester.getTopLeft(finder),
+      sliderTheme: theme,
+      isEnabled: true,
+      isDiscrete: false,
+    );
+    final gesture = await tester.startGesture(
+      Offset(track.left + track.width * 20000 / 90000, track.center.dy),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(native.commands, isEmpty);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final seek = native.commands.where((c) => c['action'] == 'seek').toList();
+    expect(seek, hasLength(1));
+    expect(seek.single['value'], closeTo(20000, 1));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'portrait primary actions stay in the safe area before and after content scrolls',

@@ -71,6 +71,7 @@ class MiniPlayer extends StatelessWidget {
           state: state,
           radius: AppRadii.floating,
           variant: GlassVariant.liquid,
+          material: GlassMaterialSpec.player,
           child: MotionPress(
             child: InkWell(
               key: const Key('mini-player'),
@@ -185,14 +186,14 @@ class MiniPlayer extends StatelessWidget {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: [
-                                    Colors.white.withValues(alpha: .23),
-                                    Colors.white.withValues(alpha: .03),
+                                    Colors.white.withValues(alpha: .12),
+                                    Colors.white.withValues(alpha: .02),
                                   ],
                                 ),
                                 border: Border.all(
                                   color: AppSurfaces.of(context).rim
-                                      .withValues(alpha: .48),
-                                  width: .7,
+                                      .withValues(alpha: .22),
+                                  width: .6,
                                 ),
                               ),
                               child: IconButton(

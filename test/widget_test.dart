@@ -249,7 +249,8 @@ void main() {
     state.stageRequests++;
     state.notifyListeners();
     await tester.pumpAndSettle();
-    expect(find.text('练唱中'), findsOneWidget);
+    expect(find.text('正在练唱'), findsOneWidget);
+    expect(find.text('已暂停'), findsOneWidget);
     expect(find.text('尚未录音'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -363,7 +364,8 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const Key('mini-player')).first);
     await tester.pumpAndSettle();
-    expect(find.text('练唱中'), findsOneWidget);
+    expect(find.text('正在练唱'), findsOneWidget);
+    expect(find.text('已暂停'), findsOneWidget);
     expect(find.text('尚未录音'), findsOneWidget);
     expect(find.text('4:29'), findsOneWidget);
     expect(tester.takeException(), isNull);

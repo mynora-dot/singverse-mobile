@@ -138,7 +138,7 @@ void main() {
             ..instanceId = 'nas-a'
             ..origin = 'http://nas.local:18080'
             ..themeMode = ThemeMode.light
-            ..current = Song(api.rows.first)
+            ..current = Song({...api.rows.first, 'title': 'All Night'})
             ..playbackState = 'PAUSED'
             ..positionMs = 30000
             ..durationMs = 240000;
@@ -229,6 +229,8 @@ void main() {
       final scroll = tester
           .state<ScrollableState>(find.byType(Scrollable).first)
           .position;
+      scroll.jumpTo(scroll.maxScrollExtent * .45);
+      await capture('03-library-scroll');
       scroll.jumpTo(scroll.maxScrollExtent);
       await tester.pumpAndSettle();
       final last = find.byWidgetPredicate(
@@ -291,12 +293,18 @@ void main() {
       await capture('08-library-playing');
       await tap(find.byTooltip('暂停播放'));
       expect(state.isPlaying, isFalse);
+      await capture('08-library-paused');
       await tap(find.byKey(const Key('mini-player')));
       expect(find.byType(PlayerPage), findsOneWidget);
       navigator.pop();
       await tester.pumpAndSettle();
       for (final tab in ['frequent', 'works', 'songs']) {
         await tap(find.byKey(Key('nav-$tab')));
+        expect(
+          find.byKey(const Key('mini-player')).hitTestable(),
+          findsOneWidget,
+        );
+        await capture('12-tab-$tab');
       }
       await tap(find.byKey(const Key('open-settings')));
       expect(find.text('设置').first, findsOneWidget);

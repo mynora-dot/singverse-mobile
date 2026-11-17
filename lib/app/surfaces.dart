@@ -13,9 +13,13 @@ enum GlassVariant { regular, control, sheet, toolbar, liquid, field }
 Widget glossyActionLayer(
   BuildContext context,
   Set<WidgetState> states,
-  Widget? child,
-) {
+  Widget? child, {
+  Color? color,
+  Color? onColor,
+}) {
   final scheme = Theme.of(context).colorScheme;
+  final fill = color ?? scheme.primary;
+  final foreground = onColor ?? scheme.onPrimary;
   if (states.contains(WidgetState.disabled)) {
     return child ?? const SizedBox.shrink();
   }
@@ -29,15 +33,12 @@ Widget glossyActionLayer(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color.lerp(scheme.primary, Colors.white, .025 + press * .035)!,
-            scheme.primary,
-            Color.lerp(scheme.primary, Colors.black, .065)!,
+            Color.lerp(fill, Colors.white, .025 + press * .035)!,
+            fill,
+            Color.lerp(fill, Colors.black, .065)!,
           ],
         ),
-        border: Border.all(
-          color: scheme.onPrimary.withValues(alpha: .13),
-          width: .7,
-        ),
+        border: Border.all(color: foreground.withValues(alpha: .13), width: .7),
       ),
       child: child,
     ),

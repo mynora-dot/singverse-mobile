@@ -72,7 +72,7 @@ CI 固定使用 Ubuntu 24.04，保留 Android SDK/JDK，复用 Flutter 与 Gradl
 
 「常唱 → NAS 共享收藏」与后台「曲库 → 收藏」、电视收藏共用服务端数据。按钮提交明确的目标状态，收到 NAS 成功响应后才改变收藏状态；分页读取完整且修订一致的集合。页面进入、应用回到前台、写入后及前台约 30 秒重新读取；切 NAS、退出或登录失效清空旧集合，丢弃迟到响应。读取失败保留上次成功内容并标明，缺失歌曲可取消且不能播放。不读取、导入或上传旧 SQLite 收藏，也不持久化新收藏或建立离线写队列；同表练唱历史及录音作品保留。详见 [共享收藏契约](contracts/favorites.md)。
 
-`make check` 执行格式、分析、Flutter 行为测试及 Android 单元测试和发布边界测试（`make release-check` 可单独执行）。`make audio-test` 在独立 `.e2e` 应用运行原生设备检查。独立 UI 验收使用 `scripts/setup-mobile-karaoke-fixtures.py` 生成自制样本（需 FFmpeg，可用 `FFMPEG` 指定），另行启动隔离 Go/compute 后执行 `scripts/check-mobile-karaoke.py`；脚本只接受模拟器访问宿主的测试 NAS `10.0.2.2:18181`，不能连接日常 NAS。产物保存在 `build/reports/`，不入库。
+`make check` 执行格式、分析、Flutter 行为测试及 Android 单元测试和发布边界测试（`make release-check` 可单独执行）。`make audio-test` 在独立 `.e2e` 应用运行原生设备检查。独立 UI 验收使用 `scripts/setup-mobile-karaoke-fixtures.py` 生成自制样本（需 FFmpeg，可用 `FFMPEG` 指定），另行启动使用新数据目录的隔离 Go/compute。练唱控制台使用 `scripts/check-player-console.py --device <物理机序列号> --voice-sample <生成的 voice-test.wav> --output <全新报告目录>`，显式绑定物理机，通过 adb reverse 访问本机 `127.0.0.1:18181`，拒绝模拟器并恢复测试前的系统字号。只更新 `.e2e` 包，保留日常应用与数据。旧 `scripts/check-mobile-karaoke.py` 的 `10.0.2.2:18181` 模拟器流程作为历史工具保留。产物保存在 `build/reports/`，不入库。设计、动效与验收说明见 [Liquid Glass](docs/liquid-glass.md)。
 
 自动化和模拟器不能替代真实手机麦克风、蓝牙、NAS 权限、微信扫码以及系统覆盖安装验证。真实安装验收需同一测试签名的两个递增版本，确认安装权限返回续装、拒绝/重试、跳过、新版本提醒和本机作品/会话保留。正式密钥、远程 GitHub Actions 与用户设备验收需发行环境完成。
 

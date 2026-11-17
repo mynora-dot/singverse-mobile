@@ -217,7 +217,7 @@ class _AppShellState extends State<AppShell> {
                         radius: AppRadii.floating,
                         variant: GlassVariant.liquid,
                         child: Padding(
-                          padding: const EdgeInsets.all(5),
+                          padding: const EdgeInsets.all(3),
                           child: Row(
                             children: [
                               for (final entry in [
@@ -248,7 +248,7 @@ class _AppShellState extends State<AppShell> {
                                       style: TextButton.styleFrom(
                                         minimumSize: Size(
                                           56,
-                                          state.senior ? 64 : 52,
+                                          state.senior ? 64 : 48,
                                         ),
                                         foregroundColor: tab == entry.$1
                                             ? Theme.of(context)
@@ -258,7 +258,7 @@ class _AppShellState extends State<AppShell> {
                                                   .colorScheme
                                                   .onSurfaceVariant,
                                         padding: EdgeInsets.symmetric(
-                                          vertical: 6,
+                                          vertical: state.senior ? 6 : 4,
                                         ),
                                       ),
                                       onPressed: () {
@@ -293,7 +293,7 @@ class _AppShellState extends State<AppShell> {
                                               size: state.senior ? 28 : 24,
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
+                                          const SizedBox(height: 3),
                                           Text(
                                             entry.$3,
                                             style: TextStyle(

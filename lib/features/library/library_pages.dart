@@ -487,6 +487,7 @@ class _BrowseLinks extends StatelessWidget {
             state: state,
             radius: AppRadii.control,
             variant: GlassVariant.control,
+            material: GlassMaterialSpec.shortcut,
             child: TextButton(
               style: TextButton.styleFrom(
                 backgroundColor: Colors.transparent,
@@ -522,7 +523,7 @@ class _BrowseLinks extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(item.$1, size: 19, color: scheme.primary),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Flexible(
                           child: Text(
                             item.$2,

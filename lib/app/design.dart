@@ -109,6 +109,9 @@ ThemeData singVerseTheme(
       backgroundColor: background,
       surfaceTintColor: Colors.transparent,
       foregroundColor: scheme.onSurface,
+      systemOverlayStyle: dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
@@ -305,6 +308,12 @@ class AppToolbar extends AppBar {
     Color? backgroundColor,
   }) : super(
          backgroundColor: backgroundColor ?? Colors.transparent,
+         systemOverlayStyle: backgroundColor == null
+             ? null
+             : ThemeData.estimateBrightnessForColor(backgroundColor) ==
+                   Brightness.dark
+             ? SystemUiOverlayStyle.light
+             : SystemUiOverlayStyle.dark,
          flexibleSpace: backgroundColor == null
              ? const GlassSurface(
                  radius: 0,
@@ -330,6 +339,7 @@ class AppSegments<T> extends StatelessWidget {
     this.glass = false,
     this.accent = false,
     this.liquid = false,
+    this.material,
   });
   final List<(T, String)> values;
   final T selected;
@@ -339,6 +349,7 @@ class AppSegments<T> extends StatelessWidget {
   final Key Function(T)? keyFor;
   final Widget Function(T, String)? labelBuilder;
   final TextStyle? textStyle;
+  final GlassMaterialSpec? material;
 
   @override
   Widget build(BuildContext context) {
@@ -442,7 +453,12 @@ class AppSegments<T> extends StatelessWidget {
       );
     }
     return glass
-        ? GlassSurface(radius: 22, child: content)
+        ? GlassSurface(
+            radius: material == null ? 22 : AppRadii.control,
+            material: material,
+            enabled: enabled,
+            child: content,
+          )
         : DecoratedBox(
             decoration: BoxDecoration(
               color: scheme.secondaryContainer,
@@ -533,10 +549,12 @@ class GlassField extends StatefulWidget {
     required this.state,
     required this.child,
     this.enabled = true,
+    this.material,
   });
   final AppState state;
   final Widget child;
   final bool enabled;
+  final GlassMaterialSpec? material;
   @override
   State<GlassField> createState() => _GlassFieldState();
 }
@@ -552,6 +570,7 @@ class _GlassFieldState extends State<GlassField> {
       state: widget.state,
       radius: AppRadii.control,
       variant: GlassVariant.field,
+      material: widget.material,
       focused: focused && widget.enabled,
       enabled: widget.enabled,
       child: widget.child,
@@ -581,7 +600,7 @@ class GlassToolbar extends StatelessWidget {
                 width: 1,
                 thickness: .5,
                 color: Theme.of(context).colorScheme.onSurfaceVariant
-                    .withValues(alpha: .22),
+                    .withValues(alpha: .12),
               ),
             ),
           children[i],
@@ -614,6 +633,7 @@ class GlassSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GlassField(
     state: state,
+    material: GlassMaterialSpec.search,
     child: TextField(
       key: fieldKey,
       controller: controller,
@@ -621,6 +641,9 @@ class GlassSearchField extends StatelessWidget {
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         hintText: '搜索歌名、歌手或拼音',
+        hintStyle: Theme.of(context).textTheme.bodyLarge
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        prefixIconColor: Theme.of(context).colorScheme.onSurfaceVariant,
         prefixIcon: const Icon(Icons.search_rounded, size: 23),
         suffixIcon: suffix,
         filled: false,

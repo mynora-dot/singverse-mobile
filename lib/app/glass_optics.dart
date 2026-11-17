@@ -95,64 +95,15 @@ class _EnvironmentPainter extends CustomPainter {
     final blue = dark
         ? AppPalette.darkEnvironmentBlue
         : AppPalette.lightEnvironmentBlue;
-    final violet = dark
-        ? AppPalette.darkEnvironmentViolet
-        : AppPalette.lightEnvironmentViolet;
     canvas.drawRect(
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(.95, -.82),
-          radius: 1.12,
+          center: const Alignment(.9, -.95),
+          radius: 1.6,
           colors: [
-            blue.withValues(alpha: dark ? .42 : .64),
+            blue.withValues(alpha: dark ? .16 : .12),
             blue.withValues(alpha: 0),
-          ],
-        ).createShader(rect),
-    );
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-1, .85),
-          radius: 1.05,
-          colors: [
-            violet.withValues(alpha: dark ? .46 : .56),
-            violet.withValues(alpha: 0),
-          ],
-        ).createShader(rect),
-    );
-    // A broad, quiet fold of environmental light, rather than floating blobs.
-    final fold = Path()
-      ..moveTo(-size.width * .25, size.height * .91)
-      ..cubicTo(
-        size.width * .16,
-        size.height * .67,
-        size.width * .63,
-        size.height * 1.05,
-        size.width * 1.18,
-        size.height * .76,
-      )
-      ..lineTo(size.width * 1.18, size.height * .88)
-      ..cubicTo(
-        size.width * .58,
-        size.height * 1.10,
-        size.width * .12,
-        size.height * .74,
-        -size.width * .25,
-        size.height * 1.02,
-      )
-      ..close();
-    canvas.drawPath(
-      fold,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            blue.withValues(alpha: .10),
-            violet.withValues(alpha: .30),
-            blue.withValues(alpha: .22),
           ],
         ).createShader(rect),
     );
@@ -194,6 +145,8 @@ class OpticalGlassSurface extends StatefulWidget {
 
 class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
   static Future<ui.FragmentProgram>? _program;
+  static final _lightTone = _lensTone(false);
+  static final _darkTone = _lensTone(true);
   ui.FragmentShader? shader;
   bool loading = false, failed = false, pressed = false, hovered = false;
   Alignment light = const Alignment(-.65, -.9);
@@ -329,13 +282,14 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                   builder: (context) {
                     final refracting =
                         !solid && !widget.field && shader != null;
+                    final floating = !widget.field;
                     final tint = widget.base.withValues(
                       alpha: solid
                           ? 1
                           : (dark
                                 ? widget.material.darkTint *
-                                      (refracting ? .095 : 1)
-                                : (refracting
+                                      (floating ? .095 : 1)
+                                : (floating
                                       ? widget.material.lightTint * .345
                                       : widget.material.lightTint)),
                     );
@@ -368,15 +322,15 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                                         alpha: dark
                                             ? .025
                                             : (widget.field
-                                                  ? .10 + touch * .04
-                                                  : .24 + touch * .10),
+                                                  ? .04 + touch * .025
+                                                  : .10 + touch * .045),
                                       ),
                                       tint,
                                     ),
                                     tint,
                                     Color.alphaBlend(
                                       widget.rim.withValues(
-                                        alpha: dark ? .015 : .09,
+                                        alpha: dark ? .01 : .025,
                                       ),
                                       tint,
                                     ),
@@ -387,7 +341,9 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                         child: child,
                       ),
                     );
-                    if (solid) return surface;
+                    if (solid || (widget.field && widget.material.blur == 0)) {
+                      return surface;
+                    }
                     if (refracting) {
                       return _BackdropLens(
                         shader: shader!,
@@ -398,10 +354,19 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                         child: surface,
                       );
                     }
-                    final filter = ui.ImageFilter.blur(
+                    final blur = ui.ImageFilter.blur(
                       sigmaX: widget.material.blur,
                       sigmaY: widget.material.blur,
                     );
+                    // Keep the same readable transmission when shader image
+                    // filters are unavailable. A color matrix compresses local
+                    // contrast without increasing blur or tinting foreground.
+                    final filter = floating
+                        ? ui.ImageFilter.compose(
+                            outer: dark ? _darkTone : _lightTone,
+                            inner: blur,
+                          )
+                        : blur;
                     return widget.material.grouped
                         ? BackdropFilter.grouped(filter: filter, child: surface)
                         : BackdropFilter(filter: filter, child: surface);
@@ -414,6 +379,28 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
       ),
     );
   }
+}
+
+/// Linear counterpart of the shader's monotonic luminance compression.
+/// Color-filter offsets use 0–255; alpha and foreground content stay unchanged.
+ui.ColorFilter _lensTone(bool dark) {
+  const luminance = [.2126, .7152, .0722];
+  final chroma = dark ? .10 : .08;
+  final range = dark ? .055 : .075;
+  final base = dark ? [.095, .110, .130] : [.895, .898, .903];
+  return ui.ColorFilter.matrix([
+    for (var row = 0; row < 3; row++) ...[
+      for (var column = 0; column < 3; column++)
+        (row == column ? chroma : 0) + (range - chroma) * luminance[column],
+      0,
+      base[row] * 255,
+    ],
+    0,
+    0,
+    0,
+    1,
+    0,
+  ]);
 }
 
 class _BackdropLens extends SingleChildRenderObjectWidget {
@@ -554,52 +541,40 @@ class _LensRimPainter extends CustomPainter {
       );
       return;
     }
-    // Opposing highlights and a darker mid-rim describe a convex meniscus.
+    // Standard controls get one hairline. Only floating glass has a faint
+    // inset reflection, so small controls never acquire concentric outlines.
     paint
-      ..strokeWidth = field ? .9 : 1.15
+      ..strokeWidth = field ? .65 : .85
       ..shader = LinearGradient(
         begin: light,
         end: Alignment.bottomRight,
         colors: [
           reflection(
             field
-                ? (dark ? .20 : .72)
-                : (dark ? .40 + touch * .12 : .94 + touch * .06),
+                ? (dark ? .24 : .64)
+                : (dark ? .38 + touch * .08 : .80 + touch * .10),
           ),
-          reflection(.12),
-          primary.withValues(alpha: field ? .035 : (dark ? .18 : .12)),
-          reflection(field ? (dark ? .12 : .50) : (dark ? .30 : .78)),
+          reflection(.06),
+          Colors.black.withValues(alpha: (dark ? .07 : .035) * highlight),
+          reflection(field ? (dark ? .10 : .22) : (dark ? .22 : .46)),
         ],
         stops: const [0, .32, .68, 1],
       ).createShader(rect);
     canvas.drawRRect(shape, paint);
-    final inner = shape.deflate(field ? 1 : 1.8);
-    paint
-      ..strokeWidth = field ? .5 : .7
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withValues(alpha: dark ? .08 : .48),
-          Colors.white.withValues(alpha: 0),
-          primary.withValues(alpha: dark ? .10 : .09),
-        ],
-      ).createShader(rect);
-    canvas.drawRRect(inner, paint);
     if (!field) {
       paint
-        ..strokeWidth = 2.8
+        ..strokeWidth = 1.5
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            rim.withValues(alpha: dark ? .035 : .11),
-            rim.withValues(alpha: 0),
-            rim.withValues(alpha: dark ? .025 : .08),
+            reflection(dark ? .04 : .10),
+            reflection(0),
+            reflection(dark ? .025 : .035),
           ],
           stops: const [0, .30, 1],
         ).createShader(rect);
-      canvas.drawRRect(shape.deflate(3.4), paint);
+      canvas.drawRRect(shape.deflate(1.4), paint);
     }
     if (focus > 0) {
       paint
