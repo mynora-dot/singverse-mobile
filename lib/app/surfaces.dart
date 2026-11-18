@@ -9,7 +9,7 @@ export 'tokens.dart';
 
 enum GlassVariant { regular, control, sheet, toolbar, liquid, field }
 
-/// Keeps the primary action blue and legible; only its sheen responds to touch.
+/// The primary action keeps its semantic color; only its sheen responds to touch.
 Widget glossyActionLayer(
   BuildContext context,
   Set<WidgetState> states,
@@ -58,6 +58,7 @@ class GlassSurface extends StatelessWidget {
     this.material,
     this.tint,
     this.enabled = true,
+    this.backdropContext = GlassBackdropContext.plain,
   });
   final Widget child;
   final double radius;
@@ -65,6 +66,7 @@ class GlassSurface extends StatelessWidget {
   final GlassVariant variant;
   final GlassMaterialSpec? material;
   final Color? tint;
+  final GlassBackdropContext backdropContext;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +82,7 @@ class GlassSurface extends StatelessWidget {
     return OpticalGlassSurface(
       radius: radius,
       solid: solid || AppMotionScope.solidOf(context),
-      material: treatment,
+      material: treatment.forBackdrop(backdropContext),
       focused: focused,
       enabled: enabled,
       base: tint ?? tokens.glass,

@@ -65,7 +65,7 @@ class _LoginHistoryPageState extends State<LoginHistoryPage> {
       groups.putIfAbsent(record.instanceId, () => []).add(record);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('历史登录')),
+      appBar: AppToolbar(title: const Text('历史登录')),
       body: SafeArea(
         child: ContentWidth(
           child: ListView(

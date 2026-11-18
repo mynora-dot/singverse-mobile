@@ -86,6 +86,7 @@ class WorksPage extends StatefulWidget {
 
 class _WorksPageState extends State<WorksPage> {
   final search = TextEditingController();
+  final searchFocus = FocusNode();
   @override
   void initState() {
     super.initState();
@@ -95,6 +96,7 @@ class _WorksPageState extends State<WorksPage> {
   @override
   void dispose() {
     search.dispose();
+    searchFocus.dispose();
     super.dispose();
   }
 
@@ -164,32 +166,24 @@ class _WorksPageState extends State<WorksPage> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                8,
-                20,
-                32 +
-                    (widget.embedded
-                        ? MediaQuery.paddingOf(context).bottom
-                        : 0),
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               sliver: SliverMainAxisGroup(
                 slivers: [
                   SliverToBoxAdapter(
-                    child: TextField(
+                    child: GlassSearchField(
+                      state: state,
                       controller: search,
+                      focusNode: searchFocus,
                       onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        hintText: '搜索作品和草稿',
-                        suffixIcon: search.text.isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: '清除搜索',
-                                onPressed: () => setState(search.clear),
-                                icon: const Icon(Icons.cancel_rounded),
-                              ),
-                      ),
+                      onSubmitted: (_) => searchFocus.unfocus(),
+                      hintText: '搜索作品和草稿',
+                      suffix: search.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: '清除搜索',
+                              onPressed: () => setState(search.clear),
+                              icon: const Icon(Icons.cancel_rounded),
+                            ),
                     ),
                   ),
                   if (state.worksLoading)
@@ -268,6 +262,7 @@ class _WorksPageState extends State<WorksPage> {
                 ],
               ),
             ),
+            SliverBottomSpace(embedded: widget.embedded),
           ],
         ),
       );
@@ -1104,9 +1099,11 @@ class _ReviewPageState extends State<ReviewPage> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      Glass(
-                        state: state,
-                        radius: 28,
+                      Card(
+                        margin: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
                           child: Column(
@@ -1200,17 +1197,8 @@ class _ReviewPageState extends State<ReviewPage> {
                                                 padding: EdgeInsets.zero,
                                                 shape: const CircleBorder(),
                                                 backgroundColor:
-                                                    Theme.of(context)
-                                                            .brightness ==
-                                                        Brightness.dark
-                                                    ? const Color(0xFFF3F5FA)
-                                                    : scheme.primary,
-                                                foregroundColor:
-                                                    Theme.of(context)
-                                                            .brightness ==
-                                                        Brightness.dark
-                                                    ? scheme.surface
-                                                    : scheme.onPrimary,
+                                                    scheme.onSurface,
+                                                foregroundColor: scheme.surface,
                                               ),
                                               onPressed: canListen
                                                   ? play

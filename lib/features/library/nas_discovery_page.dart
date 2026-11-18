@@ -74,7 +74,7 @@ class _NasDiscoveryPageState extends State<NasDiscoveryPage>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('查找局域网 NAS')),
+    appBar: AppToolbar(title: const Text('查找局域网 NAS')),
     body: SafeArea(
       child: ContentWidth(
         child: ListView(

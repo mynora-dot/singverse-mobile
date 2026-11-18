@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:singverse_mobile/app/design.dart';
 import 'package:singverse_mobile/app/glass_optics.dart' show RenderLiquidLens;
 import 'package:singverse_mobile/core/app_state.dart';
 import 'package:singverse_mobile/core/local_store.dart';
@@ -19,6 +20,8 @@ import 'package:singverse_mobile/features/player/player_page.dart';
 import 'package:singverse_mobile/main.dart';
 
 import '../test/widget_test.dart' show FakeApi;
+
+import 'phone_failure_reporter.dart';
 
 /// Only this isolated test owns catalog fixtures and playback method mocks.
 /// Production continues to use the NAS API, original covers and native audio.
@@ -68,6 +71,7 @@ class _NoSecrets implements LoginStore {
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  installPhoneFailureReporter(binding);
   testWidgets(
     'shared glass catalog preserves search filters playback and navigation',
     (tester) async {
@@ -124,6 +128,21 @@ void main() {
           'active': true,
           'count': 6,
         },
+        {
+          'id': 'mood',
+          'name': '轻松',
+          'dimension': 'MOOD',
+          'active': true,
+          'count': 6,
+        },
+        for (var i = 0; i < 18; i++)
+          {
+            'id': 'scene-$i',
+            'name': '适合家庭一起练唱的场景 ${i + 1}',
+            'dimension': 'CUSTOM',
+            'active': true,
+            'count': 6,
+          },
       ];
       final state =
           AppState(
@@ -201,7 +220,13 @@ void main() {
           .whereType<RenderLiquidLens>()
           .toSet()
           .length;
-      expect(lenses, greaterThanOrEqualTo(3));
+      expect(
+        lenses,
+        1,
+        reason:
+            'Only the floating home toolbar refracts; search, mini player '
+            'and navigation use regular diffusion.',
+      );
       Future<void> capture(String name) async {
         await tester.pumpAndSettle();
         debugPrint('LIBRARY_GLASS_SCREEN:$name');
@@ -221,15 +246,68 @@ void main() {
       final navigator = tester.state<NavigatorState>(
         find.byType(Navigator).first,
       );
+      final search = find.byKey(const ValueKey('song-search'));
+      final mini = find.byKey(const Key('mini-player'));
+      final songsTab = find.byKey(const Key('nav-songs'));
+      Finder glassOf(Finder child) =>
+          find.ancestor(of: child, matching: find.byType(Glass)).first;
+      final navigation = glassOf(songsTab);
+      final expandedNavigationWidth = tester.getSize(navigation).width;
+      final searchTop = tester.getTopLeft(search).dy;
+      expect(tester.getSize(search).height, closeTo(44, .1));
+      expect(tester.getSize(mini).height, closeTo(56, .1));
+      expect(tester.getSize(navigation).height, closeTo(56, .1));
+      for (final target in [
+        find.byTooltip('筛选歌曲'),
+        find.byKey(const Key('open-tv')),
+        find.byKey(const Key('open-settings')),
+      ]) {
+        expect(tester.getSize(target).width, greaterThanOrEqualTo(44));
+        expect(tester.getSize(target).height, greaterThanOrEqualTo(44));
+      }
+      expect(tester.widget<Glass>(navigation).variant, GlassVariant.regular);
+      expect(tester.widget<Glass>(glassOf(mini)).material?.refraction, isFalse);
+      expect(
+        find.descendant(of: songsTab, matching: find.text('点歌')),
+        findsOneWidget,
+      );
       await capture('01-library-light');
       await state.setTheme(ThemeMode.dark);
       await capture('02-library-dark');
+      expect(Theme.of(tester.element(search)).brightness, Brightness.dark);
       await state.setTheme(ThemeMode.light);
       await tester.pumpAndSettle();
       final scroll = tester
-          .state<ScrollableState>(find.byType(Scrollable).first)
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(CustomScrollView).first,
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
           .position;
-      scroll.jumpTo(scroll.maxScrollExtent * .45);
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(scroll.pixels, greaterThan(120));
+      expect(tester.getSize(navigation).width, closeTo(144, .1));
+      expect(tester.getSize(mini).height, closeTo(56, .1));
+      expect(
+        tester.getRect(mini).bottom,
+        closeTo(tester.getRect(navigation).bottom, .1),
+      );
+      expect(
+        find.descendant(of: songsTab, matching: find.text('点歌')),
+        findsNothing,
+      );
+      expect(
+        tester.getTopLeft(search).dy,
+        closeTo(searchTop, .1),
+        reason: 'Home search remains available while the feed scrolls.',
+      );
       await capture('03-library-scroll');
       scroll.jumpTo(scroll.maxScrollExtent);
       await tester.pumpAndSettle();
@@ -248,7 +326,14 @@ void main() {
         const Offset(0, 3000),
       );
       await tester.pumpAndSettle();
-      final search = find.byKey(const ValueKey('song-search'));
+      expect(
+        tester.getSize(navigation).width,
+        closeTo(expandedNavigationWidth, .1),
+      );
+      expect(
+        find.descendant(of: songsTab, matching: find.text('点歌')),
+        findsOneWidget,
+      );
       await tap(search);
       for (
         var i = 0;
@@ -258,6 +343,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
       }
       expect(View.of(tester.element(search)).viewInsets.bottom, greaterThan(0));
+      expect(mini, findsNothing);
+      expect(
+        find.byKey(const Key('nav-songs')),
+        findsNothing,
+        reason: 'Keyboard entry hides the complete dock immediately.',
+      );
       await capture('04-library-keyboard');
       // Profile mode rejects the debug-only client ID -1. Register the test
       // IME for this edit so it records the actual client, after capturing the
@@ -274,17 +365,116 @@ void main() {
         isTrue,
         reason: api.requests.join('\n'),
       );
-      expect(find.text('1 首歌曲'), findsOneWidget);
+      expect(find.text('1 首'), findsOneWidget);
       await capture('05-library-search');
       await tap(find.byTooltip('清除搜索'));
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
       await tap(find.byTooltip('筛选歌曲'));
       await capture('06-library-filter-sheet');
-      await tap(find.text('国语 · 6'));
-      await tap(find.text('应用筛选 (1)'));
-      expect(find.text('6 首歌曲'), findsOneWidget);
+      final songRequestsBeforeDraft = api.requests
+          .where(
+            (path) => Uri.parse(path).path == '/api/v1/mobile/library/songs',
+          )
+          .length;
+      final language = find.byKey(const ValueKey('song-filter:lang'));
+      final distant = find.byKey(const ValueKey('song-filter:scene-17'));
+      await tap(language);
+      final filterScrollable = find
+          .descendant(
+            of: find.byKey(const PageStorageKey('song-filter-options')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        distant,
+        250,
+        scrollable: filterScrollable,
+      );
+      await tester.ensureVisible(distant);
+      await tester.pumpAndSettle();
+      final filterScroll = tester
+          .state<ScrollableState>(filterScrollable)
+          .position;
+      expect(filterScroll.pixels, greaterThan(0));
+      final draftOffset = filterScroll.pixels;
+      final distantElement = tester.element(distant);
+      final chipFocus = Focus.of(
+        tester.element(
+          find.descendant(of: distant, matching: find.byType(Text)).first,
+        ),
+      );
+      chipFocus.requestFocus();
+      await tester.pumpAndSettle();
+      await tester.tap(distant);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilterChip>(distant).selected, isTrue);
+      expect(identical(tester.element(distant), distantElement), isTrue);
+      expect(chipFocus.hasFocus, isTrue);
+      expect(filterScroll.pixels, closeTo(draftOffset, .1));
+      expect(find.text('应用筛选 (2)'), findsOneWidget);
+      await capture('06-library-filter-draft-scrolled');
+      await tap(find.text('取消'));
+      expect(find.byType(InputChip), findsNothing);
+      expect(find.text('12 首'), findsOneWidget);
+      expect(
+        api.requests
+            .where(
+              (path) => Uri.parse(path).path == '/api/v1/mobile/library/songs',
+            )
+            .length,
+        songRequestsBeforeDraft,
+        reason: 'Cancelling a draft must not submit a catalog query.',
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byWidgetPredicate(
+                (widget) => widget is IconButton && widget.tooltip == '筛选歌曲',
+              ),
+            )
+            .focusNode
+            ?.hasFocus,
+        isTrue,
+      );
+      await tap(find.byTooltip('筛选歌曲'));
+      expect(tester.widget<FilterChip>(language).selected, isFalse);
+      await tester.scrollUntilVisible(
+        distant,
+        250,
+        scrollable: filterScrollable,
+      );
+      expect(tester.widget<FilterChip>(distant).selected, isFalse);
+      await tester.scrollUntilVisible(
+        language,
+        -250,
+        scrollable: filterScrollable,
+      );
+      await tap(language);
+      await tap(find.byKey(const ValueKey('song-filter:mood')));
+      await tap(find.text('应用筛选 (2)'));
+      expect(find.byType(InputChip), findsNWidgets(2));
+      expect(find.text('6 首'), findsOneWidget);
+      final appliedRequest = Uri.parse(
+        api.requests.lastWhere(
+          (path) => Uri.parse(path).path == '/api/v1/mobile/library/songs',
+        ),
+      );
+      expect(
+        appliedRequest.queryParametersAll['tagIds'],
+        unorderedEquals(['lang', 'mood']),
+      );
       await capture('07-library-filtered');
+      await tap(find.byTooltip('筛选歌曲'));
+      await tap(find.text('清除全部'));
+      expect(find.text('应用筛选 (0)'), findsOneWidget);
+      await tap(find.text('取消'));
+      expect(find.byType(InputChip), findsNWidgets(2));
+      expect(
+        find.text('6 首'),
+        findsOneWidget,
+        reason: 'Cancelling a clear keeps the previously applied filters.',
+      );
       await tap(find.text('清除筛选'));
       await tap(find.byTooltip('收藏 晴天').first);
       expect(state.isFavorite(Song(api.rows.first)), isTrue);
@@ -308,58 +498,250 @@ void main() {
       }
       await tap(find.byKey(const Key('open-settings')));
       expect(find.text('设置').first, findsOneWidget);
+      final performanceSwitch = find.byKey(const Key('performance-mode'));
+      final transparencySwitch = find.byKey(const Key('reduce-transparency'));
+      expect(tester.widget<SwitchListTile>(transparencySwitch).value, isFalse);
+      expect(find.text('已关闭，使用常规透明效果'), findsOneWidget);
+      await tap(transparencySwitch);
+      expect(state.reduceTransparency, isTrue);
+      expect(state.preferences.getBool('reduceTransparency'), isTrue);
+      expect(state.performanceMode, isFalse);
+      expect(tester.widget<SwitchListTile>(transparencySwitch).value, isTrue);
+      expect(find.text('已开启，使用清晰的不透明背景'), findsOneWidget);
+      expect(
+        AppMotionScope.solidOf(tester.element(transparencySwitch)),
+        isTrue,
+      );
+      expect(
+        AppMotionScope.levelOf(tester.element(transparencySwitch)),
+        isNot(AppMotionLevel.none),
+        reason: 'Reducing transparency does not enable performance mode.',
+      );
+      await capture('16-transparency-switch-on');
       navigator.pop();
       await tester.pumpAndSettle();
+      expect(
+        tester.allRenderObjects.whereType<RenderBackdropFilter>(),
+        isEmpty,
+      );
+      await tap(find.byKey(const Key('open-settings')));
+      expect(tester.widget<SwitchListTile>(transparencySwitch).value, isTrue);
+      await tap(transparencySwitch);
+      expect(state.reduceTransparency, isFalse);
+      expect(state.preferences.getBool('reduceTransparency'), isFalse);
+      expect(state.performanceMode, isFalse);
+      expect(tester.widget<SwitchListTile>(transparencySwitch).value, isFalse);
+      expect(find.text('已关闭，使用常规透明效果'), findsOneWidget);
+      await capture('17-transparency-switch-off');
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(
+        tester.allRenderObjects.whereType<RenderBackdropFilter>(),
+        isNotEmpty,
+      );
+      await tap(find.byKey(const Key('open-settings')));
+      expect(tester.widget<SwitchListTile>(performanceSwitch).value, isFalse);
+      expect(find.text('已关闭，界面效果遵循外观设置'), findsOneWidget);
+      await tap(performanceSwitch);
+      expect(state.performanceMode, isTrue);
+      expect(state.preferences.getBool('performanceMode'), isTrue);
+      expect(tester.widget<SwitchListTile>(performanceSwitch).value, isTrue);
+      expect(find.text('已开启，停用动效与实时模糊'), findsOneWidget);
+      expect(
+        AppMotionScope.levelOf(tester.element(performanceSwitch)),
+        AppMotionLevel.none,
+      );
+      expect(AppMotionScope.solidOf(tester.element(performanceSwitch)), isTrue);
+      await capture('14-performance-switch-on');
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(
+        tester.allRenderObjects.whereType<RenderBackdropFilter>(),
+        isEmpty,
+        reason: 'Turning the switch on enables the performance policy.',
+      );
+      await tap(find.byKey(const Key('open-settings')));
+      expect(tester.widget<SwitchListTile>(performanceSwitch).value, isTrue);
+      expect(find.text('已关闭，性能模式仍使用实底'), findsOneWidget);
+      await tap(transparencySwitch);
+      await tap(transparencySwitch);
+      expect(state.reduceTransparency, isFalse);
+      expect(state.preferences.getBool('reduceTransparency'), isFalse);
+      expect(state.performanceMode, isTrue);
+      expect(
+        AppMotionScope.solidOf(tester.element(transparencySwitch)),
+        isTrue,
+      );
+      await tap(performanceSwitch);
+      expect(state.performanceMode, isFalse);
+      expect(state.preferences.getBool('performanceMode'), isFalse);
+      expect(tester.widget<SwitchListTile>(performanceSwitch).value, isFalse);
+      expect(find.text('已关闭，界面效果遵循外观设置'), findsOneWidget);
+      expect(
+        AppMotionScope.levelOf(tester.element(performanceSwitch)),
+        isNot(AppMotionLevel.none),
+      );
+      await capture('15-performance-switch-off');
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(
+        tester.allRenderObjects.whereType<RenderBackdropFilter>(),
+        isNotEmpty,
+        reason: 'Turning the switch off restores the chosen appearance.',
+      );
       expect(find.byKey(const Key('open-tv')).hitTestable(), findsOneWidget);
 
       // Warm before measuring. Recording and mirroring are stopped by the host
       // on this marker; captures are kept outside the measurement interval.
-      debugPrint('LIBRARY_GLASS_SAMPLE:default');
       Future<Map<String, Object>> sample(bool performance) async {
+        debugPrint(
+          'LIBRARY_GLASS_SAMPLE:${performance ? 'performance' : 'default'}',
+        );
         await state.setPerformanceMode(performance);
         await tester.pumpAndSettle();
-        for (var i = 0; i < 4; i++) {
-          await tester.drag(
-            find.byType(CustomScrollView).first,
-            Offset(0, i.isEven ? -250 : 250),
-          );
-          await tester.pumpAndSettle();
-        }
-        final frames = <ui.FrameTiming>[];
-        final started = developer.Timeline.now;
-        void timing(List<ui.FrameTiming> values) => frames.addAll(
-          values.where(
-            (f) =>
-                f.timestampInMicroseconds(ui.FramePhase.buildStart) >= started,
-          ),
+        final previousPolicy = binding.framePolicy;
+        final arrivals = <ui.FrameTiming>[];
+        final gestures = <Map<String, Object>>[];
+        final clock = Stopwatch();
+        final scrollView = find.byType(CustomScrollView).first;
+        final scrollable = tester.state<ScrollableState>(
+          find
+              .descendant(of: scrollView, matching: find.byType(Scrollable))
+              .first,
         );
-        binding.addTimingsCallback(timing);
-        try {
-          for (var i = 0; i < 8; i++) {
-            final gesture = await tester.startGesture(
-              tester.getCenter(find.byType(CustomScrollView).first),
-            );
-            for (var step = 0; step < 24; step++) {
-              await gesture.moveBy(Offset(0, i.isEven ? -12 : 12));
-              await tester.pump(const Duration(milliseconds: 16));
-            }
-            await gesture.up();
-            await tester.pumpAndSettle();
+        var started = 0;
+        var finished = 0;
+        var callbackInstalled = false;
+        var callbackDrainComplete = false;
+        void timing(List<ui.FrameTiming> values) => arrivals.addAll(values);
+
+        Future<void> waitUntil(Duration deadline) async {
+          final remaining = deadline - clock.elapsed;
+          if (remaining > Duration.zero) {
+            await Future<void>.delayed(remaining);
           }
-          await tester.runAsync(
-            () async => Future<void>.delayed(const Duration(milliseconds: 250)),
-          );
-        } finally {
-          binding.removeTimingsCallback(timing);
         }
+
+        Future<void> swipe(int index, {required bool record}) async {
+          final gesture = await tester.createGesture();
+          final downAt = clock.elapsed;
+          final offsetBefore = scrollable.position.pixels;
+          final moves = <int>[];
+          final direction = index.isEven ? -1 : 1;
+          var active = false;
+          try {
+            await gesture.down(tester.getCenter(scrollView), timeStamp: downAt);
+            active = true;
+            for (var step = 1; step <= 24; step++) {
+              await waitUntil(downAt + Duration(milliseconds: step * 16));
+              final eventTime = clock.elapsed;
+              await gesture.moveBy(
+                Offset(0, direction * 12.0),
+                timeStamp: eventTime,
+              );
+              moves.add(eventTime.inMicroseconds);
+            }
+            await waitUntil(downAt + const Duration(milliseconds: 400));
+            final upAt = clock.elapsed;
+            await gesture.up(timeStamp: upAt);
+            active = false;
+            // A fixed real-time tail includes ballistic scrolling and dock
+            // animation. No pump or pumpAndSettle requests measurement frames.
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+            if (record) {
+              gestures.add({
+                'direction': direction,
+                'downUs': downAt.inMicroseconds,
+                'moveUs': moves,
+                'upUs': upAt.inMicroseconds,
+                'scrollBeforePx': offsetBefore,
+                'scrollAfterPx': scrollable.position.pixels,
+              });
+            }
+          } finally {
+            if (active) await gesture.cancel(timeStamp: clock.elapsed);
+          }
+        }
+
+        try {
+          binding.framePolicy =
+              LiveTestWidgetsFlutterBindingFramePolicy.benchmarkLive;
+          clock.start();
+          for (var i = 0; i < 4; i++) {
+            await swipe(i, record: false);
+          }
+          scrollable.position.jumpTo(scrollable.position.minScrollExtent);
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+          binding.addTimingsCallback(timing);
+          callbackInstalled = true;
+          // Frame timestamps use Timeline's monotonic clock; input timestamps
+          // use elapsed real time from the same measurement's zero-based t0.
+          started = developer.Timeline.now;
+          clock.reset();
+          for (var i = 0; i < 8; i++) {
+            await swipe(i, record: true);
+          }
+          finished = developer.Timeline.now;
+          // Profile timings arrive in batches (normally about 100ms). Keep
+          // collecting until a later frame confirms the window was drained.
+          final drainDeadline = clock.elapsed + const Duration(seconds: 2);
+          do {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            callbackDrainComplete = arrivals.any(
+              (frame) =>
+                  frame.timestampInMicroseconds(ui.FramePhase.vsyncStart) >=
+                  finished,
+            );
+          } while (!callbackDrainComplete && clock.elapsed < drainDeadline);
+        } finally {
+          if (callbackInstalled) binding.removeTimingsCallback(timing);
+          binding.framePolicy = previousPolicy;
+          clock.stop();
+        }
+        // Select only by the explicit time window, never by frame duration.
+        // Every selected frame, including every slow frame, is saved below.
+        final frames = arrivals.where((frame) {
+          final vsync = frame.timestampInMicroseconds(ui.FramePhase.vsyncStart);
+          return vsync >= started && vsync < finished;
+        }).toList();
+        expect(
+          callbackDrainComplete,
+          isTrue,
+          reason: 'A later timing batch must confirm the whole window arrived.',
+        );
         expect(frames.length, greaterThanOrEqualTo(100));
         double p95(List<double> values) {
           values.sort();
           return values[((values.length - 1) * .95).ceil()];
         }
 
+        final overBudget = frames
+            .where(
+              (frame) =>
+                  frame.buildDuration.inMicroseconds > 16667 ||
+                  frame.rasterDuration.inMicroseconds > 16667,
+            )
+            .length;
         return {
           'mode': performance ? 'performance' : 'default',
+          'method': 'wall-clock-gesture-v2',
+          'framePolicy': 'benchmarkLive',
+          'sampleWindowUs': finished - started,
+          'frameSelection':
+              'all vsync starts in the window; no duration filter',
+          'referenceFrameBudgetUs': 16667,
+          'displayRefreshRateHz': tester.view.display.refreshRate,
+          'callbackDrainComplete': callbackDrainComplete,
+          'gesturePlan': {
+            'warmupSwipes': 4,
+            'measuredSwipes': 8,
+            'moveEventsPerSwipe': 24,
+            'moveIntervalMs': 16,
+            'distancePerSwipePx': 288,
+            'upAtMs': 400,
+            'settleAfterUpMs': 500,
+          },
+          'gestures': gestures,
           'frames': frames.length,
           'uiP95Ms': p95(
             frames.map((f) => f.buildDuration.inMicroseconds / 1000).toList(),
@@ -367,16 +749,30 @@ void main() {
           'rasterP95Ms': p95(
             frames.map((f) => f.rasterDuration.inMicroseconds / 1000).toList(),
           ),
-          'overBudgetPercent':
-              frames
-                  .where(
-                    (f) =>
-                        f.buildDuration.inMicroseconds > 16667 ||
-                        f.rasterDuration.inMicroseconds > 16667,
-                  )
-                  .length /
-              frames.length *
-              100,
+          'uiMaxMs': frames
+              .map((f) => f.buildDuration.inMicroseconds / 1000)
+              .reduce((a, b) => a > b ? a : b),
+          'rasterMaxMs': frames
+              .map((f) => f.rasterDuration.inMicroseconds / 1000)
+              .reduce((a, b) => a > b ? a : b),
+          'overBudgetFrames': overBudget,
+          'overBudgetPercent': overBudget / frames.length * 100,
+          'frameTimings': [
+            for (final frame in frames)
+              {
+                for (final phase in [
+                  ui.FramePhase.vsyncStart,
+                  ui.FramePhase.buildStart,
+                  ui.FramePhase.buildFinish,
+                  ui.FramePhase.rasterStart,
+                  ui.FramePhase.rasterFinish,
+                ])
+                  phase.name: frame.timestampInMicroseconds(phase) - started,
+                'uiUs': frame.buildDuration.inMicroseconds,
+                'rasterUs': frame.rasterDuration.inMicroseconds,
+                'totalSpanUs': frame.totalSpan.inMicroseconds,
+              },
+          ],
         };
       }
 
@@ -388,12 +784,40 @@ void main() {
       await capture('09-library-performance');
       await state.setPerformanceMode(false);
       await state.setTransparency(true);
+      await tester.pumpAndSettle();
       expect(
         tester.allRenderObjects.whereType<RenderBackdropFilter>(),
         isEmpty,
       );
       await capture('10-library-opaque');
+      expect(tester.getSize(search).height, closeTo(44, .1));
       await state.setTransparency(false);
+      await state.setUiMode(UiMode.senior);
+      await tester.pumpAndSettle();
+      expect(find.byType(SongSpotlight), findsNothing);
+      expect(tester.getSize(mini).height, greaterThanOrEqualTo(72));
+      expect(tester.getSize(navigation).height, greaterThanOrEqualTo(72));
+      final seniorNavigationWidth = tester.getSize(navigation).width;
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -250),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(navigation).width,
+        closeTo(seniorNavigationWidth, .1),
+      );
+      expect(
+        find.descendant(of: songsTab, matching: find.text('点歌')),
+        findsOneWidget,
+      );
+      expect(
+        tester.allRenderObjects.whereType<RenderBackdropFilter>(),
+        isEmpty,
+      );
+      await capture('13-library-senior');
+      await state.setUiMode(UiMode.standard);
+      await tester.pumpAndSettle();
       state.authenticated = false;
       navigator.push(
         MaterialPageRoute<void>(
@@ -409,6 +833,19 @@ void main() {
       binding.reportData = {
         'renderer': 'Impeller',
         'shaderLenses': lenses,
+        'materialPolicy':
+            'one floating toolbar lens; regular search, navigation '
+            'and mini player; solid transparency/performance/senior modes',
+        'behaviorChecks': [
+          '44px search and actions; 56px mini player and navigation',
+          'real scrolling collapses and expands the dock; pinned search stays visible',
+          'real Android keyboard hides mini player and navigation',
+          'filter draft preserves scroll, focus and element identity',
+          'filter cancel and cancelled clear do not change applied criteria',
+          'performance switch on enables and saves the policy; off restores appearance',
+          'transparency switch on makes materials solid without disabling motion; performance still overrides off',
+          'light, dark, opaque, performance and senior modes',
+        ],
         'data': 'isolated catalog and method-channel fixtures; no real NAS, microphone or audio calls',
         'commands': commands,
         'timings': timings,

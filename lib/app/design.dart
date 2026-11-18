@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -27,27 +25,60 @@ ThemeData singVerseTheme(
   final animated = motion == AppMotionLevel.full;
   final scheme = ColorScheme.fromSeed(seedColor: berry, brightness: brightness)
       .copyWith(
-        primary: dark ? const Color(0xFF91B9FF) : berry,
-        onPrimary: dark ? const Color(0xFF101D40) : Colors.white,
+        primary: dark ? const Color(0xFFFF526F) : AppPalette.brandText,
+        onPrimary: dark ? ink : Colors.white,
         primaryContainer: dark
-            ? const Color(0xFF27344E)
-            : const Color(0xFFEDF1FF),
+            ? const Color(0xFF3C1E28)
+            : const Color(0xFFFFF0F3),
         onPrimaryContainer: dark
-            ? const Color(0xFFDCE5FF)
-            : const Color(0xFF2547B2),
-        surface: dark ? const Color(0xFF1C222C) : Colors.white,
-        onSurface: dark ? const Color(0xFFF7F7F9) : ink,
+            ? const Color(0xFFFF9AAE)
+            : AppPalette.brandText,
+        secondary: dark ? const Color(0xFFAEAEB2) : const Color(0xFF636366),
+        onSecondary: dark ? const Color(0xFF1C1C1E) : Colors.white,
+        tertiary: dark ? const Color(0xFFFF526F) : AppPalette.brandText,
+        onTertiary: dark ? ink : Colors.white,
+        tertiaryContainer: dark
+            ? const Color(0xFF3C1E28)
+            : const Color(0xFFFFF0F3),
+        onTertiaryContainer: dark
+            ? const Color(0xFFFF9AAE)
+            : AppPalette.brandText,
+        surface: dark ? const Color(0xFF1C1C1E) : Colors.white,
+        surfaceDim: dark ? const Color(0xFF141416) : const Color(0xFFE5E5EA),
+        surfaceBright: dark ? const Color(0xFF2C2C2E) : Colors.white,
+        surfaceContainerLowest: dark ? Colors.black : Colors.white,
+        surfaceContainerLow: dark
+            ? const Color(0xFF1C1C1E)
+            : const Color(0xFFF9F9FB),
+        surfaceContainer: dark
+            ? const Color(0xFF1C1C1E)
+            : const Color(0xFFF2F2F7),
+        surfaceContainerHigh: dark
+            ? const Color(0xFF2C2C2E)
+            : const Color(0xFFECECEF),
+        surfaceContainerHighest: dark
+            ? const Color(0xFF353537)
+            : const Color(0xFFE5E5EA),
+        surfaceTint: Colors.transparent,
+        onSurface: dark ? const Color(0xFFF5F5F7) : ink,
         onSurfaceVariant: dark
-            ? const Color(0xFFC6CEDB)
-            : const Color(0xFF4D5765),
+            ? const Color(0xFFAEAEB2)
+            : const Color(0xFF636366),
         secondaryContainer: surfaces.group,
-        onSecondaryContainer: dark ? const Color(0xFFF7F7F9) : ink,
+        onSecondaryContainer: dark ? const Color(0xFFF5F5F7) : ink,
         outline: dark ? const Color(0xFF5A5A60) : const Color(0xFF8E8E93),
         outlineVariant: dark
-            ? const Color(0xFF353E4A)
-            : const Color(0xFFDCE2EB),
-        error: dark ? coral : const Color(0xFFC81E3C),
-        onError: dark ? const Color(0xFF3B0712) : Colors.white,
+            ? const Color(0xFF353537)
+            : const Color(0xFFE5E5EA),
+        error: dark ? const Color(0xFFFF6961) : const Color(0xFFD70015),
+        onError: Colors.white,
+        inverseSurface: dark
+            ? const Color(0xFFF5F5F7)
+            : const Color(0xFF2C2C2E),
+        onInverseSurface: dark ? ink : Colors.white,
+        inversePrimary: dark ? AppPalette.brandText : const Color(0xFFFF526F),
+        shadow: Colors.black,
+        scrim: Colors.black,
       );
   final background = surfaces.background;
   final target = senior ? AppSizes.seniorTouch : AppSizes.touch;
@@ -56,9 +87,9 @@ ThemeData singVerseTheme(
       .merge(
         TextTheme(
           headlineLarge: TextStyle(
-            fontSize: senior ? 34 : (compactText ? 30 : 32),
+            fontSize: 34,
             height: 1.18,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             letterSpacing: -.8,
           ),
           headlineSmall: TextStyle(
@@ -67,7 +98,7 @@ ThemeData singVerseTheme(
             fontWeight: FontWeight.w600,
           ),
           titleLarge: TextStyle(
-            fontSize: senior ? 23 : (compactText ? 19 : 20),
+            fontSize: senior ? 23 : 20,
             height: 1.28,
             fontWeight: FontWeight.w600,
             letterSpacing: -.35,
@@ -77,21 +108,26 @@ ThemeData singVerseTheme(
             height: 1.3,
             fontWeight: FontWeight.w600,
           ),
-          bodyLarge: TextStyle(fontSize: senior ? 21 : 16, height: 1.4),
-          bodyMedium: TextStyle(fontSize: senior ? 19 : 16, height: 1.45),
+          bodyLarge: TextStyle(fontSize: senior ? 20 : 16, height: 1.4),
+          bodyMedium: TextStyle(fontSize: senior ? 18 : 16, height: 1.45),
           bodySmall: TextStyle(
-            fontSize: senior ? 17 : 13,
-            height: 1.4,
+            fontSize: senior ? 14 : 12,
+            height: 1.5,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
           labelLarge: TextStyle(
-            fontSize: senior ? 19 : (compactText ? 14 : 15),
+            fontSize: senior ? 17 : 16,
             height: 1.25,
             fontWeight: FontWeight.w600,
           ),
           labelMedium: TextStyle(
-            fontSize: senior ? 17 : (compactText ? 12 : 13),
+            fontSize: senior ? 14 : 13,
             fontWeight: FontWeight.w500,
+          ),
+          labelSmall: TextStyle(
+            fontSize: senior ? 14 : 12,
+            height: 1.4,
+            fontWeight: FontWeight.w400,
           ),
         ),
       )
@@ -114,11 +150,11 @@ ThemeData singVerseTheme(
           : SystemUiOverlayStyle.dark,
       elevation: 0,
       scrolledUnderElevation: 0,
-      centerTitle: false,
-      toolbarHeight: senior ? 68 : 56,
+      centerTitle: true,
+      toolbarHeight: senior ? 60 : 48,
       titleSpacing: 20,
       titleTextStyle: textTheme.titleMedium?.copyWith(
-        fontSize: senior ? 23 : 18,
+        fontSize: senior ? 21 : 17,
         fontWeight: FontWeight.w600,
       ),
     ),
@@ -128,10 +164,6 @@ ThemeData singVerseTheme(
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadii.content),
-        side: BorderSide(
-          color: scheme.outlineVariant.withValues(alpha: .6),
-          width: .6,
-        ),
       ),
     ),
     dividerTheme: DividerThemeData(
@@ -182,6 +214,8 @@ ThemeData singVerseTheme(
     filledButtonTheme: FilledButtonThemeData(
       style:
           FilledButton.styleFrom(
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onPrimary,
             minimumSize: Size(target, target),
             padding: const EdgeInsets.symmetric(horizontal: 20),
             textStyle: textTheme.labelLarge,
@@ -215,7 +249,7 @@ ThemeData singVerseTheme(
           TextButton.styleFrom(
             minimumSize: Size(target, target),
             textStyle: textTheme.labelLarge,
-            foregroundColor: scheme.onSurfaceVariant,
+            foregroundColor: scheme.primary,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -225,10 +259,14 @@ ThemeData singVerseTheme(
           ),
     ),
     iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(minimumSize: Size(target, target)).copyWith(
-        animationDuration: animated ? AppMotion.press : Duration.zero,
-        foregroundBuilder: AppMotion.buttonLayer,
-      ),
+      style:
+          IconButton.styleFrom(
+            minimumSize: Size(target, target),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ).copyWith(
+            animationDuration: animated ? AppMotion.press : Duration.zero,
+            foregroundBuilder: AppMotion.buttonLayer,
+          ),
     ),
     chipTheme: ChipThemeData(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: senior ? 12 : 8),
@@ -263,13 +301,13 @@ ThemeData singVerseTheme(
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       titleTextStyle: textTheme.titleLarge,
       contentTextStyle: textTheme.bodyMedium,
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: dark ? const Color(0xFFEEEAE5) : const Color(0xFF282624),
+      backgroundColor: dark ? const Color(0xFFF5F5F7) : const Color(0xFF2C2C2E),
       contentTextStyle: textTheme.bodyMedium?.copyWith(
         color: dark ? ink : Colors.white,
       ),
@@ -295,6 +333,21 @@ class ContentWidth extends StatelessWidget {
   );
 }
 
+/// Only the trailing space depends on the shell's changing dock inset.
+class SliverBottomSpace extends StatelessWidget {
+  const SliverBottomSpace({super.key, this.embedded = true});
+  final bool embedded;
+
+  @override
+  Widget build(BuildContext context) => SliverToBoxAdapter(
+    child: SizedBox(
+      height:
+          AppSpace.large +
+          (embedded ? MediaQuery.paddingOf(context).bottom : 0),
+    ),
+  );
+}
+
 /// Stable toolbar material, including camera and WebView containers.
 class AppToolbar extends AppBar {
   AppToolbar({
@@ -315,13 +368,29 @@ class AppToolbar extends AppBar {
              ? SystemUiOverlayStyle.light
              : SystemUiOverlayStyle.dark,
          flexibleSpace: backgroundColor == null
-             ? const GlassSurface(
-                 radius: 0,
-                 variant: GlassVariant.toolbar,
-                 child: SizedBox.expand(),
-               )
+             ? const _ToolbarBackground()
              : ColoredBox(color: backgroundColor),
        );
+}
+
+class _ToolbarBackground extends StatelessWidget {
+  const _ToolbarBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).scaffoldBackgroundColor;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color, color.withValues(alpha: 0)],
+          stops: const [.82, 1],
+        ),
+      ),
+      child: const SizedBox.expand(),
+    );
+  }
 }
 
 class AppSegments<T> extends StatelessWidget {
@@ -356,7 +425,7 @@ class AppSegments<T> extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final index = values.indexWhere((value) => value.$1 == selected);
     final content = Padding(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(2),
       child: Stack(
         children: [
           if (index >= 0)
@@ -375,26 +444,19 @@ class AppSegments<T> extends StatelessWidget {
                 child: FractionallySizedBox(
                   widthFactor: 1 / values.length,
                   heightFactor: 1,
-                  child: liquid
-                      ? GlassSurface(
-                          radius: 12,
-                          enabled: enabled,
-                          variant: GlassVariant.liquid,
-                          child: SizedBox.expand(),
-                        )
-                      : DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: accent ? scheme.primary : scheme.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppSurfaces.of(context).shadow,
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: accent ? scheme.primary : scheme.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppSurfaces.of(context).shadow,
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -409,10 +471,13 @@ class AppSegments<T> extends StatelessWidget {
                         key: keyFor?.call(value.$1),
                         style: TextButton.styleFrom(
                           textStyle: textStyle,
-                          minimumSize: Size(48, senior ? 56 : 48),
-                          padding: const EdgeInsets.symmetric(
+                          minimumSize: Size(
+                            AppSizes.touch,
+                            senior ? AppSizes.seniorTouch : AppSizes.touch,
+                          ),
+                          padding: EdgeInsets.symmetric(
                             horizontal: 8,
-                            vertical: 12,
+                            vertical: senior ? 12 : 8,
                           ),
                           foregroundColor: value.$1 == selected
                               ? (accent
@@ -442,8 +507,8 @@ class AppSegments<T> extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppMotionScope.solidOf(context)
               ? scheme.secondaryContainer
-              : scheme.secondaryContainer.withValues(alpha: .42),
-          borderRadius: BorderRadius.circular(16),
+              : scheme.secondaryContainer.withValues(alpha: .74),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: scheme.outlineVariant.withValues(alpha: .30),
             width: .5,
@@ -462,7 +527,7 @@ class AppSegments<T> extends StatelessWidget {
         : DecoratedBox(
             decoration: BoxDecoration(
               color: scheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: content,
           );
@@ -494,9 +559,21 @@ class SheetHeader extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       Expanded(
-        child: Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        child: Text(title, style: Theme.of(context).textTheme.titleLarge),
       ),
-      TextButton(onPressed: () => Navigator.pop(context), child: Text(done)),
+      IconButton.filled(
+        tooltip: done,
+        style: IconButton.styleFrom(
+          backgroundColor: done == '完成'
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.secondaryContainer,
+          foregroundColor: done == '完成'
+              ? Theme.of(context).colorScheme.onPrimary
+              : Theme.of(context).colorScheme.onSurface,
+        ),
+        onPressed: () => Navigator.pop(context),
+        icon: Icon(done == '完成' ? Icons.check_rounded : Icons.close_rounded),
+      ),
     ],
   );
 }
@@ -512,6 +589,7 @@ class Glass extends StatelessWidget {
     this.material,
     this.tint,
     this.enabled = true,
+    this.backdropContext = GlassBackdropContext.plain,
   });
   final AppState state;
   final Widget child;
@@ -521,6 +599,7 @@ class Glass extends StatelessWidget {
   final bool enabled;
   final GlassMaterialSpec? material;
   final Color? tint;
+  final GlassBackdropContext backdropContext;
   @override
   Widget build(BuildContext context) {
     final solid =
@@ -536,6 +615,7 @@ class Glass extends StatelessWidget {
       material: material,
       tint: tint,
       enabled: enabled,
+      backdropContext: backdropContext,
       child: child,
     );
   }
@@ -550,11 +630,13 @@ class GlassField extends StatefulWidget {
     required this.child,
     this.enabled = true,
     this.material,
+    this.backdropContext = GlassBackdropContext.plain,
   });
   final AppState state;
   final Widget child;
   final bool enabled;
   final GlassMaterialSpec? material;
+  final GlassBackdropContext backdropContext;
   @override
   State<GlassField> createState() => _GlassFieldState();
 }
@@ -573,6 +655,7 @@ class _GlassFieldState extends State<GlassField> {
       material: widget.material,
       focused: focused && widget.enabled,
       enabled: widget.enabled,
+      backdropContext: widget.backdropContext,
       child: widget.child,
     ),
   );
@@ -580,33 +663,23 @@ class _GlassFieldState extends State<GlassField> {
 
 /// A shared functional layer; the content underneath stays unfiltered.
 class GlassToolbar extends StatelessWidget {
-  const GlassToolbar({super.key, required this.state, required this.children});
+  const GlassToolbar({
+    super.key,
+    required this.state,
+    required this.children,
+    this.backdropContext = GlassBackdropContext.plain,
+  });
   final AppState state;
   final List<Widget> children;
+  final GlassBackdropContext backdropContext;
 
   @override
   Widget build(BuildContext context) => Glass(
     state: state,
-    radius: AppRadii.floating,
+    radius: 22,
     variant: GlassVariant.liquid,
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < children.length; i++) ...[
-          if (i > 0)
-            SizedBox(
-              height: 18,
-              child: VerticalDivider(
-                width: 1,
-                thickness: .5,
-                color: Theme.of(context).colorScheme.onSurfaceVariant
-                    .withValues(alpha: .12),
-              ),
-            ),
-          children[i],
-        ],
-      ],
-    ),
+    backdropContext: backdropContext,
+    child: Row(mainAxisSize: MainAxisSize.min, children: children),
   );
 }
 
@@ -622,6 +695,8 @@ class GlassSearchField extends StatelessWidget {
     required this.onSubmitted,
     this.suffix,
     this.fieldKey,
+    this.hintText = '搜索歌名、歌手或拼音',
+    this.backdropContext = GlassBackdropContext.content,
   });
   final AppState state;
   final TextEditingController controller;
@@ -629,33 +704,49 @@ class GlassSearchField extends StatelessWidget {
   final ValueChanged<String> onChanged, onSubmitted;
   final Widget? suffix;
   final Key? fieldKey;
+  final String hintText;
+  final GlassBackdropContext backdropContext;
 
   @override
   Widget build(BuildContext context) => GlassField(
     state: state,
     material: GlassMaterialSpec.search,
+    backdropContext: backdropContext,
     child: TextField(
       key: fieldKey,
       controller: controller,
       focusNode: focusNode,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(fontSize: state.senior ? 18 : 16, height: 1.25),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: '搜索歌名、歌手或拼音',
-        hintStyle: Theme.of(context).textTheme.bodyLarge
-            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        hintText: hintText,
+        hintStyle: TextStyle(
+          fontSize: state.senior ? 18 : 16,
+          height: 1.25,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         prefixIconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-        prefixIcon: const Icon(Icons.search_rounded, size: 23),
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: AppSizes.touch,
+          minHeight: AppSizes.touch,
+        ),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: AppSizes.touch,
+          minHeight: AppSizes.touch,
+        ),
         suffixIcon: suffix,
         filled: false,
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
         constraints: BoxConstraints(
-          minHeight: state.senior ? 64 : AppSizes.field,
+          minHeight: state.senior ? AppSizes.seniorTouch : AppSizes.touch,
         ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.md,
-          vertical: AppSpace.md,
+          horizontal: AppSpace.sm,
+          vertical: 12,
         ),
       ),
       onChanged: onChanged,
@@ -709,15 +800,26 @@ Future<T?> showAppSheet<T>({
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ExcludeSemantics(
-              child: Container(
-                width: 32,
-                height: 4,
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant
-                      .withValues(alpha: .35),
-                  borderRadius: BorderRadius.circular(2),
+            SizedBox(
+              width: 64,
+              height: AppSizes.touch,
+              child: TextButton(
+                onPressed: () => Navigator.maybePop(context),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(AppSizes.touch, AppSizes.touch),
+                ),
+                child: Semantics(
+                  label: '关闭面板',
+                  child: Container(
+                    width: 36,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant
+                          .withValues(alpha: .55),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -767,12 +869,6 @@ Future<T?> showAppDialog<T>({
   required WidgetBuilder builder,
   bool barrierDismissible = true,
 }) {
-  final nativeSurface = const {
-    'player',
-    'tv',
-    'scan',
-    'admin',
-  }.contains(ModalRoute.of(context)?.settings.name);
   final themes = InheritedTheme.capture(
     from: context,
     to: Navigator.of(context, rootNavigator: true).context,
@@ -784,19 +880,8 @@ Future<T?> showAppDialog<T>({
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black54,
       transitionDuration: AppMotionScope.durationOf(context, AppMotion.sheet),
-      pageBuilder: (context, _, _) => themes.wrap(
-        SafeArea(
-          child: Builder(
-            builder: (context) => ClipRect(
-              child: BackdropFilter(
-                enabled: !nativeSurface && !AppMotionScope.solidOf(context),
-                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                child: builder(context),
-              ),
-            ),
-          ),
-        ),
-      ),
+      pageBuilder: (context, _, _) =>
+          themes.wrap(SafeArea(child: Builder(builder: builder))),
       transitionBuilder: (context, animation, _, child) {
         final level = AppMotionScope.levelOf(context);
         if (level == AppMotionLevel.none) return child;

@@ -17,6 +17,8 @@ import 'package:singverse_mobile/main.dart';
 
 import '../test/widget_test.dart' show FakeApi;
 
+import 'phone_failure_reporter.dart';
+
 class _EmptyVault implements LoginStore {
   @override
   Future<List<LoginRecord>> load() async => [];
@@ -34,6 +36,7 @@ class _EmptyVault implements LoginStore {
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  installPhoneFailureReporter(binding);
   testWidgets('NAS optical glass renders on Impeller and remains interruptible', (
     tester,
   ) async {
@@ -93,10 +96,38 @@ void main() {
         .length;
     expect(
       lenses,
-      greaterThanOrEqualTo(3),
+      1,
       reason:
-          'Back button, selected segment, and player must use the real shader.',
+          'The floating back button uses the shader; account fields, protocol '
+          'selection and mini player use neutral or regular materials.',
     );
+    final username = find.byKey(const ValueKey('nas-username-field'));
+    final address = find.byKey(const ValueKey('nas-address-field'));
+    final mini = find.byKey(const Key('mini-player'));
+    final protocol = find.byKey(const ValueKey('nas-protocol'));
+    expect(tester.widget<AppSegments<String>>(protocol).liquid, isFalse);
+    for (final field in [
+      address,
+      username,
+      find.byKey(const ValueKey('nas-password-field')),
+    ]) {
+      final decoration = tester.widget<TextField>(field).decoration!;
+      expect(decoration.filled, isTrue);
+      expect(
+        decoration.fillColor,
+        Theme.of(tester.element(field)).colorScheme.surface,
+      );
+      expect(
+        find.ancestor(of: field, matching: find.byType(GlassField)),
+        findsNothing,
+      );
+      expect(tester.getSize(field).height, closeTo(52, .1));
+    }
+    expect(tester.getSize(mini).height, closeTo(56, .1));
+    final miniGlass = find
+        .ancestor(of: mini, matching: find.byType(Glass))
+        .first;
+    expect(tester.widget<Glass>(miniGlass).material?.refraction, isFalse);
     await tester.pumpAndSettle();
     Future<void> capture(String name) async {
       await tester.pumpAndSettle();
@@ -105,16 +136,52 @@ void main() {
       for (var i = 0; i < 65; i++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
+      expect(tester.takeException(), isNull, reason: name);
     }
 
     await capture('01-nas-light');
     await state.setTheme(ThemeMode.dark);
     await capture('02-nas-dark');
+    expect(Theme.of(tester.element(username)).brightness, Brightness.dark);
+    expect(
+      tester.widget<TextField>(username).decoration!.fillColor,
+      Theme.of(tester.element(username)).colorScheme.surface,
+    );
     await state.setTheme(ThemeMode.light);
     await tester.pumpAndSettle();
-    final username = find.byKey(const ValueKey('nas-username-field'));
     await tester.tap(username);
     await tester.pumpAndSettle();
+    for (
+      var i = 0;
+      i < 30 && View.of(tester.element(username)).viewInsets.bottom == 0;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(View.of(tester.element(username)).viewInsets.bottom, greaterThan(0));
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(of: username, matching: find.byType(EditableText)),
+          )
+          .focusNode
+          .hasFocus,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<TextField>(username)
+          .decoration!
+          .focusedBorder!
+          .borderSide
+          .color,
+      Theme.of(tester.element(username)).colorScheme.primary,
+    );
+    expect(
+      mini,
+      findsNothing,
+      reason: 'The real Android keyboard hides the shared mini player.',
+    );
     await capture('03-nas-focus-keyboard');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
@@ -187,7 +254,20 @@ void main() {
     await state.setTransparency(true);
     await capture('05-nas-reduce-transparency');
     expect(tester.allRenderObjects.whereType<RenderBackdropFilter>(), isEmpty);
+    expect(tester.getSize(username).height, closeTo(52, .1));
     await state.setTransparency(false);
+    await state.setUiMode(UiMode.senior);
+    await tester.pumpAndSettle();
+    expect(tester.widget<AppSegments<String>>(protocol).senior, isTrue);
+    expect(tester.getSize(username).height, greaterThanOrEqualTo(64));
+    expect(tester.getSize(mini).height, greaterThanOrEqualTo(72));
+    expect(
+      tester.getSize(find.byType(BackButton)).height,
+      greaterThanOrEqualTo(56),
+    );
+    expect(tester.allRenderObjects.whereType<RenderBackdropFilter>(), isEmpty);
+    await capture('07-nas-senior');
+    await state.setUiMode(UiMode.standard);
     await tester.pumpAndSettle();
     // Change policy while the sliding selection and focus sheen are in flight.
     await tester.tap(find.text('HTTPS'));
@@ -213,6 +293,15 @@ void main() {
     binding.reportData = {
       'renderer': 'Impeller',
       'shaderLenses': lenses,
+      'materialPolicy':
+          'one floating back lens; neutral account fields and '
+          'protocol control; regular 56px mini player',
+      'behaviorChecks': [
+        '52px neutral fields with visible focus border',
+        'real Android keyboard hides the shared mini player',
+        'light, dark, opaque, performance and senior modes',
+        'protocol selection survives a policy change during animation',
+      ],
       'data': 'controlled fixture; no NAS or native playback calls',
       'timings': timings,
     };

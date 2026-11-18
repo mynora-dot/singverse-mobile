@@ -41,15 +41,14 @@ void main() {
   // The inner Gaussian filter already scatters the scene. A single displaced
   // sample avoids text ghosting and redundant full-resolution texture reads.
   vec4 scene = sampleBackdrop(refracted);
-  // Compress backdrop detail instead of increasing blur. The mapping stays
-  // monotonic: dark text cannot turn into a bright halo inside the material.
-  // A trace of scene chroma and the displaced rim retain actual transmission.
+  // Keep transmission neutral and monotonic. The material's tint and diffusion
+  // supply readability; the shader only compresses contrast and bends the rim.
   float luma = dot(scene.rgb, vec3(0.2126, 0.7152, 0.0722));
   vec3 chroma = scene.rgb - vec3(luma);
-  float lightLuma = mix(0.895, 0.970, smoothstep(0.0, 1.0, luma));
-  float darkLuma = mix(0.105, 0.160, smoothstep(0.0, 1.0, luma));
-  vec3 lightGlass = vec3(lightLuma) + vec3(0.0, 0.003, 0.008) + chroma * 0.08;
-  vec3 darkGlass = vec3(darkLuma) + vec3(-0.010, 0.005, 0.025) + chroma * 0.10;
+  float lightLuma = mix(0.68, 0.95, luma);
+  float darkLuma = mix(0.06, 0.20, luma);
+  vec3 lightGlass = vec3(lightLuma) + chroma * 0.08;
+  vec3 darkGlass = vec3(darkLuma) + chroma * 0.10;
   vec3 glass = mix(lightGlass, darkGlass, u_dark);
   vec3 transmitted = vec3(luma) + chroma * 0.18;
   // A narrow, slightly clearer edge reveals the actual refracted backdrop.

@@ -407,7 +407,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   }
 
   Widget detail(String label, Widget value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12),
+    padding: const EdgeInsets.symmetric(vertical: 14),
     child: LayoutBuilder(
       builder: (context, size) {
         final caption = Text(
@@ -426,7 +426,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: 80, child: caption),
+            SizedBox(width: 68, child: caption),
             const SizedBox(width: 12),
             Expanded(child: value),
           ],
@@ -441,25 +441,47 @@ class _ConnectionPageState extends State<ConnectionPage> {
     String subtitle,
     VoidCallback? action,
   ) => ListTile(
-    minTileHeight: widget.state.senior ? 88 : 72,
+    minTileHeight: widget.state.senior ? 88 : 60,
     leading: Icon(icon, size: 20),
-    title: Text(title),
+    title: Text(
+      title,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(fontWeight: FontWeight.w400),
+    ),
     subtitle: Text(subtitle),
     trailing: const Icon(Icons.chevron_right_rounded, size: 18),
     onTap: action,
   );
 
+  Widget managementHeading(String text) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Semantics(
+      header: true,
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          fontSize: widget.state.senior ? 17 : 13,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ),
+  );
+
   Widget loginForm(AppState state) {
     final theme = Theme.of(context);
+    final inputStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontSize: state.senior ? 18 : 16,
+      height: 1.25,
+    );
     final labelStyle = theme.textTheme.bodySmall?.copyWith(
-      fontSize: state.senior ? 17 : 14,
+      fontSize: state.senior ? 17 : 13,
       height: 1.4,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       color: theme.colorScheme.onSurfaceVariant,
     );
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide.none,
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
     );
     InputDecoration decoration({
       String? hint,
@@ -467,27 +489,30 @@ class _ConnectionPageState extends State<ConnectionPage> {
       Widget? suffix,
     }) => InputDecoration(
       hintText: hint,
+      hintStyle: inputStyle?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
       prefixText: prefix,
+      prefixStyle: inputStyle,
       suffixIcon: suffix,
       isDense: true,
-      filled: false,
-      constraints: BoxConstraints(minHeight: state.senior ? 64 : 60),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      filled: true,
+      fillColor: theme.colorScheme.surface,
+      constraints: BoxConstraints(minHeight: state.senior ? 64 : 52),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: border,
       enabledBorder: border,
       disabledBorder: border,
-      focusedBorder: border,
+      focusedBorder: border.copyWith(
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.2),
+      ),
     );
     Widget labelledField(String label, Widget field) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ExcludeSemantics(child: Text(label, style: labelStyle)),
-        const SizedBox(height: 10),
-        GlassField(
-          state: state,
-          enabled: !working,
-          child: Semantics(label: label, child: field),
-        ),
+        const SizedBox(height: 8),
+        Semantics(label: label, child: field),
       ],
     );
     Widget option(
@@ -544,7 +569,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
           LayoutBuilder(
             builder: (context, size) => Wrap(
               alignment: WrapAlignment.spaceBetween,
@@ -554,8 +579,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
               children: [
                 ExcludeSemantics(child: Text('NAS 地址', style: labelStyle)),
                 SizedBox(
-                  width: (176 * MediaQuery.textScalerOf(context).scale(14) / 14)
-                      .clamp(176, size.maxWidth),
+                  width: (160 * MediaQuery.textScalerOf(context).scale(14) / 14)
+                      .clamp(160, size.maxWidth),
                   child: Semantics(
                     label: '连接协议',
                     child: AppSegments<String>(
@@ -564,7 +589,6 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       selected: scheme,
                       senior: state.senior,
                       enabled: !working,
-                      liquid: true,
                       textStyle: labelStyle,
                       onChanged: (value) {
                         if (value == scheme) return;
@@ -580,51 +604,49 @@ class _ConnectionPageState extends State<ConnectionPage> {
             ),
           ),
           const SizedBox(height: 12),
-          GlassField(
-            state: state,
-            enabled: !working,
-            child: Semantics(
-              label: 'NAS 地址',
-              child: TextField(
-                key: const ValueKey('nas-address-field'),
-                controller: address,
-                enabled: !working,
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-                enableSuggestions: false,
-                textInputAction: TextInputAction.next,
-                decoration: decoration(
-                  hint: '192.168.1.10:18080',
-                  prefix: '$scheme://',
-                  suffix: IconButton(
-                    key: const ValueKey('nas-history'),
-                    tooltip: '历史登录',
-                    onPressed: working ? null : showHistory,
-                    icon: const Icon(Icons.history_rounded, size: 20),
-                  ),
+          Semantics(
+            label: 'NAS 地址',
+            child: TextField(
+              key: const ValueKey('nas-address-field'),
+              style: inputStyle,
+              controller: address,
+              enabled: !working,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              enableSuggestions: false,
+              textInputAction: TextInputAction.next,
+              decoration: decoration(
+                hint: '192.168.1.10:18080',
+                prefix: '$scheme://',
+                suffix: IconButton(
+                  key: const ValueKey('nas-history'),
+                  tooltip: '历史登录',
+                  onPressed: working ? null : showHistory,
+                  icon: const Icon(Icons.history_rounded, size: 20),
                 ),
-                onChanged: (value) => setState(() {
-                  invalidateSaved();
-                  final match = RegExp(
-                    r'^(https?)://',
-                    caseSensitive: false,
-                  ).firstMatch(value);
-                  if (match != null) {
-                    scheme = match[1]!.toLowerCase();
-                    address.text = value.substring(match.end);
-                    address.selection = TextSelection.collapsed(
-                      offset: address.text.length,
-                    );
-                  }
-                }),
               ),
+              onChanged: (value) => setState(() {
+                invalidateSaved();
+                final match = RegExp(
+                  r'^(https?)://',
+                  caseSensitive: false,
+                ).firstMatch(value);
+                if (match != null) {
+                  scheme = match[1]!.toLowerCase();
+                  address.text = value.substring(match.end);
+                  address.selection = TextSelection.collapsed(
+                    offset: address.text.length,
+                  );
+                }
+              }),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           labelledField(
             '管理员账号',
             TextField(
               key: const ValueKey('nas-username-field'),
+              style: inputStyle,
               controller: username,
               enabled: !working,
               autocorrect: false,
@@ -640,6 +662,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
             useSavedPassword ? '已保存密码' : '密码',
             TextField(
               key: const ValueKey('nas-password-field'),
+              style: inputStyle,
               controller: password,
               enabled: !working,
               obscureText: !visible,
@@ -693,12 +716,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
           FilledButton(
             key: const ValueKey('nas-submit'),
             style: FilledButton.styleFrom(
-              minimumSize: Size.fromHeight(state.senior ? 60 : 56),
+              minimumSize: Size.fromHeight(state.senior ? 60 : 52),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
               ),
               textStyle: theme.textTheme.titleMedium,
-            ).copyWith(backgroundBuilder: glossyActionLayer),
+            ),
             onPressed: working ? null : submit,
             child: Text(working ? '正在连接…' : '登录并连接'),
           ),
@@ -852,8 +875,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
       ),
     ),
     const SizedBox(height: 24),
-    const SectionTitle('连接管理'),
-    const SizedBox(height: 12),
+    managementHeading('连接管理'),
+    const SizedBox(height: 8),
     Card(
       child: Column(
         children: [
@@ -893,8 +916,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
       ),
     ),
     const SizedBox(height: 24),
-    const SectionTitle('账号'),
-    const SizedBox(height: 12),
+    managementHeading('账号'),
+    const SizedBox(height: 8),
     Card(
       child: management(
         Icons.logout_rounded,
@@ -925,24 +948,24 @@ class _ConnectionPageState extends State<ConnectionPage> {
             surfaceTintColor: Colors.transparent,
             elevation: 0,
             scrolledUnderElevation: 0,
-            toolbarHeight: state.senior ? 64 : 56,
+            toolbarHeight: state.senior ? 64 : 52,
             centerTitle: true,
             systemOverlayStyle:
                 (Theme.of(context).brightness == Brightness.dark
                         ? SystemUiOverlayStyle.light
                         : SystemUiOverlayStyle.dark)
                     .copyWith(statusBarColor: Colors.transparent),
-            leadingWidth: state.senior ? 80 : 72,
+            leadingWidth: state.senior ? 76 : 60,
             leading: Navigator.canPop(context)
                 ? Padding(
-                    padding: const EdgeInsets.only(left: 24, top: 4, bottom: 4),
+                    padding: const EdgeInsets.only(left: 16, top: 4, bottom: 4),
                     child: Glass(
                       state: state,
                       radius: 26,
                       variant: GlassVariant.liquid,
                       child: BackButton(
                         style: IconButton.styleFrom(
-                          minimumSize: Size.square(state.senior ? 56 : 48),
+                          minimumSize: Size.square(state.senior ? 56 : 44),
                           padding: EdgeInsets.zero,
                         ),
                       ),
@@ -961,7 +984,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   key: const ValueKey('nas-page-scroll'),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                  padding: EdgeInsets.fromLTRB(
+                    MediaQuery.sizeOf(context).width < 375 ? 16 : 20,
+                    24,
+                    MediaQuery.sizeOf(context).width < 375 ? 16 : 20,
+                    32,
+                  ),
                   children: [
                     if (state.mfaRequired)
                       mfaForm(state)

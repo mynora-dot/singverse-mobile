@@ -1,6 +1,150 @@
 # Liquid Glass 设计与验证
 
-## 视觉层级
+## 当前规范（2026-11-18）
+
+当前实现对齐 [手机端苹果液态玻璃原型（2026-11-18）](../../docs/手机端苹果液态玻璃原型-20261118/)。这是 Flutter Android 对 Liquid Glass 的近似实现，不是 Apple 的原生材质 API，也没有新增 iOS 工程。下面记录本轮代码采用的规则；后面的历史记录保留旧参数和旧验收来源，不能用作本轮通过结论。
+
+### 内容、材质与字体
+
+浅色采用白色内容底，深色采用黑色 / 中性深灰；分组、弹层、环境光和阴影均去掉原有蓝色偏移。品牌和录音采用红色系，基础品牌色为 `#FA2D55`；浅色小号操作文字和录音按钮使用更深的红色，浅色主按钮配白字、深色主按钮配深色字，以保持可读性。练唱页面跟随浅深主题，视频保持真实比例和原生播放路径。连续歌曲、封面、歌词、长文本和表单依靠稳定底色与排版建立结构。
+
+普通触控目标至少 44dp，长辈目标至少 56dp；部分操作保留更大尺寸。统一表单高度基准 52dp，内容最大宽度 720dp，页面边距基准 20dp，窄屏可收至 16dp。沿用系统字体和系统字号，正文基准 16sp，辅助文字基准至少 12sp、长辈至少 14sp；组件根据实际字号增加高度，长文本可换行或滚动。歌曲标题与时长不会因为玻璃效果进入滤镜输入。
+
+`AppPalette` / `AppSurfaces` 管理颜色，`AppSpace` / `AppRadii` / `AppSizes` 管理几何，`GlassMaterialSpec` 管理材质。`GlassSurface` / `Glass` 是共同绘制入口，`GlassField` 保留输入焦点与控制器行为，`showAppSheet` / `showAppDialog` 保留路由取消、返回与焦点管理。
+
+| 基础材质 | 浅 / 深染色不透明度 | 局部模糊 sigma | 折射 shader |
+| --- | --- | --- | --- |
+| `standard` | .82 / .84 | 18 | 无 |
+| `search` | .88 / .90 | 24 | 无 |
+| `floating` | .55 / .55 | 18 | 支持时启用 |
+| `player` | .90 / .92 | 32 | 无，元数据保持稳定扩散 |
+| `sheet` | .98 / .98 | 18 | 无 |
+| `field` | .98 / .98 | 0 | 无 |
+| `shortcut` | 1 / 1 | 0 | 无 |
+| `onColor` | .18 / .18 | 12 | 无 |
+| `stageControl` | .72 / .76 | 24 | 无 |
+| `mediaOverlay` | .76 / .76 | 0 | 无 |
+
+小型 regular 表面通过 `backdropContext` 参数接收布局提供的背景语义，取值为 `GlassBackdropContext.plain` / `content` / `media`，不逐帧读取屏幕像素。`plain` 保留基础参数；`content` 将染色提高到至少 .90 / .92、模糊至少 32；`media` 至少 .76 / .80、模糊至少 28。零模糊表面直接保留原参数，原生视频覆盖键与稳定表单不会因背景语义启用采样。导航与迷你播放器显式采用 `content`；通用 `GlassSearchField` 默认采用 `content`。
+
+折射只用于选择了 `floating` 等折射材质的小表面。Impeller 支持时，`liquid_lens.frag` 在窄边缘做有限位移与中性亮度压缩；不支持或加载失败时使用局部模糊与对应色矩阵。反光改为单条局部柔和高光，按压光点跟随手指，没有常驻动画。每个透镜独立持有并释放 shader，前景文字不参与背景采样。
+
+长 sheet 使用接近实体的 .98 中性底色、18dp 扩散且不启用折射，抑制粉红透底与大范围 shader 成本。弹层抓手提供 64×44dp 点击关闭区，短横视觉保留；内容由 `Flexible` 与自身滚动容器约束。对话框使用稳定底色；全视口背景模糊已移除。顶部工具栏渐隐、dock 底部渐隐和 `AppEnvironment` 都不使用全视口模糊。原生视频、相机与 WebView 路由的弹层使用实体表面，`mediaOverlay` 绘制时直接跳过滤镜。
+
+### 主框架与辅助模式
+
+普通模式的已连接点歌页把搜索与扫码 / 设置工具组固定在列表上方，列表内容独立滚动。长辈模式使用独立标题栏与常规搜索布局。推荐卡仍来自第一首实际歌曲，搜索或筛选时恢复完整结果，不注入演示曲目。
+
+底部 dock 在列表向下滚动超过阈值后收拢，向上滚动或接近顶部时展开，切换标签时恢复展开。收拢状态通过独立 `ValueNotifier` 只重建底栏；动态底部留白由列表末尾的 `SliverBottomSpace` 局部订阅，避免 `Scaffold.extendBody` 更新 padding 时重建三个标签页的全部正文。Scaffold 仍更新实际底部布局和内容留白。收拢导航宽 144dp，容纳三个至少 44dp 的按钮；存在当前歌曲时与 compact 迷你播放器同行，窄屏隐藏 compact 封面并对标题做单行省略。键盘出现时整个 dock 立即隐藏。底部渐隐延伸到系统安全区，嵌入列表读取实际底部留白，列表末项可以滚动到 dock 上方。迷你播放器保持独立播放操作，点击或向上拖动进入播放器。
+
+长辈模式、录音中以及系统字号将 16sp 放大到超过 21sp 时，dock 保持展开。导航、迷你播放器与页面内容继续保留系统字号缩放；长辈模式和大字号不展示密集推荐卡。性能模式、长辈模式、减少透明效果与高对比度使用实体材质，跳过实时模糊和折射。系统减少动态效果 / 辅助导航使用简化动效，透明度仍遵循独立偏好；Android 无跨版本统一的系统 Reduce Transparency 信号。
+
+`AppMotion` 当前时长为按下 100ms、恢复 260ms、导航 360ms、页面 320ms、弹层 360ms、展开 280ms。减少动态效果只保留至多 100ms 的必要淡入，性能模式立即收束界面动画。媒体时钟、歌词、录音计时和网络请求不依赖动效完成。
+
+设置中的性能模式开关采用正向语义：打开即启用性能模式，显示“已开启，停用动效与实时模糊”；关闭即退出性能模式，显示“已关闭，界面效果遵循外观设置”。保存的 `performanceMode` 布尔值与开关一致；关闭后继续遵循独立的减少透明效果、长辈模式和系统辅助设置。
+
+“减少透明效果”同样使用正向开关：打开显示“已开启，使用清晰的不透明背景”，关闭显示“已关闭，使用常规透明效果”。若长辈模式或性能模式仍开启，关闭时明确说明该模式仍使用实底；不会因为关闭透明度偏好而退出其他模式。保存的 `reduceTransparency` 布尔值与该开关一致；减少透明效果本身不关闭动效。
+
+### 本轮设备验证与命令
+
+本轮所有运行验收仅使用已指定物理机 `10AE9J2E5Q000FJ`，使用隔离的 `.e2e` 包；不运行本机 unit / widget 测试或模拟器。验证分为两层，结果必须分开记录：
+
+| runner target | 验证层 | 数据与能力边界 |
+| --- | --- | --- |
+| `library_glass` | 真机 UI fixture | 在真实 Flutter / Android 渲染器上检查主框架、搜索、筛选、dock、字号和材质；受控曲库与测试方法通道不证明真实 NAS、音频或相机链路 |
+| `nas_glass` | 真机 UI fixture | 检查登录表单、焦点、键盘、浅深色与材质回退；内存数据与测试凭据不证明真实登录、证书或 Keystore 行为 |
+| `player_console`（默认） | 真实原生链路 | 独立 NAS / compute、自制真实媒体以及实际 Media3、AndroidView、AudioRecord / AAC；需要生成的语音样本 |
+
+统一入口为 `scripts/check-player-console.py --target <target>`。`--device` 和全新 `--output` 必填；`player_console` 和合并入口 `apple_prototype` 需要 `--voice-sample`。UI fixture 不需要语音样本，也不需要连接日常 NAS。
+
+```sh
+python3 scripts/check-player-console.py \
+  --target library_glass \
+  --device 10AE9J2E5Q000FJ \
+  --output build/reports/liquid-glass-20261118-library-new-run
+
+python3 scripts/check-player-console.py \
+  --target nas_glass \
+  --device 10AE9J2E5Q000FJ \
+  --output build/reports/liquid-glass-20261118-nas-new-run
+```
+
+原生链路先使用新数据目录启动 `127.0.0.1:18181` 的独立 NAS / compute，并导入 `setup-mobile-karaoke-fixtures.py` 生成的自制媒体，再执行：
+
+```sh
+python3 scripts/check-player-console.py \
+  --target player_console \
+  --device 10AE9J2E5Q000FJ \
+  --voice-sample /absolute/path/to/generated/voice-test.wav \
+  --output build/reports/liquid-glass-20261118-native-new-run
+```
+
+需要一次安装连续验证三套时，使用 `--target apple_prototype` 并提供同一 `--voice-sample`，各套截图按 `library/`、`nas/`、`player/` 保存，UI 报告汇入 `uiSuites`。测试表单偏好在内存中，真实播放仍走 NAS、Media3、AudioRecord 与本机 AAC。
+
+重复验证同一包可添加 `--reuse-installed-apk`：runner 仍构建所选 target，只有本地 APK 与手机 `.e2e` 的 `base.apk` 完整 SHA256 一致才跳过安装；不一致或无法读取直接失败，不回退到安装或卸载。为了避免 vivo 丢失 logcat，测试包暂停启动，`scripts/phone_vm_log_bridge.dart` 直接订阅已验证的 loopback Dart VM Stdout / Stderr，READY 后由 driver 恢复执行；drive 使用 `--no-dds` 保持订阅。场景截图与字号、麦克风授权、语音样本播放标记均去重处理，原生验收同时核对四种控制标记全部到达。`vm.log` 和 `integration.log` 分别保留原始日志。
+
+曲库性能采样使用 `wall-clock-gesture-v2`：`benchmarkLive` 下以真实时钟发送带时间戳的 8 次手势，每次 24 个移动事件；保留 500ms 惯性和界面变化尾段，按 vsync 开始时间纳入窗口内全部帧，不按耗时剔除帧。报告保留逐帧五阶段时间戳、手势时间和 callback drain 结果。设备报告的刷新率与实际应用帧率分开记录；16,667μs 是本轮 60Hz 参考预算，不代表已验证 120Hz。
+
+省略 `--target` 等同于 `player_console`。runner 显式绑定物理机，使用 `.e2e` 覆盖安装和独立端口，不覆盖日常包或已有报告；结束后恢复测试前的系统字号与端口映射。截图、交互录屏、日志与帧统计保存在各自报告目录。帧采样前停止录屏和镜像，报告注明设备、构建模式、渲染器及采样范围；UI fixture 与真实原生播放的数据不能互相代替。60Hz 的 UI / Raster P95 ≤16.7ms 与超预算帧占比 <1% 是验收目标，只有本轮实际帧数据才能支持性能结论。
+
+### 本轮执行结果
+
+2026-11-18，物理机 vivo V2417A（`10AE9J2E5Q000FJ`），Android 15 / API 35，1260×2800、density 560（逻辑 360×800）。运行包为 `com.mynora.singverse.mobile.e2e`，profile / Impeller。所有运行测试均在这台手机完成，没有运行宿主 unit / widget 测试或模拟器；宿主执行静态分析、格式检查与 APK 构建。
+
+`build/reports/apple-prototype-20261118/bundle-06/` 三套功能验收全部通过，包含曲库 / NAS UI fixture、21 项真实原生链路检查及 40 张场景截图。覆盖搜索、筛选草稿与取消、焦点和滚动保持、底栏收展与键盘避让、浅深色 / 不透明 / 性能 / 长辈模式，以及实际 Media3 播放、全屏返回、收藏、调音、音轨切换、选段应用 / 取消、拖动收起与迷你播放器展开、系统 200% 字号、AudioRecord / AAC 和录音回听。报告核对四种原生控制标记全部到达，结束后系统字号恢复为 1.0，日常包版本与更新时间保持不变。
+
+真实录音报告时长 12,020ms，麦克风峰值 0.02373，voiceFrames 584,640、backingFrames 583,841、timestampAligned 为 true，保留 PREVIEW 且实际播放了生成的 AAC。语音样本由本轮自制 WAV 经宿主扬声器播放，由手机真实麦克风拾取；这证明采集与回听链路，不是音质专项结论。
+
+| 原生场景（各 20 秒，`benchmarkLive`） | 帧数 | UI P95 | Raster P95 | 超 16.667ms 帧 |
+| --- | ---: | ---: | ---: | ---: |
+| 默认视频 | 1200 | 6.665ms | 7.318ms | 0% |
+| 性能模式视频 | 1202 | 7.170ms | 4.112ms | 0% |
+| 默认音频 / 歌词 | 1196 | 8.506ms | 8.485ms | 0.167% |
+
+最终留白订阅修复后，仅在同一手机复测受影响的曲库 / 主框架，`build/reports/apple-prototype-20261118/library-03/` 全部交互通过，保存 18 张截图。每种模式使用约 7.24 秒真实手势窗口，callback drain 均完成，全部逐帧与手势记录保存在 `report.json`：
+
+| 最终曲库滚动（`wall-clock-gesture-v2`） | 帧数 | UI P95 / 最大 | Raster P95 / 最大 | 超 16.667ms 帧 |
+| --- | ---: | ---: | ---: | ---: |
+| 默认玻璃 | 434 | 3.322 / 9.770ms | 6.326 / 14.444ms | 0 / 0% |
+| 性能模式 | 431 | 2.698 / 10.677ms | 3.977 / 4.986ms | 0 / 0% |
+
+对照 `bundle-06` 的同方法数据，修复前默认 4/419 帧超预算（0.955%，UI 最大 25.741ms），性能模式 7/424（1.651%，UI 最大 26.999ms）。最终窗口中两种模式均满足本轮 60Hz 参考目标；这是所列设备与样本窗口的实测结果，不外推为所有设备、热状态或 120Hz 的保证。NAS fixture 内快速切换协议的 pump 采样仅作交互诊断，不用于宣称真实时钟下的性能达标。
+
+原生验证使用新数据目录和自制媒体，Go 来源 revision `44494661ffe4802b80cd5c442ad2d9295ee397b5`、compute 来源 revision `2663424657d406c05835276d2426e7608822cbae`，分别绑定宿主 loopback 18181 / 18190，不连接日常 NAS。原生播放器 / 录音代码在 `bundle-06` 后没有变更，最后一轮只修改主框架列表的底部留白订阅并执行对应曲库复测。
+
+旧报告全部保留：`bundle-03` 是首轮三套通过记录；`library-02` 的功能测试通过，但旧 runner 因 vivo 丢失截图标记返回 1，性能模式慢帧 1.64%；`bundle-04` / `bundle-05` 是日志桥启动失败，尚未进入功能验收；`bundle-06` 修正启动参数和 DDS 接管后完成三套验收。不能将这些启动失败标为功能通过，也不能用旧 pump 曲库数据替代最终手势采样。
+
+最终静态分析为 No issues found，64 个 Dart 文件格式检查无变化，`git diff --check` 通过；`sh scripts/build-apk.sh debug` 成功且 `pubspec.lock` 未变。开发产物为 `build/app/outputs/flutter-apk/app-debug.apk`，正式包名 `com.mynora.singverse.mobile`、开发版本 0.0.0 / code 1、minSdk 24 / targetSdk 36，Android Debug 签名验证通过；该开发 APK 只构建，没有覆盖手机上的日常应用。手机运行验收使用上文的 profile `.e2e` 包。
+
+最终 ADB 结构化证据保存在 `/tmp/singverse-mobile-apple-20261118-final-v2/`：已查看 `screenshots/current.png`，前台 Activity 为 `.e2e/com.mynora.singverse.mobile.MainActivity`，PID 31158，`/crash` 返回空记录。该当前画面是曲库 fixture 最后打开的 NAS 表单；真实原生场景的证据在 `bundle-06/player/`。镜像采集地址为 `http://127.0.0.1:56857/`（采集后已关闭）；Codex 内嵌浏览器此前控制超时，未成功打开面板，本轮不据此宣称浏览器验收。所有性能采样完成后才启动这次镜像采集。测试后系统字号已核对恢复 1.0，临时 `stay_on_while_plugged_in` 已恢复原值 0；ADB 正反向端口映射均已清理，本轮独立 NAS、compute 和镜像进程均已停止，相应端口已核对无监听。
+
+实际测试启动入口（runner 先订阅 VM 日志，再由 driver 恢复暂停的 isolate）：
+
+```sh
+adb -s 10AE9J2E5Q000FJ shell am start \
+  -a android.intent.action.MAIN -c android.intent.category.LAUNCHER \
+  --ez start-paused true --ez enable-dart-profiling true \
+  --ez enable-impeller true --ez disable-service-auth-codes true \
+  com.mynora.singverse.mobile.e2e/com.mynora.singverse.mobile.MainActivity
+```
+
+本轮没有覆盖真实蓝牙路由 / 中断、实际相机扫码、WebView 登录、Keystore 专项、用户 NAS 权限及递增正式版本更新流程；这些不由受控 UI fixture 证明。
+
+### 同日补充：两个开关的状态说明
+
+性能模式与减少透明效果现在分别明确显示“已开启”或“已关闭”，开关打开即启用该项。减少透明效果关闭、但长辈模式或性能模式仍开启时，会明确说明该模式仍使用实底。原有正向布尔值、默认值和保存方式不变。
+
+`build/reports/performance-switch-20261118/phone-02/` 在同一 vivo V2417A（`10AE9J2E5Q000FJ`）的 profile / Impeller `.e2e` 包通过曲库与主框架验收，保存 22 张截图。实际点击两个开关，检查状态文字、开关值、AppState、受控偏好值和渲染策略一致；返回设置后保持选中状态。减少透明效果单独开启时不关闭动效；性能模式开启后，再开关减少透明效果仍保持性能实底；退出两个模式后恢复外观效果。默认 / 性能模式滚动窗口分别纳入 437 / 436 帧，超 16.667ms 帧均为 0。该项为真实手机上的受控 UI fixture，不是新增原生播放 / 录音或跨进程偏好持久化专项验收。
+
+状态截图为同目录的 `14-performance-switch-on.png`、`15-performance-switch-off.png`、`16-transparency-switch-on.png`、`17-transparency-switch-off.png`；功能结果与逐帧记录见 `acceptance.json` 和 `report.json`。`phone-01/` 保留加入减少透明效果调整前、性能模式单项通过的记录。本次没有启动镜像或打开浏览器面板，截图来自 runner 的 ADB 采集；启动入口与包名同上。字号核对为 1.0，ADB 正反向映射均为空，日常包版本与更新时间未变。
+
+补充改动的 Dart 格式整理完成，完整 Flutter 静态分析为 No issues found；开发 APK 已重新构建成功，`pubspec.lock` 未变。产物仍为 `build/app/outputs/flutter-apk/app-debug.apk`，本次没有覆盖安装日常包。
+
+## 历史设计与验收记录（截至 2026-11-17）
+
+以下完整保留此前设计轮次与验证说明。蓝色品牌、蓝黑舞台、3–5dp 模糊、48dp 普通目标、340ms 导航等参数属于历史实现；模拟器命令和旧报告目录仅用于辨识来源，不代表 2026-11-18 当前规范或本轮验收结果。本轮操作方式以上方物理机说明为准。
+
+### 历史：视觉层级
 
 2026-11-17 第二轮重新调整了页面构图。点歌页以曲库第一首实际歌曲作为开唱卡片，该歌曲不在列表重复显示，搜索和筛选时恢复完整结果列表；歌手、分类与家庭歌单收为紧凑的同行入口。常唱页使用实际收藏封面与数量；作品草稿以原始录音波形呈现，缺失音频单独标记。未加入虚构推荐、封面或波形。
 
@@ -28,7 +172,7 @@ NAS 登录页取消介绍段落、端口说明、自动登录说明和底部说�
 
 视频、扫码和管理端路由保持原生视图比例；页面过渡只淡入，弹层使用不透明表面，确认对话框不采样其背景。WebView 内部页面仍由 NAS 提供。
 
-## 全局三层设计系统
+### 历史：全局三层设计系统
 
 内容层不使用玻璃：连续歌曲列表、清晰原始封面、深蓝练唱卡、歌词和长文本依靠排版建立结构。搜索、快捷入口和表单使用标准玻璃；顶部工具栏、底部导航、迷你播放器和操作弹层使用悬浮透镜。不会为每一首歌创建滤镜或卡片。
 
@@ -50,7 +194,7 @@ NAS、点歌、常唱、作品、设置、练唱详情、歌手、分类与家�
 
 点歌页保持原搜索控制器、350ms 防抖、筛选请求、收藏调用和练唱入口。推荐卡沿用第一首实际曲目与封面，不预设标题或更换封面。歌曲行连续排布，底部内容空间读取 Scaffold 实际传入的悬浮控件高度；键盘出现时立即隐藏迷你播放器，避免挤压搜索结果。
 
-### 第四轮推荐卡与局部精修
+#### 第四轮推荐卡与局部精修
 
 2026-11-17 保留既有页面结构，将练唱推荐改为更紧凑的音乐 Banner：16dp 内边距、20dp 外圆角；文字与原封面分列并垂直平衡，封面保持方形、12dp 圆角，按可用宽度使用 88 / 96dp。下方白色主按钮的可见高度 40dp、圆角 12dp，触控范围仍至少 48dp。收藏改为无描边的低浓度半透明圆形，视觉直径 40dp、触控范围 48dp，与封面居中对齐；收藏状态淡入和原调用保持不变。两项操作都继承原有按压反馈、禁用条件和动效偏好。深蓝渐变使用静态色阶与克制阴影，没有波浪或常驻发光动画。
 
@@ -60,7 +204,7 @@ NAS、点歌、常唱、作品、设置、练唱详情、歌手、分类与家�
 
 新增回归覆盖浅深色、320 / 390 / 430 / 768dp、100% / 130% / 200% 字号下的长标题、原封面标识和点击区域，验证收藏不会开启播放、按钮边缘点击只触发一次播放打开，以及收藏过渡中启用性能模式。实际设备截图与回归结果保存在 `build/reports/liquid-glass-refinement-v5/`。
 
-### 深色练唱控制台
+#### 深色练唱控制台
 
 2026-11-17 将「正在练唱」升级为深色控制台，使用共享 `AppPalette.stage*` 定义深蓝黑舞台、柔白正文、灰蓝辅助文字及浅蓝选中态。录音仍使用 `AppPalette.recording`。共享 `AppEnvironment` 只提供静态、低亮度的蓝色环境光，原封面环境色继续使用 `ImageFiltered`，没有新增常驻背景动画。
 
@@ -87,7 +231,7 @@ python3 scripts/check-player-console.py \
 
 宿主驱动拒绝模拟器及已有报告目录，通过指定设备的 adb reverse 仅连接测试端口，权限授予只针对 `.e2e`。使用 `adb install -r` 覆盖安装，拒绝时立即停止，不采用 Flutter 的卸载重试；连接现有 VM 并保留测试包。为兼容 vivo 的进程日志限制，仅查找隔离包 UID 的本机监听端口，并验证 Dart VM 协议。系统字号和端口映射在 finally 中恢复，不清空应用数据或删除录音；采样前停止录屏。FrameTiming 使用 `benchmarkLive`，每场景预热后采样 20 秒，由框架与引擎自然调度，避免强制 pump 帧的等待时间干扰。输出真实设备截图、交互视频、逐项验收和三组原生播放 FrameTiming。录音样本保留在隔离包内，不替代真实歌曲音质、蓝牙或中断专项验收。
 
-## 动效策略
+### 历史：动效策略
 
 `AppMotionScope` 是 UI 策略入口，媒体时钟、歌词时间同步、网络请求与录音状态不依赖动画完成。
 
@@ -105,7 +249,7 @@ python3 scripts/check-player-console.py \
 
 共享弹层保留系统取消、返回、拖动和焦点行为。弹层动画控制器在路由退出 Overlay 后释放；中途开启性能模式会立即收束，避免残留遮罩。
 
-## 自动化验证
+### 历史：自动化验证
 
 ```sh
 make check
@@ -132,7 +276,7 @@ flutter --no-version-check test --no-pub test/mobile_redesign_test.dart \
 
 截图写入 `build/reports/mobile-ui-unslop/`、`build/reports/mobile-player-unslop/` 和 `build/reports/liquid-glass/matrix/`。截图测试使用可控封面、波形与数据，不能替代原生设备验收。
 
-## Android profile 验收
+### 历史：Android profile 验收
 
 用户已指定后续实测使用当前连接的物理机。2026-11-17 连接的设备为 vivo V2417A（Android 15，serial `10AE9J2E5Q000FJ`）；实测命令必须显式绑定该物理机，不再默认使用模拟器。使用独立 `.e2e` 包，不覆盖日常应用或触碰其账号、作品与录音。历史模拟器结果保留并明确标注来源。
 
@@ -151,7 +295,7 @@ python3 scripts/check-mobile-karaoke.py --suite profile \
 
 60Hz 验收目标为 UI / Raster 各自 P95 ≤16.7ms、任一线程超预算的帧占比 <1%。报告必须注明设备、分辨率、渲染器、构建模式及采样数。软件渲染模拟器只能用于布局和行为检查；代表性真机数据才可用于 60 FPS 结论。真实麦克风、蓝牙、中断、相机扫码、WebView 登录和系统覆盖安装仍需设备验收。
 
-## NAS 光学材质设备验证
+### 历史：NAS 光学材质设备验证
 
 ```sh
 ORG_GRADLE_PROJECT_singverseE2e=true \
@@ -167,7 +311,7 @@ flutter --no-version-check drive --profile --no-pub --enable-impeller \
 
 设计依据：Apple [Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)；Flutter [Fragment shaders](https://docs.flutter.dev/ui/design/graphics/fragment-shaders)。SDK 能力以仓库当前 Flutter 3.47.5 的 `dart:ui` 源码为准。
 
-## 点歌设计系统 Android 验证
+### 历史：点歌设计系统 Android 验证
 
 ```sh
 ORG_GRADLE_PROJECT_singverseE2e=true \
@@ -182,7 +326,7 @@ flutter --no-version-check drive --profile --no-pub --enable-impeller \
 24 组带播放器截图可通过 `--name 'floating library controls leave' --dart-define=CAPTURE_DESIGN_SYSTEM=true` 生成，位于 `build/reports/singverse-design-system-v3/matrix/`。这些是 Flutter 布局截图；与 Android 原生实拍分开展示，不能用来声称已验证系统原生 Liquid Glass 或真机 60 FPS。
 
 
-## 第三轮点歌材质精修（2026-11-17）
+### 历史：第三轮点歌材质精修（2026-11-17）
 
 保留构图、业务回调及全部播放器条件。标准玻璃采用 3dp 模糊、单层 0.65dp 渐变边缘；卡片收藏采用 2dp 模糊和同一条细轮廓。悬浮导航 / 工具栏采用 4dp 模糊，播放器采用 5dp，均保留窄边缘折射和低强度反射。浮层减弱阴影；着色器抑制透出封面的饱和色，并按亮度保护前景对比度。背景移除波浪与紫色光团，仅保留浅灰白 / 午夜底色和极淡蓝光。收藏图标使用轻量淡入，遵循减少动态效果和性能模式。
 

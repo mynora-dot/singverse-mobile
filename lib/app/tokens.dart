@@ -1,46 +1,51 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppPalette {
-  static const brand = Color(0xFF2463DE);
-  static const recording = Color(0xFFC92547);
-  static const ink = Color(0xFF181D26);
-  static const lightEnvironmentBlue = Color(0xFFC4D8F4);
-  static const darkEnvironmentBlue = Color(0xFF244777);
-  static const lightEnvironmentViolet = Color(0xFFDEDDF1);
-  static const darkEnvironmentViolet = Color(0xFF302D54);
-  static const stage = Color(0xFF10151D);
-  static const stageAccent = Color(0xFF9ABEFF);
-  static const stageOnAccent = Color(0xFF152849);
-  static const stageText = Color(0xFFF0F3F8);
-  static const stageMuted = Color(0xFFABB7C9);
-  static const stageTrack = Color(0xFF343E4F);
+  static const brand = Color(0xFFFA2D55);
+  static const brandText = Color(0xFFD8103C);
+  static const recording = Color(0xFFD8103C);
+  static const ink = Color(0xFF1D1D1F);
+  // Compatibility names; the environment is neutral rather than blue/violet.
+  static const lightEnvironmentBlue = Color(0xFFE5E5EA);
+  static const darkEnvironmentBlue = Color(0xFF2C2C2E);
+  static const lightEnvironmentViolet = Color(0xFFF2F2F7);
+  static const darkEnvironmentViolet = Color(0xFF1C1C1E);
+  static const stage = Color(0xFF131315);
+  static const stageAccent = Color(0xFFFF526F);
+  static const stageOnAccent = Colors.white;
+  static const stageText = Color(0xFFF5F5F7);
+  static const stageMuted = Color(0xFF98989D);
+  static const stageTrack = Color(0xFF353537);
 }
 
 /// Geometry shared by content, standard controls and floating glass.
 abstract final class AppSpace {
   static const double xxs = 4, xs = 8, sm = 12, md = 16;
-  static const double page = 24, section = 28, large = 32;
+  static const double page = 20, section = 24, large = 32;
 }
 
 abstract final class AppRadii {
-  static const double artwork = 12, control = 18, content = 24, floating = 28;
-  static const double featured = 20;
+  static const double artwork = 8, control = 14, content = 14, floating = 24;
+  static const double featured = 16;
 }
 
 abstract final class AppSizes {
-  static const double touch = 48, seniorTouch = 56, field = 60;
-  static const double songArtwork = 52, contentWidth = 720;
+  static const double touch = 44, seniorTouch = 56, field = 52;
+  static const double songArtwork = 48, contentWidth = 720;
 }
+
+/// Semantic context supplied by layout, without reading screen pixels.
+enum GlassBackdropContext { plain, content, media }
 
 /// Optical treatment is independent of geometry and business state. Content
 /// has no material; standard controls scatter light; floating controls lens it.
 @immutable
 class GlassMaterialSpec {
   const GlassMaterialSpec({
-    this.lightTint = .22,
-    this.darkTint = .70,
-    this.blur = 3,
-    this.highlight = .42,
+    this.lightTint = .82,
+    this.darkTint = .84,
+    this.blur = 18,
+    this.highlight = .22,
     this.shadow = 0,
     this.refraction = false,
     this.grouped = false,
@@ -52,68 +57,87 @@ class GlassMaterialSpec {
 
   static const standard = GlassMaterialSpec(grouped: true);
   static const search = GlassMaterialSpec(
-    lightTint: .46,
-    darkTint: .80,
-    highlight: .32,
-    grouped: true,
+    lightTint: .88,
+    darkTint: .90,
+    blur: 24,
+    highlight: .20,
   );
   static const shortcut = GlassMaterialSpec(
-    lightTint: .32,
-    darkTint: .72,
-    highlight: .24,
-    grouped: true,
+    lightTint: 1,
+    darkTint: 1,
+    blur: 0,
+    highlight: 0,
   );
   static const field = GlassMaterialSpec(
-    lightTint: .28,
-    darkTint: .76,
-    highlight: .48,
-    grouped: true,
+    lightTint: .98,
+    darkTint: .98,
+    blur: 0,
+    highlight: .12,
   );
   static const onColor = GlassMaterialSpec(
-    lightTint: .07,
-    darkTint: .07,
-    blur: 2,
-    highlight: .50,
+    lightTint: .18,
+    darkTint: .18,
+    blur: 12,
+    highlight: .30,
   );
   static const stageControl = GlassMaterialSpec(
-    darkTint: .48,
-    blur: 3,
-    highlight: .30,
+    lightTint: .72,
+    darkTint: .76,
+    blur: 24,
+    highlight: .18,
   );
   // Native video cannot be sampled. Its small overlay uses the same optical
   // edge and touch light, with no backdrop filter or displacement.
   static const mediaOverlay = GlassMaterialSpec(
+    lightTint: .76,
     darkTint: .76,
     blur: 0,
-    highlight: .36,
+    highlight: .22,
   );
   static const floating = GlassMaterialSpec(
-    lightTint: .34,
-    darkTint: .78,
-    blur: 4,
-    highlight: .56,
+    lightTint: .55,
+    darkTint: .55,
+    blur: 18,
+    highlight: .30,
     shadow: .40,
     refraction: true,
   );
   // A little more diffusion behind song metadata; the navigation stays clearer.
   static const player = GlassMaterialSpec(
-    lightTint: .50,
-    darkTint: .84,
-    blur: 5,
-    highlight: .60,
-    shadow: .50,
-    refraction: true,
+    lightTint: .90,
+    darkTint: .92,
+    blur: 32,
+    highlight: .24,
+    shadow: .40,
   );
   static const sheet = GlassMaterialSpec(
-    lightTint: .76,
-    darkTint: .91,
-    blur: 12,
-    shadow: 1,
-    refraction: true,
+    lightTint: .98,
+    darkTint: .98,
+    blur: 18,
+    highlight: .12,
+    shadow: .70,
   );
 
   final double lightTint, darkTint, blur, highlight, shadow;
   final bool refraction, grouped;
+
+  GlassMaterialSpec forBackdrop(GlassBackdropContext context) {
+    // Zero-blur materials include native video overlays and stable form fields.
+    if (context == GlassBackdropContext.plain || blur == 0) return this;
+    final content = context == GlassBackdropContext.content;
+    final minLight = content ? .90 : .76;
+    final minDark = content ? .92 : .80;
+    final minBlur = content ? 32.0 : 28.0;
+    return GlassMaterialSpec(
+      lightTint: lightTint < minLight ? minLight : lightTint,
+      darkTint: darkTint < minDark ? minDark : darkTint,
+      blur: blur < minBlur ? minBlur : blur,
+      highlight: highlight,
+      shadow: shadow,
+      refraction: refraction,
+      grouped: grouped,
+    );
+  }
 }
 
 /// Shared optical values; content surfaces remain quiet and readable.
@@ -133,14 +157,14 @@ class AppSurfaces extends ThemeExtension<AppSurfaces> {
   factory AppSurfaces.forBrightness(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     return AppSurfaces(
-      background: dark ? const Color(0xFF0D1119) : const Color(0xFFF6F7F9),
-      group: dark ? const Color(0xFF222935) : const Color(0xFFEBEEF3),
-      glass: dark ? const Color(0xFF202630) : const Color(0xFFFDFEFF),
-      rim: dark ? const Color(0xFFBCCBDD) : Colors.white,
-      shadow: Colors.black.withValues(alpha: dark ? .24 : .07),
-      spotlight: dark ? const Color(0xFF162D50) : const Color(0xFF203F68),
+      background: dark ? Colors.black : Colors.white,
+      group: dark ? const Color(0xFF2C2C2E) : const Color(0xFFECECEF),
+      glass: dark ? const Color(0xFF1C1C1E) : Colors.white,
+      rim: Colors.white,
+      shadow: Colors.black.withValues(alpha: dark ? .26 : .08),
+      spotlight: dark ? const Color(0xFF1C1C1E) : const Color(0xFF26262A),
       onSpotlight: const Color(0xFFFFFFFF),
-      spotlightMuted: const Color(0xFFD1DFF2),
+      spotlightMuted: const Color(0xFFD1D1D6),
     );
   }
 

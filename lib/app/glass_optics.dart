@@ -7,8 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
-/// An environment shared by the form and its floating player. Static light
-/// fields provide something for the lenses to refract, without an idle ticker.
+/// A stable neutral environment shared by content and floating controls.
 class AppEnvironment extends StatelessWidget {
   const AppEnvironment({
     super.key,
@@ -92,7 +91,7 @@ class _EnvironmentPainter extends CustomPainter {
       canvas.restore();
       return;
     }
-    final blue = dark
+    final ambient = dark
         ? AppPalette.darkEnvironmentBlue
         : AppPalette.lightEnvironmentBlue;
     canvas.drawRect(
@@ -102,8 +101,8 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(.9, -.95),
           radius: 1.6,
           colors: [
-            blue.withValues(alpha: dark ? .16 : .12),
-            blue.withValues(alpha: 0),
+            ambient.withValues(alpha: .035),
+            ambient.withValues(alpha: 0),
           ],
         ).createShader(rect),
     );
@@ -235,6 +234,11 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                 pressed = true;
               })
             : null,
+        onPointerMove: full
+            ? (event) {
+                if (pressed) setState(() => point(event.localPosition));
+              }
+            : null,
         onPointerUp: (_) {
           if (pressed) setState(() => pressed = false);
         },
@@ -262,11 +266,11 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                 boxShadow: [
                   if (widget.material.shadow > 0 && !solid)
                     BoxShadow(
-                      color: const Color(0xFF1C3155).withValues(
-                        alpha: (dark ? .20 : .07) * widget.material.shadow,
+                      color: Colors.black.withValues(
+                        alpha: (dark ? .26 : .12) * widget.material.shadow,
                       ),
-                      blurRadius: 14,
-                      offset: const Offset(0, 5),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
                   if (focus > 0)
                     BoxShadow(
@@ -286,12 +290,9 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                     final tint = widget.base.withValues(
                       alpha: solid
                           ? 1
-                          : (dark
-                                ? widget.material.darkTint *
-                                      (floating ? .095 : 1)
-                                : (floating
-                                      ? widget.material.lightTint * .345
-                                      : widget.material.lightTint)),
+                          : dark
+                          ? widget.material.darkTint
+                          : widget.material.lightTint,
                     );
                     final surface = CustomPaint(
                       foregroundPainter: _LensRimPainter(
@@ -301,8 +302,9 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                         field: widget.field,
                         rim: widget.rim,
                         primary: primary,
-                        outline: Theme.of(context).colorScheme.onSurfaceVariant
-                            .withValues(alpha: .65),
+                        outline: MediaQuery.highContrastOf(context)
+                            ? Theme.of(context).colorScheme.onSurfaceVariant
+                            : Theme.of(context).colorScheme.outlineVariant,
                         focus: focus,
                         touch: touch,
                         light: light,
@@ -319,18 +321,15 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                                   colors: [
                                     Color.alphaBlend(
                                       widget.rim.withValues(
-                                        alpha: dark
-                                            ? .025
-                                            : (widget.field
-                                                  ? .04 + touch * .025
-                                                  : .10 + touch * .045),
+                                        alpha:
+                                            (dark ? .012 : .025) + touch * .02,
                                       ),
                                       tint,
                                     ),
                                     tint,
                                     Color.alphaBlend(
                                       widget.rim.withValues(
-                                        alpha: dark ? .01 : .025,
+                                        alpha: dark ? .005 : .012,
                                       ),
                                       tint,
                                     ),
@@ -341,7 +340,7 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                         child: child,
                       ),
                     );
-                    if (solid || (widget.field && widget.material.blur == 0)) {
+                    if (solid || widget.material.blur == 0) {
                       return surface;
                     }
                     if (refracting) {
@@ -358,9 +357,8 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                       sigmaX: widget.material.blur,
                       sigmaY: widget.material.blur,
                     );
-                    // Keep the same readable transmission when shader image
-                    // filters are unavailable. A color matrix compresses local
-                    // contrast without increasing blur or tinting foreground.
+                    // Match the shader's neutral contrast compression when
+                    // image-filter shaders are unavailable.
                     final filter = floating
                         ? ui.ImageFilter.compose(
                             outer: dark ? _darkTone : _lightTone,
@@ -386,8 +384,8 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
 ui.ColorFilter _lensTone(bool dark) {
   const luminance = [.2126, .7152, .0722];
   final chroma = dark ? .10 : .08;
-  final range = dark ? .055 : .075;
-  final base = dark ? [.095, .110, .130] : [.895, .898, .903];
+  final range = dark ? .14 : .27;
+  final base = dark ? [.06, .06, .06] : [.68, .68, .68];
   return ui.ColorFilter.matrix([
     for (var row = 0; row < 3; row++) ...[
       for (var column = 0; column < 3; column++)
@@ -541,41 +539,23 @@ class _LensRimPainter extends CustomPainter {
       );
       return;
     }
-    // Standard controls get one hairline. Only floating glass has a faint
-    // inset reflection, so small controls never acquire concentric outlines.
+    // One local reflection replaces full bright rims and concentric outlines.
     paint
-      ..strokeWidth = field ? .65 : .85
-      ..shader = LinearGradient(
-        begin: light,
-        end: Alignment.bottomRight,
+      ..strokeWidth = field ? .6 : .65
+      ..shader = RadialGradient(
+        center: light,
+        radius: 1.1,
         colors: [
           reflection(
             field
-                ? (dark ? .24 : .64)
-                : (dark ? .38 + touch * .08 : .80 + touch * .10),
+                ? (dark ? .24 : .60)
+                : (dark ? .40 + touch * .08 : .76 + touch * .08),
           ),
-          reflection(.06),
-          Colors.black.withValues(alpha: (dark ? .07 : .035) * highlight),
-          reflection(field ? (dark ? .10 : .22) : (dark ? .22 : .46)),
+          reflection(0),
         ],
-        stops: const [0, .32, .68, 1],
+        stops: const [0, .75],
       ).createShader(rect);
     canvas.drawRRect(shape, paint);
-    if (!field) {
-      paint
-        ..strokeWidth = 1.5
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            reflection(dark ? .04 : .10),
-            reflection(0),
-            reflection(dark ? .025 : .035),
-          ],
-          stops: const [0, .30, 1],
-        ).createShader(rect);
-      canvas.drawRRect(shape.deflate(1.4), paint);
-    }
     if (focus > 0) {
       paint
         ..strokeWidth = 1.4

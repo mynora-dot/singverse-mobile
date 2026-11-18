@@ -128,6 +128,35 @@ class _SoundValue extends StatelessWidget {
   );
 }
 
+/// Equal-width actions at normal text sizes, with room to read at large sizes.
+class _SoundActions extends StatelessWidget {
+  const _SoundActions({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.textScalerOf(context).scale(14) > 21) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            children[i],
+          ],
+        ],
+      );
+    }
+    return Row(
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(child: children[i]),
+        ],
+      ],
+    );
+  }
+}
+
 Future<void> singingSettings(
   BuildContext context,
   AppState state,
@@ -138,7 +167,7 @@ Future<void> singingSettings(
   builder: (context) => ListenableBuilder(
     listenable: state.performance,
     builder: (context, _) => SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -272,41 +301,57 @@ Future<void> audioSettings(
         if (yes == true) await state.command('role', role);
       });
       return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
             const SheetHeader('音轨与播放设置'),
-            Text(state.taking ? '录音中不能切换音轨或声道。' : '先试听：有人唱的是原唱，只有音乐的是伴奏。'),
+            Text(
+              state.taking ? '录音中不能切换音轨或声道。' : '先试听，再选择原唱或伴奏。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 12),
             if (audio.isEmpty) const Notice('歌曲准备好后，会在这里显示音轨。'),
             for (var i = 0; i < audio.length; i++)
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                minTileHeight: state.senior ? 76 : 64,
-                selected: audio[i]['selected'] == true,
-                selectedTileColor: Theme.of(context)
-                    .colorScheme
-                    .primaryContainer,
-                selectedColor: Theme.of(context).colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  key: ValueKey('audio-track-${audio[i]['id']}'),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  minTileHeight: state.senior ? 80 : 68,
+                  selected: audio[i]['selected'] == true,
+                  selectedTileColor: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer,
+                  selectedColor: Theme.of(context).colorScheme.primary,
+                  tileColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: audio[i]['selected'] == true
+                          ? Theme.of(context).colorScheme.primary
+                                .withValues(alpha: .28)
+                          : Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
+                  leading: Icon(
+                    audio[i]['selected'] == true
+                        ? Icons.check_circle_rounded
+                        : Icons.circle_outlined,
+                    size: 20,
+                  ),
+                  title: Text('音轨 ${i + 1}'),
+                  subtitle: Text(audio[i]['label'] as String? ?? '未命名音轨'),
+                  onTap: state.taking
+                      ? null
+                      : () => uiTask(
+                          context,
+                          () => state.command('track', audio[i]['id']),
+                        ),
                 ),
-                leading: Icon(
-                  audio[i]['selected'] == true
-                      ? Icons.check_circle_rounded
-                      : Icons.circle_outlined,
-                  size: 20,
-                ),
-                title: Text('音轨 ${i + 1}'),
-                subtitle: Text(audio[i]['label'] as String? ?? '未命名音轨'),
-                onTap: state.taking
-                    ? null
-                    : () => uiTask(
-                        context,
-                        () => state.command('track', audio[i]['id']),
-                      ),
               ),
             if (audio.isNotEmpty)
               TextButton.icon(
@@ -326,8 +371,8 @@ Future<void> audioSettings(
             if (stereo) ...[
               const SizedBox(height: 12),
               const Text('声道'),
-              Wrap(
-                spacing: 8,
+              const SizedBox(height: 8),
+              _SoundActions(
                 children: [
                   for (final item in [
                     ('STEREO', '立体声'),
@@ -335,6 +380,13 @@ Future<void> audioSettings(
                     ('RIGHT', '右声道'),
                   ])
                     ChoiceChip(
+                      key: ValueKey('audio-channel-${item.$1}'),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      showCheckmark: false,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 12,
+                      ),
                       label: Text(item.$2),
                       selected: state.channelMode == item.$1,
                       onSelected: state.taking
@@ -347,9 +399,9 @@ Future<void> audioSettings(
                 ],
               ),
             ],
-            if (audio.length > 1 || stereo)
-              Wrap(
-                spacing: 8,
+            if (audio.length > 1 || stereo) ...[
+              const SizedBox(height: 16),
+              _SoundActions(
                 children: [
                   OutlinedButton(
                     onPressed: state.taking ? null : () => mark('backing'),
@@ -361,6 +413,7 @@ Future<void> audioSettings(
                   ),
                 ],
               ),
+            ],
             const SizedBox(height: 16),
             Text(
               '声音输出：${state.outputRoute}',

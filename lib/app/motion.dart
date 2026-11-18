@@ -72,8 +72,8 @@ class AppSpringCurve extends Curve {
 
 abstract final class AppMotion {
   static const press = Duration(milliseconds: 100);
-  static const release = Duration(milliseconds: 220);
-  static const navigation = Duration(milliseconds: 340);
+  static const release = Duration(milliseconds: 260);
+  static const navigation = Duration(milliseconds: 360);
   static const page = Duration(milliseconds: 320);
   static const sheet = Duration(milliseconds: 360);
   static const expand = Duration(milliseconds: 280);

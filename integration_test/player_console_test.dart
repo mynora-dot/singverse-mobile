@@ -10,10 +10,13 @@ import 'package:singverse_mobile/core/models.dart';
 import 'package:singverse_mobile/features/player/player_page.dart';
 import 'package:singverse_mobile/main.dart' as app;
 
+import 'phone_failure_reporter.dart';
+
 /// Real NAS transport, Media3, AndroidView, AudioRecord and local AAC rendering.
 /// Run only in the isolated .e2e package, against the disposable loopback NAS.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  installPhoneFailureReporter(binding);
   testWidgets('physical player console media controls and microphone', (
     tester,
   ) async {
@@ -260,6 +263,20 @@ void main() {
         'restart plays from beginning',
       );
       checks.add('restart');
+      final committedRange = (state.rangeA, state.rangeB);
+      await text('选段');
+      await slider('player-range-start', 10000);
+      await slider('player-range-end', 50000);
+      expect((state.rangeA, state.rangeB), committedRange);
+      await shot('05-range-draft');
+      await tap(find.byTooltip('取消'));
+      expect((state.rangeA, state.rangeB), committedRange);
+      await text('选段');
+      await slider('player-range-start', 12000);
+      await tester.binding.handlePopRoute();
+      await frames();
+      expect((state.rangeA, state.rangeB), committedRange);
+      checks.add('range-draft-cancel-and-back');
       await text('选段');
       await text('当前位置设为起点');
       await text('循环练唱这一段');
@@ -274,6 +291,18 @@ void main() {
       await tester.binding.handlePopRoute();
       await frames();
       checks.add('more-dismiss');
+      await tester.drag(find.text('正在练唱'), const Offset(0, 150));
+      await frames();
+      expect(find.byType(PlayerPage), findsNothing);
+      expect(state.current?.id, video.id);
+      expect(state.isPlaying, isTrue);
+      await tester.drag(
+        find.byKey(const Key('mini-player')),
+        const Offset(0, -110),
+      );
+      await frames();
+      expect(find.byType(PlayerPage), findsOneWidget);
+      checks.add('player-drag-collapse-and-mini-expand');
       await measure('default-native-video');
       await state.setPerformanceMode(true);
       await frames();

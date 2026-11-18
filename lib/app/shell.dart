@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import '../features/updates/update_page.dart';
 
@@ -25,7 +26,268 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int tab = 0;
+  final collapsed = ValueNotifier(false);
   final backdrop = BackdropKey();
+
+  @override
+  void dispose() {
+    collapsed.dispose();
+    super.dispose();
+  }
+
+  bool trackScroll(ScrollNotification notification) {
+    if (notification.depth != 0 ||
+        notification.metrics.axis != Axis.vertical ||
+        notification is! ScrollUpdateNotification) {
+      return false;
+    }
+    final state = widget.state;
+    final offset = notification.metrics.pixels;
+    final delta = notification.scrollDelta ?? 0;
+    final next =
+        !state.senior &&
+        !state.taking &&
+        MediaQuery.textScalerOf(context).scale(16) <= 21 &&
+        offset >= 60 &&
+        (delta < -4
+            ? false
+            : offset > 120 && delta > 3
+            ? true
+            : collapsed.value);
+    collapsed.value = next;
+    return false;
+  }
+
+  void selectTab(int value) {
+    if (tab == value) return;
+    final state = widget.state;
+    if (!state.taking &&
+        AppMotionScope.levelOf(context) == AppMotionLevel.full) {
+      unawaited(HapticFeedback.selectionClick());
+    }
+    collapsed.value = false;
+    setState(() => tab = value);
+    if (value == 1) unawaited(state.refreshPersonal());
+  }
+
+  Widget tools(AppState state) => GlassToolbar(
+    state: state,
+    children: [
+      IconButton(
+        key: const Key('open-tv'),
+        tooltip: '扫一扫',
+        onPressed: () => openTv(context, state),
+        icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+      ),
+      IconButton(
+        key: const Key('open-settings'),
+        tooltip: '设置',
+        onPressed: () => openSettings(context, state),
+        icon: const Icon(Icons.person_outline_rounded, size: 20),
+      ),
+    ],
+  );
+
+  double navigationHeight(BuildContext context, AppState state) => math.max(
+    state.senior ? 72 : 56,
+    (state.senior ? 26 : 21) +
+        MediaQuery.textScalerOf(context).scale(state.senior ? 17 : 12) * 1.4 +
+        10,
+  );
+
+  Widget navigation(
+    BuildContext context,
+    AppState state,
+    int drafts,
+    bool compact,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final height = navigationHeight(context, state);
+    return Glass(
+      state: state,
+      radius: AppRadii.floating,
+      variant: GlassVariant.regular,
+      backdropContext: GlassBackdropContext.content,
+      child: SizedBox(
+        height: height,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: AnimatedAlign(
+                  alignment: Alignment(tab - 1.0, 0),
+                  duration:
+                      AppMotionScope.levelOf(context) == AppMotionLevel.full
+                      ? AppMotion.navigation
+                      : Duration.zero,
+                  curve: AppMotion.softSpring,
+                  child: FractionallySizedBox(
+                    widthFactor: 1 / 3,
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: scheme.primary.withValues(
+                          alpha: Theme.of(context).brightness == Brightness.dark
+                              ? .16
+                              : .09,
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadii.floating),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  for (final entry in const [
+                    (0, Icons.library_music_outlined, '点歌', 'nav-songs'),
+                    (1, Icons.favorite_outline_rounded, '常唱', 'nav-frequent'),
+                    (2, Icons.graphic_eq_rounded, '作品', 'nav-works'),
+                  ])
+                    Expanded(
+                      child: Semantics(
+                        selected: tab == entry.$1,
+                        label: compact ? entry.$3 : null,
+                        child: TextButton(
+                          key: Key(entry.$4),
+                          style: TextButton.styleFrom(
+                            minimumSize: Size(44, height - 8),
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor: tab == entry.$1
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                          ),
+                          onPressed: () => selectTab(entry.$1),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Badge(
+                                isLabelVisible: entry.$1 == 2 && drafts > 0,
+                                backgroundColor: scheme.primaryContainer,
+                                textColor: scheme.onPrimaryContainer,
+                                label: Text('$drafts'),
+                                child: Icon(
+                                  entry.$2,
+                                  size: state.senior ? 26 : 21,
+                                ),
+                              ),
+                              if (!compact) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  entry.$3,
+                                  style: TextStyle(
+                                    fontSize: state.senior ? 17 : 12,
+                                    fontWeight: tab == entry.$1
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget dock(
+    BuildContext context,
+    AppState state,
+    int drafts,
+    bool collapsed,
+  ) {
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+      return const SizedBox.shrink();
+    }
+    final compact =
+        collapsed &&
+        !state.senior &&
+        !state.taking &&
+        MediaQuery.textScalerOf(context).scale(16) <= 21;
+    final hasPlayer = state.current != null;
+    final background = Theme.of(context).scaffoldBackgroundColor;
+    final safe = MediaQuery.viewPaddingOf(context).bottom;
+    final height = navigationHeight(context, state);
+    final controls = compact && hasPlayer
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              SizedBox(
+                width: 144,
+                child: navigation(context, state, drafts, true),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: MiniPlayer(state: state, inset: false, compact: true),
+              ),
+            ],
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasPlayer) ...[
+                MiniPlayer(state: state, inset: false),
+                const SizedBox(height: 8),
+              ],
+              SizedBox(
+                width: compact ? 144 : double.infinity,
+                child: navigation(context, state, drafts, compact),
+              ),
+            ],
+          );
+    return ContentWidth(
+      child: SizedBox(
+        height:
+            (compact
+                ? height
+                : height +
+                      (hasPlayer
+                          ? MiniPlayer.heightOf(context, state) + 8
+                          : 0)) +
+            safe +
+            8,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: -40,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0, .36, .72, 1],
+                      colors: [
+                        background.withValues(alpha: 0),
+                        background.withValues(alpha: .82),
+                        background,
+                        background,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(left: 12, right: 12, bottom: safe + 8, child: controls),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -35,282 +297,78 @@ class _AppShellState extends State<AppShell> {
       final drafts = state.visibleWorks
           .where((w) => w['status'] != 'SAVED' && w['status'] != 'MISSING')
           .length;
-      final largeToolbar = MediaQuery.textScalerOf(context).scale(16) > 22;
+      final homeHeader = tab == 0 && state.authenticated && !state.senior;
       final shell = PopScope(
         canPop: tab == 0,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) setState(() => tab = 0);
+          if (!didPop) selectTab(0);
         },
         child: Scaffold(
           extendBody: true,
           backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            titleSpacing: AppSpace.page,
-            backgroundColor: Colors.transparent,
-            systemOverlayStyle: Theme.of(context).brightness == Brightness.dark
-                ? SystemUiOverlayStyle.light
-                : SystemUiOverlayStyle.dark,
-            toolbarHeight: state.senior
-                ? (MediaQuery.textScalerOf(context).scale(34) * 1.18 + 24)
-                      .clamp(76, 156)
-                : (MediaQuery.textScalerOf(context).scale(32) * 1.18 +
-                          MediaQuery.textScalerOf(context).scale(12) * 1.3 +
-                          28)
-                      .clamp(88, 156),
-            automaticallyImplyLeading: false,
-            title: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (!state.senior) ...[
-                  Text(
-                    'SingVerse',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+          appBar: homeHeader
+              ? null
+              : AppBar(
+                  automaticallyImplyLeading: false,
+                  titleSpacing: 20,
+                  toolbarHeight: state.senior ? 64 : 48,
+                  title: Text(
+                    const ['点歌', '常唱', '作品'][tab],
+                    style: state.senior
+                        ? Theme.of(context).textTheme.headlineSmall
+                        : null,
                   ),
-                  const SizedBox(height: 4),
-                ],
-                Text(
-                  const ['点歌', '常唱', '作品'][tab],
-                  style: Theme.of(context).textTheme.headlineLarge,
+                  backgroundColor: Colors.transparent,
+                  systemOverlayStyle:
+                      Theme.of(context).brightness == Brightness.dark
+                      ? SystemUiOverlayStyle.light
+                      : SystemUiOverlayStyle.dark,
+                  actions: [tools(state), const SizedBox(width: 16)],
                 ),
-              ],
-            ),
-            actions: [
-              if (!state.senior)
-                Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: GlassToolbar(
-                    state: state,
-                    children: [
-                      IconButton(
-                        key: const Key('open-tv'),
-                        tooltip: '扫一扫',
-                        onPressed: () => openTv(context, state),
-                        icon: const Icon(
-                          Icons.qr_code_scanner_rounded,
-                          size: 21,
-                        ),
-                      ),
-                      IconButton(
-                        key: const Key('open-settings'),
-                        tooltip: '设置',
-                        onPressed: () => openSettings(context, state),
-                        icon: const Icon(Icons.settings_outlined, size: 21),
-                      ),
-                    ],
-                  ),
-                ),
-              if (state.senior && largeToolbar)
-                TextButton(
-                  key: const Key('open-tv'),
-                  style: TextButton.styleFrom(
-                    textStyle: Theme.of(context).textTheme.labelLarge
-                        ?.copyWith(inherit: true, fontSize: 18),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  onPressed: () => openTv(context, state),
-                  child: const Text('扫码'),
-                )
-              else if (state.senior)
-                TextButton.icon(
-                  key: const Key('open-tv'),
-                  onPressed: () => openTv(context, state),
-                  icon: const Icon(Icons.qr_code_scanner_rounded),
-                  label: const Text('扫码'),
-                ),
-              if (state.senior && largeToolbar)
-                TextButton(
-                  key: const Key('open-settings'),
-                  style: TextButton.styleFrom(
-                    textStyle: Theme.of(context).textTheme.labelLarge
-                        ?.copyWith(inherit: true, fontSize: 18),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  onPressed: () => openSettings(context, state),
-                  child: const Text('设置'),
-                )
-              else if (state.senior)
-                TextButton.icon(
-                  key: const Key('open-settings'),
-                  onPressed: () => openSettings(context, state),
-                  icon: const Icon(Icons.settings_outlined),
-                  label: const Text('设置'),
-                ),
-              const SizedBox(width: 8),
-            ],
-          ),
           body: SafeArea(
-            top: false,
+            top: homeHeader,
             bottom: false,
             child: ContentWidth(
-              child: IndexedStack(
-                index: tab,
-                children: [
-                  TickerMode(
-                    enabled: tab == 0,
-                    child: MotionTabPane(
-                      active: tab == 0,
-                      child: state.authenticated
-                          ? SongsPage(
-                              key: ValueKey(state.instanceId),
-                              state: state,
-                              embedded: true,
-                              showBrowse: true,
-                            )
-                          : _Disconnected(
-                              state: state,
-                              onOpenWorks: () => setState(() => tab = 2),
-                            ),
-                    ),
-                  ),
-                  TickerMode(
-                    enabled: tab == 1,
-                    child: MotionTabPane(
-                      active: tab == 1,
-                      child: FrequentPage(
-                        key: ValueKey('personal:${state.instanceId}'),
-                        state: state,
-                      ),
-                    ),
-                  ),
-                  TickerMode(
-                    enabled: tab == 2,
-                    child: MotionTabPane(
-                      active: tab == 2,
-                      child: WorksPage(state: state, embedded: true),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          bottomNavigationBar: SafeArea(
-            top: false,
-            child: ContentWidth(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpace.page,
-                  0,
-                  AppSpace.page,
-                  AppSpace.sm,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: trackScroll,
+                child: IndexedStack(
+                  index: tab,
                   children: [
-                    MotionVisibility(
-                      visible:
-                          state.current != null &&
-                          MediaQuery.viewInsetsOf(context).bottom == 0,
-                      immediate: MediaQuery.viewInsetsOf(context).bottom > 0,
-                      child: MiniPlayer(state: state, inset: false),
-                    ),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: state.senior ? AppSizes.contentWidth : 360,
+                    TickerMode(
+                      enabled: tab == 0,
+                      child: MotionTabPane(
+                        active: tab == 0,
+                        child: state.authenticated
+                            ? SongsPage(
+                                key: ValueKey(state.instanceId),
+                                state: state,
+                                embedded: true,
+                                showBrowse: true,
+                                headerActions: state.senior
+                                    ? null
+                                    : tools(state),
+                              )
+                            : _Disconnected(
+                                state: state,
+                                onOpenWorks: () => selectTab(2),
+                              ),
                       ),
-                      child: Glass(
-                        state: state,
-                        radius: AppRadii.floating,
-                        variant: GlassVariant.liquid,
-                        child: Padding(
-                          padding: const EdgeInsets.all(3),
-                          child: Row(
-                            children: [
-                              for (final entry in [
-                                (
-                                  0,
-                                  Icons.library_music_outlined,
-                                  '点歌',
-                                  'nav-songs',
-                                ),
-                                (
-                                  1,
-                                  Icons.favorite_outline_rounded,
-                                  '常唱',
-                                  'nav-frequent',
-                                ),
-                                (
-                                  2,
-                                  Icons.graphic_eq_rounded,
-                                  '作品',
-                                  'nav-works',
-                                ),
-                              ])
-                                Expanded(
-                                  child: Semantics(
-                                    selected: tab == entry.$1,
-                                    child: TextButton(
-                                      key: Key(entry.$4),
-                                      style: TextButton.styleFrom(
-                                        minimumSize: Size(
-                                          56,
-                                          state.senior ? 64 : 48,
-                                        ),
-                                        foregroundColor: tab == entry.$1
-                                            ? Theme.of(context)
-                                                  .colorScheme
-                                                  .primary
-                                            : Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                        padding: EdgeInsets.symmetric(
-                                          vertical: state.senior ? 6 : 4,
-                                        ),
-                                      ),
-                                      onPressed: () {
-                                        if (tab != entry.$1 &&
-                                            !state.taking &&
-                                            AppMotionScope.levelOf(context) ==
-                                                AppMotionLevel.full) {
-                                          unawaited(
-                                            HapticFeedback.selectionClick(),
-                                          );
-                                        }
-                                        setState(() => tab = entry.$1);
-                                        if (entry.$1 == 1) {
-                                          unawaited(state.refreshPersonal());
-                                        }
-                                      },
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Badge(
-                                            isLabelVisible:
-                                                entry.$1 == 2 && drafts > 0,
-                                            backgroundColor: Theme.of(context)
-                                                .colorScheme
-                                                .secondaryContainer,
-                                            textColor: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                            label: Text('$drafts'),
-                                            child: Icon(
-                                              entry.$2,
-                                              size: state.senior ? 28 : 24,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            entry.$3,
-                                            style: TextStyle(
-                                              fontSize: state.senior ? 18 : 12,
-                                              fontWeight: tab == entry.$1
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w400,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                    ),
+                    TickerMode(
+                      enabled: tab == 1,
+                      child: MotionTabPane(
+                        active: tab == 1,
+                        child: FrequentPage(
+                          key: ValueKey('personal:${state.instanceId}'),
+                          state: state,
                         ),
+                      ),
+                    ),
+                    TickerMode(
+                      enabled: tab == 2,
+                      child: MotionTabPane(
+                        active: tab == 2,
+                        child: WorksPage(state: state, embedded: true),
                       ),
                     ),
                   ],
@@ -318,10 +376,12 @@ class _AppShellState extends State<AppShell> {
               ),
             ),
           ),
+          bottomNavigationBar: ValueListenableBuilder<bool>(
+            valueListenable: collapsed,
+            builder: (context, value, _) => dock(context, state, drafts, value),
+          ),
         ),
       );
-      // Standard controls share only non-overlapping clips. Optical floating
-      // layers own their filter because each samples a different background.
       return AppEnvironment(
         child: BackdropGroup(backdropKey: backdrop, child: shell),
       );
@@ -337,12 +397,7 @@ class _Disconnected extends StatelessWidget {
   Widget build(BuildContext context) {
     final material = AppSurfaces.of(context);
     return ListView(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        16,
-        20,
-        32 + MediaQuery.paddingOf(context).bottom,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
         if (state.error != null) Notice(state.error!),
         Container(
@@ -413,6 +468,10 @@ class _Disconnected extends StatelessWidget {
           icon: const Icon(Icons.headphones_rounded, size: 21),
           label: const Text('查看本机作品'),
         ),
+        Builder(
+          builder: (context) =>
+              SizedBox(height: MediaQuery.paddingOf(context).bottom),
+        ),
       ],
     );
   }
@@ -428,9 +487,11 @@ class FrequentPage extends StatefulWidget {
 class _FrequentPageState extends State<FrequentPage> {
   bool history = false;
   final search = TextEditingController();
+  final searchFocus = FocusNode();
   @override
   void dispose() {
     search.dispose();
+    searchFocus.dispose();
     super.dispose();
   }
 
@@ -480,20 +541,20 @@ class _FrequentPageState extends State<FrequentPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(
+                GlassSearchField(
+                  state: state,
                   controller: search,
+                  focusNode: searchFocus,
                   onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    hintText: history ? '搜索最近练唱' : '搜索收藏歌曲',
-                    suffixIcon: search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: '清除搜索',
-                            onPressed: () => setState(search.clear),
-                            icon: const Icon(Icons.cancel_rounded),
-                          ),
-                  ),
+                  onSubmitted: (_) => searchFocus.unfocus(),
+                  hintText: history ? '搜索最近练唱' : '搜索收藏歌曲',
+                  suffix: search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清除搜索',
+                          onPressed: () => setState(search.clear),
+                          icon: const Icon(Icons.cancel_rounded),
+                        ),
                 ),
                 const SizedBox(height: 12),
                 AppSegments<bool>(
@@ -582,15 +643,7 @@ class _FrequentPageState extends State<FrequentPage> {
             ),
           ),
         ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            32 + MediaQuery.paddingOf(context).bottom,
-          ),
-          sliver: SliverToBoxAdapter(child: Column(children: [])),
-        ),
+        const SliverBottomSpace(),
       ],
     );
   }
@@ -718,12 +771,12 @@ class SettingsPage extends StatelessWidget {
     builder: (context, _) {
       final scheme = Theme.of(context).colorScheme;
       Widget group(String title, List<Widget> children) => Padding(
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.only(bottom: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
               child: Text(
                 title,
                 style: Theme.of(context).textTheme.bodySmall
@@ -744,14 +797,10 @@ class SettingsPage extends StatelessWidget {
           ],
         ),
       );
-      Widget icon(IconData data) => Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: scheme.primaryContainer,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(data, size: 20, color: scheme.primary),
+      Widget icon(IconData data) => SizedBox(
+        width: 28,
+        height: 32,
+        child: Icon(data, size: 20, color: scheme.onSurfaceVariant),
       );
       return Scaffold(
         appBar: AppToolbar(title: const Text('设置')),
@@ -806,9 +855,9 @@ class SettingsPage extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   child: AppSegments<ThemeMode>(
                     values: const [
-                      (ThemeMode.system, '跟随系统'),
                       (ThemeMode.light, '浅色'),
                       (ThemeMode.dark, '深色'),
+                      (ThemeMode.system, '跟随系统'),
                     ],
                     selected: state.themeMode,
                     senior: state.senior,
@@ -817,12 +866,19 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
                 SwitchListTile(
+                  key: const Key('reduce-transparency'),
                   value: state.reduceTransparency,
                   onChanged: (value) =>
                       uiTask(context, () => state.setTransparency(value)),
                   title: const Text('减少透明效果'),
                   subtitle: Text(
-                    state.senior ? '长辈模式始终使用清晰的不透明背景' : '提高导航和播放器的背景清晰度',
+                    state.reduceTransparency
+                        ? '已开启，使用清晰的不透明背景'
+                        : state.senior
+                        ? '已关闭，长辈模式仍使用实底'
+                        : state.performanceMode
+                        ? '已关闭，性能模式仍使用实底'
+                        : '已关闭，使用常规透明效果',
                   ),
                 ),
               ]),
@@ -836,7 +892,7 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ),
                   title: Text(state.senior ? '长辈模式已开启' : '长辈模式'),
-                  subtitle: const Text('放大文字和按钮，主导航位置保持不变'),
+                  subtitle: const Text('放大文字和按钮'),
                 ),
                 SwitchListTile(
                   key: const Key('performance-mode'),
@@ -844,7 +900,9 @@ class SettingsPage extends StatelessWidget {
                   onChanged: (value) =>
                       uiTask(context, () => state.setPerformanceMode(value)),
                   title: const Text('性能模式'),
-                  subtitle: const Text('关闭界面动效和实时模糊，让较早的设备也能流畅使用'),
+                  subtitle: Text(
+                    state.performanceMode ? '已开启，停用动效与实时模糊' : '已关闭，界面效果遵循外观设置',
+                  ),
                 ),
               ]),
               Text(

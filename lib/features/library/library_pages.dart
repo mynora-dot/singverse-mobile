@@ -40,6 +40,7 @@ class SongsPage extends StatefulWidget {
     this.embedded = false,
     this.showBrowse = false,
     this.browseItem,
+    this.headerActions,
   });
   final AppState state;
   final String title;
@@ -47,6 +48,7 @@ class SongsPage extends StatefulWidget {
   final List<String> tags;
   final bool embedded, showBrowse;
   final Json? browseItem;
+  final Widget? headerActions;
   @override
   State<SongsPage> createState() => _SongsPageState();
 }
@@ -59,6 +61,8 @@ class _SongsPageState extends State<SongsPage> {
   );
   final search = TextEditingController();
   final searchFocus = FocusNode();
+  final filtersFocus = FocusNode(debugLabel: '筛选歌曲');
+  final scroll = ScrollController();
   final tagNames = <String, String>{};
   Timer? debounce;
   @override
@@ -75,6 +79,8 @@ class _SongsPageState extends State<SongsPage> {
     debounce?.cancel();
     searchFocus.removeListener(searchChanged);
     searchFocus.dispose();
+    filtersFocus.dispose();
+    scroll.dispose();
     search.dispose();
     query.dispose();
     super.dispose();
@@ -92,115 +98,28 @@ class _SongsPageState extends State<SongsPage> {
     for (final tag in tags) {
       tagNames[tag['id'] as String] = tag['name'] as String;
     }
-    final selected = {...query.tagIds};
     if (!mounted) return;
+    searchFocus.unfocus();
     final result = await showAppSheet<List<String>>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, update) => ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * .78,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpace.page,
-              AppSpace.xs,
-              AppSpace.page,
-              AppSpace.md,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '筛选歌曲',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('取消'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      if (tags.isEmpty) const Notice('曲库还没有可用分类。'),
-                      for (final dimension in {
-                        ...tagDimensions.keys,
-                        ...tags.map(
-                          (t) => t['dimension'] as String? ?? 'CUSTOM',
-                        ),
-                      })
-                        if (tags.any(
-                          (t) => (t['dimension'] ?? 'CUSTOM') == dimension,
-                        )) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16, bottom: 8),
-                            child: Text(
-                              tagDimensions[dimension] ?? dimension,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: [
-                              for (final tag in tags.where(
-                                (t) =>
-                                    (t['dimension'] ?? 'CUSTOM') == dimension,
-                              ))
-                                FilterChip(
-                                  label: Text(
-                                    '${tag['name']} · ${tag['count']}',
-                                  ),
-                                  selected: selected.contains(tag['id']),
-                                  onSelected: (yes) => update(() {
-                                    yes
-                                        ? selected.add(tag['id'] as String)
-                                        : selected.remove(tag['id']);
-                                  }),
-                                ),
-                            ],
-                          ),
-                        ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    TextButton(
-                      onPressed: () => update(selected.clear),
-                      child: const Text('清除全部'),
-                    ),
-                    FilledButton(
-                      onPressed: () =>
-                          Navigator.pop(context, selected.toList()),
-                      child: Text('应用筛选 (${selected.length})'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => _SongFilters(
+        tags: tags,
+        selected: query.tagIds,
+        senior: widget.state.senior,
       ),
     );
-    if (result != null && mounted) {
+    if (!mounted) return;
+    if (result != null) {
       query.tagIds = result;
+      if (scroll.hasClients) scroll.jumpTo(0);
       await query.load();
+    }
+    if (mounted &&
+        ModalRoute.of(context)?.isCurrent == true &&
+        filtersFocus.context != null) {
+      filtersFocus.requestFocus();
     }
   });
 
@@ -209,6 +128,7 @@ class _SongsPageState extends State<SongsPage> {
     listenable: query,
     builder: (context, _) {
       final state = widget.state;
+      final pageInset = MediaQuery.sizeOf(context).width < 375 ? 16.0 : 20.0;
       final searching =
           searchFocus.hasFocus ||
           search.text.isNotEmpty ||
@@ -217,63 +137,86 @@ class _SongsPageState extends State<SongsPage> {
           widget.showBrowse &&
           !searching &&
           !state.senior &&
-          MediaQuery.sizeOf(context).width >= 360 &&
           MediaQuery.textScalerOf(context).scale(16) <= 21 &&
           query.items.isNotEmpty;
       final rows = spotlight ? query.items.skip(1).toList() : query.items;
+      final pinnedSearch = widget.embedded && widget.headerActions != null;
+      final searchHeader = Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: _SongSearchField(
+              state: state,
+              fieldKey: const ValueKey('song-search'),
+              controller: search,
+              focusNode: searchFocus,
+              suffix: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (search.text.isNotEmpty)
+                    IconButton(
+                      tooltip: '清除搜索',
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size.square(44),
+                        fixedSize: const Size.square(44),
+                        padding: EdgeInsets.zero,
+                      ),
+                      onPressed: () {
+                        debounce?.cancel();
+                        search.clear();
+                        query.query = '';
+                        query.load();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.cancel_rounded),
+                    ),
+                  IconButton(
+                    tooltip: '筛选歌曲',
+                    focusNode: filtersFocus,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size.square(44),
+                      fixedSize: const Size.square(44),
+                      padding: EdgeInsets.zero,
+                    ),
+                    onPressed: filters,
+                    icon: Badge(
+                      isLabelVisible: query.tagIds.isNotEmpty,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      child: const Icon(Icons.tune_rounded),
+                    ),
+                  ),
+                ],
+              ),
+              onChanged: (text) {
+                query.query = text;
+                setState(() {});
+                debounce?.cancel();
+                debounce = Timer(const Duration(milliseconds: 350), () {
+                  if (scroll.hasClients) scroll.jumpTo(0);
+                  query.load();
+                });
+              },
+              onSubmitted: (_) {
+                debounce?.cancel();
+                query.load();
+                searchFocus.unfocus();
+              },
+            ),
+          ),
+          if (widget.headerActions != null) ...[
+            const SizedBox(width: 8),
+            widget.headerActions!,
+          ],
+        ],
+      );
       final header = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (widget.browseItem != null)
             _BrowseIntroduction(state: state, item: widget.browseItem!),
-          GlassSearchField(
-            state: state,
-            fieldKey: const ValueKey('song-search'),
-            controller: search,
-            focusNode: searchFocus,
-            suffix: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (search.text.isNotEmpty)
-                  IconButton(
-                    tooltip: '清除搜索',
-                    onPressed: () {
-                      debounce?.cancel();
-                      search.clear();
-                      query.query = '';
-                      query.load();
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.cancel_rounded),
-                  ),
-                IconButton(
-                  tooltip: '筛选歌曲',
-                  onPressed: filters,
-                  icon: Badge(
-                    isLabelVisible: query.tagIds.isNotEmpty,
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    child: const Icon(Icons.tune_rounded),
-                  ),
-                ),
-              ],
-            ),
-            onChanged: (text) {
-              query.query = text;
-              setState(() {});
-              debounce?.cancel();
-              debounce = Timer(
-                const Duration(milliseconds: 350),
-                () => query.load(),
-              );
-            },
-            onSubmitted: (_) {
-              debounce?.cancel();
-              query.load();
-              searchFocus.unfocus();
-            },
-          ),
+          if (!pinnedSearch) searchHeader,
           if (widget.showBrowse && !searching) ...[
-            const SizedBox(height: AppSpace.md),
+            const SizedBox(height: 4),
             _BrowseLinks(state: state),
           ],
           if (query.tagIds.isNotEmpty)
@@ -305,7 +248,7 @@ class _SongsPageState extends State<SongsPage> {
               ),
             ),
           if (spotlight) ...[
-            const SizedBox(height: AppSpace.page),
+            const SizedBox(height: 8),
             MotionEntrance(
               key: ValueKey(
                 'spotlight:${state.instanceId}:${query.items.first.id}',
@@ -314,11 +257,11 @@ class _SongsPageState extends State<SongsPage> {
               child: SongSpotlight(state: state, song: query.items.first),
             ),
           ],
-          const SizedBox(height: AppSpace.section),
+          const SizedBox(height: 16),
           SectionTitle(
-            searching ? '搜索结果' : '全部歌曲',
+            searching ? '搜索结果' : '全部曲目',
             trailing: Text(
-              '${query.total} 首歌曲',
+              '${query.total} 首',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -331,6 +274,7 @@ class _SongsPageState extends State<SongsPage> {
       final body = RefreshIndicator(
         onRefresh: () => query.load(),
         child: CustomScrollView(
+          controller: scroll,
           key: PageStorageKey(
             'songs:${state.instanceId}:${widget.artistId}:${widget.tags.join(',')}',
           ),
@@ -338,16 +282,11 @@ class _SongsPageState extends State<SongsPage> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.page,
-                AppSpace.xs,
-                AppSpace.page,
-                0,
-              ),
+              padding: EdgeInsets.fromLTRB(pageInset, 4, pageInset, 0),
               sliver: SliverToBoxAdapter(child: header),
             ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+              padding: EdgeInsets.symmetric(horizontal: pageInset),
               sliver: SliverList.builder(
                 itemCount: rows.length,
                 itemBuilder: (context, index) => MotionEntrance(
@@ -360,15 +299,7 @@ class _SongsPageState extends State<SongsPage> {
               ),
             ),
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpace.page,
-                0,
-                AppSpace.page,
-                AppSpace.large +
-                    (widget.embedded
-                        ? MediaQuery.paddingOf(context).bottom
-                        : 0),
-              ),
+              padding: EdgeInsets.symmetric(horizontal: pageInset),
               sliver: SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -397,17 +328,219 @@ class _SongsPageState extends State<SongsPage> {
                 ),
               ),
             ),
+            SliverBottomSpace(embedded: widget.embedded),
           ],
         ),
       );
+      final content = pinnedSearch
+          ? Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(pageInset, 4, pageInset, 0),
+                  child: searchHeader,
+                ),
+                Expanded(child: body),
+              ],
+            )
+          : body;
       return widget.embedded
-          ? body
+          ? content
           : Scaffold(
               appBar: AppToolbar(title: Text(widget.title)),
-              body: ContentWidth(child: body),
+              body: ContentWidth(child: content),
             );
     },
   );
+}
+
+class _SongSearchField extends StatelessWidget {
+  const _SongSearchField({
+    required this.state,
+    required this.fieldKey,
+    required this.controller,
+    required this.focusNode,
+    required this.suffix,
+    required this.onChanged,
+    required this.onSubmitted,
+    this.hint = '搜索歌名或歌手',
+  });
+  final AppState state;
+  final Key fieldKey;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final Widget suffix;
+  final ValueChanged<String> onChanged, onSubmitted;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) => GlassField(
+    state: state,
+    material: GlassMaterialSpec.search,
+    child: TextField(
+      key: fieldKey,
+      controller: controller,
+      focusNode: focusNode,
+      textInputAction: TextInputAction.search,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(fontSize: state.senior ? 18 : 16, height: 1.25),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontSize: state.senior ? 18 : 16,
+          height: 1.25,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        prefixIcon: const Icon(Icons.search_rounded, size: 19),
+        prefixIconConstraints: BoxConstraints(
+          minWidth: state.senior ? 44 : 36,
+          minHeight: state.senior ? 56 : 44,
+        ),
+        suffixIcon: suffix,
+        suffixIconConstraints: BoxConstraints(
+          minHeight: state.senior ? 56 : 44,
+        ),
+        isDense: true,
+        filled: false,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+      ),
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+    ),
+  );
+}
+
+class _SongFilters extends StatefulWidget {
+  const _SongFilters({
+    required this.tags,
+    required this.selected,
+    required this.senior,
+  });
+  final List<Json> tags;
+  final List<String> selected;
+  final bool senior;
+
+  @override
+  State<_SongFilters> createState() => _SongFiltersState();
+}
+
+class _SongFiltersState extends State<_SongFilters> {
+  late final selected = {...widget.selected};
+  final scroll = ScrollController();
+
+  @override
+  void dispose() {
+    scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final inset = MediaQuery.sizeOf(context).width < 375 ? 16.0 : 20.0;
+    final dimensions = {
+      ...tagDimensions.keys,
+      ...widget.tags.map((tag) => tag['dimension'] as String? ?? 'CUSTOM'),
+    };
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .82,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(inset, 0, inset, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('筛选歌曲', style: theme.textTheme.titleLarge),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消'),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: ListView(
+              key: const PageStorageKey('song-filter-options'),
+              controller: scroll,
+              shrinkWrap: true,
+              padding: EdgeInsets.fromLTRB(inset, 0, inset, 12),
+              children: [
+                if (widget.tags.isEmpty) const Notice('曲库还没有可用分类。'),
+                for (final dimension in dimensions)
+                  if (widget.tags.any(
+                    (tag) => (tag['dimension'] ?? 'CUSTOM') == dimension,
+                  )) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16, bottom: 8),
+                      child: Text(
+                        tagDimensions[dimension] ?? dimension,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: widget.senior ? 17 : 13,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final tag in widget.tags.where(
+                          (tag) => (tag['dimension'] ?? 'CUSTOM') == dimension,
+                        ))
+                          FilterChip(
+                            key: ValueKey('song-filter:${tag['id']}'),
+                            label: Text('${tag['name']} · ${tag['count']}'),
+                            selected: selected.contains(tag['id']),
+                            onSelected: (yes) => setState(() {
+                              yes
+                                  ? selected.add(tag['id'] as String)
+                                  : selected.remove(tag['id']);
+                            }),
+                          ),
+                      ],
+                    ),
+                  ],
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(inset, 8, inset, 12),
+              child: OverflowBar(
+                alignment: MainAxisAlignment.spaceBetween,
+                overflowAlignment: OverflowBarAlignment.end,
+                spacing: 12,
+                overflowSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: () => setState(selected.clear),
+                    child: const Text('清除全部'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, selected.toList()),
+                    child: Text('应用筛选 (${selected.length})'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BrowseIntroduction extends StatelessWidget {
@@ -474,8 +607,9 @@ class _BrowseLinks extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final stacked =
+          state.senior ||
           constraints.maxWidth < 280 ||
-          MediaQuery.textScalerOf(context).scale(15) > 20;
+          MediaQuery.textScalerOf(context).scale(13) > 18;
       final scheme = Theme.of(context).colorScheme;
       final links = [
         for (final item in [
@@ -483,78 +617,49 @@ class _BrowseLinks extends StatelessWidget {
           (Icons.grid_view_outlined, '分类', '分类'),
           (Icons.queue_music_rounded, '家庭歌单', '共享歌单'),
         ])
-          Glass(
-            state: state,
-            radius: AppRadii.control,
-            variant: GlassVariant.control,
-            material: GlassMaterialSpec.shortcut,
-            child: TextButton(
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                foregroundColor: scheme.onSurface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadii.control),
-                ),
-                padding: EdgeInsets.symmetric(
-                  horizontal: stacked ? 16 : 8,
-                  vertical: 10,
-                ),
-                minimumSize: Size(
-                  AppSizes.touch,
-                  state.senior ? AppSizes.seniorTouch : 52,
-                ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: scheme.onSurfaceVariant,
+              padding: EdgeInsets.symmetric(horizontal: stacked ? 12 : 0),
+              minimumSize: Size(44, state.senior ? 56 : 44),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) => BrowsePage(state: state, kind: item.$3),
-                ),
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => BrowsePage(state: state, kind: item.$3),
               ),
-              child: stacked
-                  ? Row(
-                      children: [
-                        Icon(item.$1, size: 24, color: scheme.primary),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(item.$2)),
-                        const Icon(Icons.chevron_right_rounded, size: 20),
-                      ],
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(item.$1, size: 19, color: scheme.primary),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            item.$2,
-                            maxLines: 1,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
+            ),
+            child: Row(
+              mainAxisAlignment: stacked
+                  ? MainAxisAlignment.start
+                  : MainAxisAlignment.center,
+              children: [
+                Icon(item.$1, size: state.senior ? 22 : 18),
+                SizedBox(width: stacked ? 12 : 6),
+                Flexible(
+                  fit: stacked ? FlexFit.tight : FlexFit.loose,
+                  child: Text(
+                    item.$2,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: state.senior ? 18 : 13,
+                      fontWeight: FontWeight.w500,
                     ),
+                  ),
+                ),
+                if (stacked) const Icon(Icons.chevron_right_rounded, size: 20),
+              ],
             ),
           ),
       ];
       return stacked
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (var i = 0; i < links.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  links[i],
-                ],
-              ],
+              children: links,
             )
-          : Row(
-              children: [
-                for (var i = 0; i < links.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 10),
-                  Expanded(child: links[i]),
-                ],
-              ],
-            );
+          : Row(children: [for (final link in links) Expanded(child: link)]);
     },
   );
 }
@@ -569,6 +674,7 @@ class BrowsePage extends StatefulWidget {
 
 class _BrowsePageState extends State<BrowsePage> {
   final search = TextEditingController();
+  final searchFocus = FocusNode();
   List<Json> items = [];
   int page = 0, total = 0, generation = 0;
   bool loading = false;
@@ -586,6 +692,7 @@ class _BrowsePageState extends State<BrowsePage> {
   @override
   void dispose() {
     search.dispose();
+    searchFocus.dispose();
     generation++;
     super.dispose();
   }
@@ -656,7 +763,7 @@ class _BrowsePageState extends State<BrowsePage> {
     child: Material(
       color: Colors.transparent,
       child: ListTile(
-        minTileHeight: widget.state.senior ? 88 : 72,
+        minTileHeight: widget.state.senior ? 88 : 68,
         contentPadding: EdgeInsets.symmetric(
           vertical: widget.state.senior ? 12 : 4,
         ),
@@ -674,7 +781,7 @@ class _BrowsePageState extends State<BrowsePage> {
         title: Text(
           item['name'] as String,
           style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(fontWeight: FontWeight.w500),
+              ?.copyWith(fontWeight: FontWeight.w400),
         ),
         subtitle: Text('${item['count'] ?? 0} 首歌曲'),
         trailing: const Icon(Icons.chevron_right_rounded, size: 20),
@@ -683,7 +790,54 @@ class _BrowsePageState extends State<BrowsePage> {
     ),
   );
   Widget gridTile(Json item) {
-    if (tags) return tile(item);
+    if (tags) {
+      return Material(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => open(item),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 76),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['name'] as String,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${item['count'] ?? 0} 首歌曲',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return LayoutBuilder(
       builder: (context, size) => Material(
         color: Colors.transparent,
@@ -701,7 +855,7 @@ class _BrowsePageState extends State<BrowsePage> {
                   state: widget.state,
                   path: item[artist ? 'portraitPath' : 'coverPath'] as String?,
                   round: artist,
-                  size: artist ? math.min(112, size.maxWidth) : size.maxWidth,
+                  size: artist ? math.min(124, size.maxWidth) : size.maxWidth,
                   revision: item[artist ? 'portraitVersion' : 'revision']
                       ?.toString(),
                 ),
@@ -729,6 +883,7 @@ class _BrowsePageState extends State<BrowsePage> {
 
   @override
   Widget build(BuildContext context) {
+    final pageInset = MediaQuery.sizeOf(context).width < 375 ? 16.0 : 20.0;
     final rows = <({String? heading, Json? item})>[];
     if (tags) {
       for (final dimension in {
@@ -761,27 +916,34 @@ class _BrowsePageState extends State<BrowsePage> {
             slivers: [
               if (!tags)
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                  padding: EdgeInsets.fromLTRB(pageInset, 4, pageInset, 20),
                   sliver: SliverToBoxAdapter(
-                    child: TextField(
+                    child: _SongSearchField(
+                      state: widget.state,
+                      fieldKey: const ValueKey('browse-search'),
                       controller: search,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        hintText:
-                            '搜索${widget.kind == '共享歌单' ? '家庭歌单' : widget.kind}',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: IconButton(
-                          tooltip: '搜索',
-                          onPressed: load,
-                          icon: const Icon(Icons.arrow_forward_rounded),
+                      focusNode: searchFocus,
+                      hint: '搜索${widget.kind == '共享歌单' ? '家庭歌单' : widget.kind}',
+                      suffix: IconButton(
+                        tooltip: '搜索',
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size.square(44),
+                          fixedSize: const Size.square(44),
+                          padding: EdgeInsets.zero,
                         ),
+                        onPressed: load,
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 19),
                       ),
-                      onSubmitted: (_) => load(),
+                      onChanged: (_) {},
+                      onSubmitted: (_) {
+                        load();
+                        searchFocus.unfocus();
+                      },
                     ),
                   ),
                 ),
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(horizontal: pageInset),
                 sliver: SliverLayoutBuilder(
                   builder: (context, constraints) {
                     final columns =
@@ -811,18 +973,18 @@ class _BrowsePageState extends State<BrowsePage> {
                         final row = display[index];
                         if (row.heading != null) {
                           return Padding(
-                            padding: const EdgeInsets.only(top: 20, bottom: 4),
+                            padding: const EdgeInsets.only(top: 20, bottom: 12),
                             child: SectionTitle(row.heading!),
                           );
                         }
                         if (columns == 1) return tile(row.items.single);
                         return Padding(
-                          padding: EdgeInsets.only(bottom: tags ? 0 : 20),
+                          padding: EdgeInsets.only(bottom: tags ? 8 : 20),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(child: gridTile(row.items.first)),
-                              const SizedBox(width: 16),
+                              SizedBox(width: tags ? 8 : 20),
                               Expanded(
                                 child: row.items.length == 2
                                     ? gridTile(row.items.last)
@@ -837,7 +999,7 @@ class _BrowsePageState extends State<BrowsePage> {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                padding: EdgeInsets.fromLTRB(pageInset, 0, pageInset, 32),
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -919,44 +1081,39 @@ class _PlaylistPageState extends State<PlaylistPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Artwork(
-                            state: widget.state,
-                            path: item['coverPath'] as String?,
-                            label: item['name'] as String,
-                            revision: item['revision']?.toString(),
-                            size: widget.state.senior ? 88 : 100,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item['name'] as String,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${item['count'] ?? songs.length} 首 · 家庭共享',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        fontFeatures: const [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
-                                ),
-                              ],
+                      Center(
+                        child: Column(
+                          children: [
+                            Artwork(
+                              state: widget.state,
+                              path: item['coverPath'] as String?,
+                              label: item['name'] as String,
+                              revision: item['revision']?.toString(),
+                              size: widget.state.senior ? 144 : 176,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 20),
+                            Text(
+                              item['name'] as String,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${item['count'] ?? songs.length} 首 · 家庭共享',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontSize: widget.state.senior ? 16 : 13,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
                       if ((item['description'] as String? ?? '').isNotEmpty)
                         Padding(

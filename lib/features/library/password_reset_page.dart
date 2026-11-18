@@ -100,7 +100,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
   Widget build(BuildContext context) => PopScope(
     canPop: !busy,
     child: Scaffold(
-      appBar: AppBar(title: const Text('忘记密码')),
+      appBar: AppToolbar(title: const Text('忘记密码')),
       body: SafeArea(
         child: ContentWidth(
           child: ListView(

@@ -2,11 +2,15 @@
 
 Flutter / Android 家庭 KTV 客户端，使用用户自备歌曲。手机连接 NAS 的 Go 主服务，支持家庭曲库、本机练唱与录音、作品回听导出，以及扫码参与电视 H5 点歌。支持用已登录音乐库的 App 扫描电视登录码，在手机确认后将当前音乐库连接到电视，电视无需填写 IP；账号登录保留为备用方式。没有 iOS 工程；手机 minSdk 24，包名保持 `com.mynora.singverse.mobile`。
 
-## 界面与动态效果
+## 界面与动态效果（2026-11-18）
 
-点歌、常唱和作品共用雾银浅色 / 午夜深色主题，默认跟随系统。悬浮导航、迷你播放器与工具弹层使用局部玻璃材质，歌曲和歌词保持稳定的阅读底色。系统字号、长辈模式和已有主题偏好继续生效。
+界面参照 [手机端苹果液态玻璃原型（2026-11-18）](../docs/手机端苹果液态玻璃原型-20261118/)，使用中性白色 / 黑色与深灰主题、红色品牌操作，默认跟随系统。这是 Flutter Android 对 Liquid Glass 的近似实现。浮动导航、搜索与迷你播放器使用局部扩散材质，选择了折射的少量小表面使用 shader；歌曲、歌词和普通表单保持稳定底色。长 sheet 使用 .98 中性底色与 18dp 局部模糊，无折射 shader；对话框没有全视口背景模糊，原生视频覆盖键不采样背景。
+
+普通 / 长辈触控基准为 44 / 56dp，保留系统字号缩放与大字号滚动布局。普通模式已连接点歌页固定搜索和工具组，底部 dock 随列表滚动收拢 / 展开，收拢导航宽 144dp，与 compact 迷你播放器同行；键盘出现时隐藏整个 dock。长辈、录音中和大字号保持展开。底部内容留白读取 dock 实际高度，覆盖系统安全区。
 
 「设置 → 性能模式」立即关闭界面动效与实时模糊，保留静态光影、播放进度和录音计时，不改变主题或「减少透明效果」偏好。系统 Reduce Motion 使用简化反馈；长辈模式、高对比度和减少透明效果使用不透明表面。实现约束与验收方式见 [Liquid Glass 设计与验证](docs/liquid-glass.md)。
+
+设计文档顶部为当前规范，2026-11-17 及此前的蓝色材质参数、模拟器命令和验收记录明确归档为历史。本轮真机执行结果在设备验收完成后补充，旧报告不代表本轮已通过。
 
 ## 独立构建
 
@@ -72,7 +76,11 @@ CI 固定使用 Ubuntu 24.04，保留 Android SDK/JDK，复用 Flutter 与 Gradl
 
 「常唱 → NAS 共享收藏」与后台「曲库 → 收藏」、电视收藏共用服务端数据。按钮提交明确的目标状态，收到 NAS 成功响应后才改变收藏状态；分页读取完整且修订一致的集合。页面进入、应用回到前台、写入后及前台约 30 秒重新读取；切 NAS、退出或登录失效清空旧集合，丢弃迟到响应。读取失败保留上次成功内容并标明，缺失歌曲可取消且不能播放。不读取、导入或上传旧 SQLite 收藏，也不持久化新收藏或建立离线写队列；同表练唱历史及录音作品保留。详见 [共享收藏契约](contracts/favorites.md)。
 
-`make check` 执行格式、分析、Flutter 行为测试及 Android 单元测试和发布边界测试（`make release-check` 可单独执行）。`make audio-test` 在独立 `.e2e` 应用运行原生设备检查。独立 UI 验收使用 `scripts/setup-mobile-karaoke-fixtures.py` 生成自制样本（需 FFmpeg，可用 `FFMPEG` 指定），另行启动使用新数据目录的隔离 Go/compute。练唱控制台使用 `scripts/check-player-console.py --device <物理机序列号> --voice-sample <生成的 voice-test.wav> --output <全新报告目录>`，显式绑定物理机，通过 adb reverse 访问本机 `127.0.0.1:18181`，拒绝模拟器并恢复测试前的系统字号。只更新 `.e2e` 包，保留日常应用与数据。旧 `scripts/check-mobile-karaoke.py` 的 `10.0.2.2:18181` 模拟器流程作为历史工具保留。产物保存在 `build/reports/`，不入库。设计、动效与验收说明见 [Liquid Glass](docs/liquid-glass.md)。
+`make check` 提供格式、分析、Flutter 行为测试及 Android 单元测试和发布边界检查（`make release-check` 可单独执行）；`make audio-test` 提供独立 `.e2e` 原生设备检查。这些是工程入口说明，不是本轮执行记录。2026-11-18 界面改造的运行验收仅使用指定物理机 `10AE9J2E5Q000FJ`，不运行本机 unit / widget 测试或模拟器。
+
+设备 runner 为 `scripts/check-player-console.py --target <target> --device <物理机序列号> --output <全新报告目录>`。`--target library_glass` 与 `--target nas_glass` 在真实手机渲染器上运行受控 UI fixture，不连接日常 NAS 或真实音频，不需要语音样本。`--target player_console` 为默认目标，验证实际原生播放与录音链路，必须额外提供 `--voice-sample <生成的 voice-test.wav>`；先用 `scripts/setup-mobile-karaoke-fixtures.py` 生成自制媒体（需 FFmpeg，可用 `FFMPEG` 指定），并启动新数据目录的隔离 Go / compute，经 adb reverse 连接 `127.0.0.1:18181`。
+
+两层结果分别记录，UI fixture 不能代替真实 Media3、AndroidView、麦克风与 AAC 验收。runner 显式绑定物理机、拒绝模拟器、恢复测试前系统字号，仅更新 `.e2e` 包并保留日常应用与数据。旧 `scripts/check-mobile-karaoke.py` 的 `10.0.2.2:18181` 模拟器流程作为历史工具保留。产物保存在 `build/reports/`，不入库；命令、材质参数和本轮结果登记位置见 [Liquid Glass](docs/liquid-glass.md)。
 
 自动化和模拟器不能替代真实手机麦克风、蓝牙、NAS 权限、微信扫码以及系统覆盖安装验证。真实安装验收需同一测试签名的两个递增版本，确认安装权限返回续装、拒绝/重试、跳过、新版本提醒和本机作品/会话保留。正式密钥、远程 GitHub Actions 与用户设备验收需发行环境完成。
 
