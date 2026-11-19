@@ -4,11 +4,19 @@ package com.mynora.singverse.mobile
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.app.ActivityManager
 import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.AudioTimestamp
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.Player
+import androidx.media3.session.MediaController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
@@ -36,6 +44,143 @@ import kotlin.math.hypot
 /** Runs the real service/player against loopback HTTP, without a NAS or a real song. */
 @RunWith(AndroidJUnit4::class)
 class PlaybackInstrumentedTest {
+    @Test fun backgroundPlaybackHasAForegroundServiceAndNotificationControlsCanResumeIt() {
+        withLoopingPlayback { service ->
+            main { assertEquals("direct platform-channel playback must register its session", 1, service.sessions.size) }
+            waitFor("media playback is a foreground service") { isForeground(service) }
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            shell("am start -a android.settings.SETTINGS")
+            waitFor("player activity stopped behind another task") {
+                var stopped = false
+                main { stopped = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.STOPPED).any { it is MainActivity } }
+                stopped
+            }
+            assertTrue("playback stays foreground behind another task", isForeground(service))
+            var before = 0L
+            main { before = service.player.currentPosition }
+            Thread.sleep(800)
+            main {
+                assertTrue("switching tasks must keep the player playing", service.player.isPlaying)
+                assertTrue("background audio really advances", service.player.currentPosition != before)
+            }
+            withCompetingFocus(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) {
+                waitFor("temporary interruption pauses background audio") { var paused = false; main { paused = !service.player.playWhenReady }; paused }
+                assertTrue("temporary interruption retains foreground eligibility", isForeground(service))
+            }
+            waitFor("temporary background interruption resumes") { var playing = false; main { playing = service.player.isPlaying }; playing }
+            val controller = notificationController(service)
+            try {
+                main { controller.pause() }
+                waitFor("background notification pauses playback") { var paused = false; main { paused = !service.player.playWhenReady }; paused }
+                main { controller.play() }
+                var diagnostic = ""
+                try { waitFor("background notification resumes playback") { var playing = false; main {
+                    playing = service.player.isPlaying; diagnostic = service.snapshot().toString()
+                }; playing } } catch (failure: AssertionError) { throw AssertionError(diagnostic, failure) }
+                assertTrue("resuming playback restores foreground service", isForeground(service))
+            } finally {
+                main { controller.release() }
+                main { instrumentation.targetContext.startActivity(Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+        }
+    }
+
+    @Test fun transientAudioFocusLossResumesPlaybackButANotificationPauseCancelsResumption() {
+        withLoopingPlayback { service ->
+            for (gain in listOf(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)) {
+                withCompetingFocus(gain) {
+                    waitFor("transient audio focus loss pauses playback") { var paused = false; main { paused = !service.player.playWhenReady }; paused }
+                }
+                waitFor("regaining audio focus resumes interrupted playback") { var playing = false; main { playing = service.player.isPlaying }; playing }
+            }
+            val controller = notificationController(service)
+            try {
+                withCompetingFocus(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) {
+                    waitFor("interrupted before explicit pause") { var paused = false; main { paused = !service.player.playWhenReady }; paused }
+                    main { controller.pause() }
+                    // The player is already paused, so no playWhenReady event is emitted.
+                    Thread.sleep(250)
+                }
+                Thread.sleep(350)
+                main { assertFalse("an explicit pause must cancel automatic resumption", service.player.playWhenReady) }
+                main { controller.play() }
+                waitFor("explicit play still works after interruption") { var playing = false; main { playing = service.player.isPlaying }; playing }
+            } finally { main { controller.release() } }
+        }
+    }
+
+    @Test fun permanentFocusLossRequiresExplicitPlayAndNeverLeavesPlaybackStuck() {
+        withLoopingPlayback { service ->
+            withCompetingFocus(AudioManager.AUDIOFOCUS_GAIN) {
+                waitFor("permanent audio focus loss pauses playback") { var paused = false; main { paused = !service.player.playWhenReady }; paused }
+            }
+            Thread.sleep(350)
+            main { assertFalse("permanent loss must not restart music automatically", service.player.playWhenReady) }
+            main { service.command("play", null) }
+            waitFor("explicit play reacquires audio focus") { var playing = false; main { playing = service.player.isPlaying }; playing }
+        }
+    }
+
+    @Test fun focusLossCancelsRecordingCountdownAndDoesNotRestartItOnGain() {
+        withLoopingPlayback { service ->
+            val target = InstrumentationRegistry.getInstrumentation().targetContext
+            shell("pm grant ${target.packageName} android.permission.RECORD_AUDIO")
+            main { service.beginRecording() }
+            main { assertTrue(service.snapshot()["countdown"] as Int > 0) }
+            withCompetingFocus(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) {
+                waitFor("focus loss cancels countdown") { var cancelled = false; main { cancelled = service.snapshot()["countdown"] == 0 }; cancelled }
+            }
+            Thread.sleep(350)
+            main {
+                assertFalse("interrupted recording must not start playing on focus gain", service.player.playWhenReady)
+                assertNotEquals("RECORDING", service.karaoke.phase)
+                assertEquals(0, service.snapshot()["countdown"])
+            }
+        }
+    }
+
+    private fun withLoopingPlayback(block: (PlaybackService) -> Unit) {
+        val wav = wave()
+        val server = HttpFixture { request -> when {
+            request.path.endsWith("/csrf") -> Reply("{\"token\":\"test-token\"}")
+            request.path.contains("/playback/") -> Reply(JSONObject().put("status", "READY").put("mode", "DIRECT").put("url", "/api/v1/test/tone.wav").toString())
+            request.path.endsWith("/tone.wav") -> Reply(wav, "audio/wav")
+            else -> Reply("{}")
+        } }
+        try { withService(server) { service ->
+            main { service.command("loop", true); service.open(song("background"), "isolated") }
+            waitFor("controlled audio plays", 15_000) { var playing = false; main { playing = service.player.isPlaying }; playing }
+            block(service)
+        } } finally { server.close() }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isForeground(service: PlaybackService): Boolean =
+        (service.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getRunningServices(Int.MAX_VALUE)
+            .any { it.service.className == PlaybackService::class.java.name && it.foreground }
+
+    private fun notificationController(service: PlaybackService): MediaController {
+        var pending: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
+        main { pending = MediaController.Builder(service, service.sessions.single().token).buildAsync() }
+        return pending!!.get(5, TimeUnit.SECONDS)
+    }
+
+    private fun withCompetingFocus(gain: Int, block: () -> Unit) {
+        org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 26)
+        val audio = InstrumentationRegistry.getInstrumentation().targetContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val request = AudioFocusRequest.Builder(gain)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            .setOnAudioFocusChangeListener({}, Handler(Looper.getMainLooper())).build()
+        try {
+            assertEquals("competing focus is granted", AudioManager.AUDIOFOCUS_REQUEST_GRANTED, audio.requestAudioFocus(request))
+            block()
+        } finally { audio.abandonAudioFocusRequest(request) }
+    }
+
+    private fun shell(command: String): String =
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command))
+            .use { String(it.readBytes(), Charsets.UTF_8) }
+
     @Test fun preparingIsPacedAndSlowCancellationDoesNotDelayTheNextSong() {
         val polls = Collections.synchronizedList(mutableListOf<Long>())
         val cancelStarted = CountDownLatch(1); val releaseCancel = CountDownLatch(1)
@@ -451,9 +596,9 @@ class PlaybackInstrumentedTest {
             // Bind the service AND its real Media3 HTTP factory to the isolated transport.
             // MainActivity starts the service from onCreate, so bind before launching it.
             singleton.set(null, NasTransport(isolated).apply { configure(server.origin) })
-            // Flutter may repaint continuously; startActivitySync incorrectly waits for global
-            // queue idleness. Require the actual foreground lifecycle instead.
-            main { target.startActivity(Intent(target, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            // Shell launch also works on devices that restrict background activity starts.
+            // Avoid startActivitySync: Flutter may continuously repaint and never become idle.
+            shell("am start -n ${target.packageName}/${MainActivity::class.java.name}")
             waitFor("test activity resumed", 30_000) {
                 main { activity = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).firstOrNull { it is MainActivity } }
                 activity != null

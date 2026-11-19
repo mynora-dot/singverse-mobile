@@ -95,10 +95,31 @@ class PlaybackService : MediaSessionService() {
         playbackTrace.addLast("${SystemClock.elapsedRealtime()} $event")
     }
     private var focusRequest: AudioFocusRequest? = null
+    private var resumeOnFocusGain = false
     private val audio by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
     private val focus = AudioManager.OnAudioFocusChangeListener { change ->
-        // A regained focus never silently starts sound again.
-        if (change < 0) main.post { finishRecording("音频焦点已中断，录音片段已保留"); playAfterPreparation = false; player.pause(); publish() }
+        if (!destroyed) handleFocusChange(change)
+    }
+    private fun handleFocusChange(change: Int) {
+        // The listener already runs on main. Posting again can pause a newer play request.
+        trace("audioFocus=$change")
+        when (change) {
+            AudioManager.AUDIOFOCUS_GAIN -> if (resumeOnFocusGain) {
+                resumeOnFocusGain = false
+                command("play", null)
+            }
+            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                val interruptedTake = countdown > 0 || karaoke.phase in listOf("RECORDING", "FINALIZING")
+                val resume = change != AudioManager.AUDIOFOCUS_LOSS && !interruptedTake &&
+                    (resumeOnFocusGain || player.playWhenReady || state == "PREPARING" && playAfterPreparation)
+                finishRecording("音频焦点已中断，录音片段已保留")
+                resumeOnFocusGain = resume
+                playAfterPreparation = false
+                player.pause()
+                publish()
+            }
+        }
     }
 
     override fun onCreate() {
@@ -122,7 +143,14 @@ class PlaybackService : MediaSessionService() {
             .setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
         player.setHandleAudioBecomingNoisy(true)
         player.setWakeMode(C.WAKE_MODE_NETWORK)
-        session = MediaSession.Builder(this, player)
+        val sessionPlayer = object : ForwardingPlayer(player) {
+            // Notification/lock-screen commands must also update pending autoplay,
+            // including a deliberate pause while focus has already paused the player.
+            override fun play() { command("play", null) }
+            override fun pause() { command("pause", null) }
+            override fun setPlayWhenReady(playWhenReady: Boolean) { command(if (playWhenReady) "play" else "pause", null) }
+        }
+        session = MediaSession.Builder(this, sessionPlayer)
             .setSessionActivity(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             .setCallback(object : MediaSession.Callback {
             override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
@@ -136,11 +164,10 @@ class PlaybackService : MediaSessionService() {
                             Player.COMMAND_GET_AUDIO_ATTRIBUTES).build()).build()
                     else MediaSession.ConnectionResult.reject()
             }
-            override fun onPlayerCommandRequest(session: MediaSession, controller: MediaSession.ControllerInfo, command: Int): Int {
-                if (command == Player.COMMAND_PLAY_PAUSE && !player.isPlaying && !requestFocus()) return androidx.media3.session.SessionError.ERROR_INVALID_STATE
-                return SessionResult.RESULT_SUCCESS
-            }
         }).build()
+        // Flutter controls this service directly rather than binding a MediaController,
+        // so onGetSession alone never registers it for notifications/foreground playback.
+        addSession(session)
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) { trace("playerState=$playbackState ready=$resourceReady") }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { trace("playWhenReady=$playWhenReady reason=$reason") }
@@ -165,6 +192,7 @@ class PlaybackService : MediaSessionService() {
                 publish()
             }
             override fun onPlayerError(error: PlaybackException) {
+                resumeOnFocusGain = false
                 trace("playerError=${error.errorCode} cause=${error.cause?.javaClass?.simpleName}")
                 requestedPosition = player.currentPosition + offsetMs
                 var cause: Throwable? = error
@@ -208,6 +236,7 @@ class PlaybackService : MediaSessionService() {
             "isPlaying" to player.isPlaying, "suppressionReason" to player.playbackSuppressionReason,
             "mode" to resourceMode, "resourceReady" to resourceReady, "hasLease" to leaseId.isNotBlank(),
             "audioRole" to snapshot()["audioRole"], "tracks" to snapshot()["tracks"],
+            "resumeOnFocusGain" to resumeOnFocusGain, "registeredSessions" to sessions.size,
             "errorCode" to player.playerError?.errorCode,
             "errorCause" to player.playerError?.cause?.javaClass?.simpleName,
             "errorDetail" to player.playerError?.cause?.message?.replace(Regex("https?://\\S+"), "<media>"),
@@ -235,6 +264,7 @@ class PlaybackService : MediaSessionService() {
 
     fun open(value: JSONObject, instanceId: String, position: Long = 0, compatible: Boolean = false, autoplay: Boolean = true, preserveSettings: Boolean = false, reuseAttempt: Boolean = false) {
         require(karaoke.phase !in listOf("RECORDING", "FINALIZING") && countdown == 0) { "请先结束并保存当前录音" }
+        resumeOnFocusGain = false
         karaoke.testMicrophone(false)
         val keepHistory = (preserveSettings || reuseAttempt) && historyAttempt?.invalid == false && historyConnection == transport.connectionIdentity() &&
             historySongId == value.optString("id") && server == instanceId && workId.isEmpty()
@@ -347,6 +377,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun fail(error: Exception) {
+        resumeOnFocusGain = false
         trace("resourceError=${error.javaClass.simpleName}")
         if (resourceReady) requestedPosition = player.currentPosition + offsetMs
         requestInFlight = false; resourceReady = false; finishRecording(error.message ?: "歌曲连接中断"); player.pause()
@@ -411,22 +442,31 @@ class PlaybackService : MediaSessionService() {
             "endRecord" -> finishRecording("主动结束录唱", false)
             "cancelCountdown" -> { countdownGeneration++; countdown = 0; stopRecordingForeground() }
 
-            "play" -> { playAfterPreparation = true; if (resourceReady && state !in listOf("ERROR", "AUTH_REQUIRED") && requestFocus()) {
-                message = ""
-                if (player.playbackState == Player.STATE_ENDED && workId.isEmpty() && leaseId.isNotBlank()) {
-                    // Ended sessions stop heartbeating and can expire. Replay must acquire
-                    // a fresh lease from the song start, including an offset HLS window.
-                    finishHistory("COMPLETED")
-                    open(song, server, 0, force, autoplay = true, preserveSettings = true)
-                } else {
+            "play" -> {
+                resumeOnFocusGain = false; playAfterPreparation = true
+                if (resourceReady && state !in listOf("ERROR", "AUTH_REQUIRED")) {
                     if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                    if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
-                    player.play()
+                    if (requestFocus()) {
+                        message = ""
+                        if (player.playbackState == Player.STATE_ENDED && workId.isEmpty() && leaseId.isNotBlank()) {
+                            // Ended sessions stop heartbeating and can expire. Replay must acquire
+                            // a fresh lease from the song start, including an offset HLS window.
+                            finishHistory("COMPLETED")
+                            open(song, server, 0, force, autoplay = true, preserveSettings = true)
+                        } else {
+                            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+                            player.play()
+                        }
+                    }
                 }
-            } }
-            "pause" -> { finishRecording("演唱已暂停，录音片段已保留"); playAfterPreparation = false; player.pause() }
+            }
+            "pause" -> {
+                resumeOnFocusGain = false; finishRecording("演唱已暂停，录音片段已保留"); playAfterPreparation = false; player.pause()
+                onUpdateNotification(session, false)
+            }
             "restart" -> { finishHistory("STOPPED"); beginHistory(); command("seek", value ?: 0L) }
             "stop" -> {
+                resumeOnFocusGain = false; playAfterPreparation = false
                 finishHistory("STOPPED")
                 requestScope.cancel()
                 generation++; player.stop(); player.clearMediaItems(); cancelResource(leaseId); leaseId = ""
@@ -462,6 +502,7 @@ class PlaybackService : MediaSessionService() {
             }
             if (workId.isEmpty() && playbackOrigin.isNotBlank() && playbackOrigin != transport.origin && state !in listOf("ERROR", "AUTH_REQUIRED", "IDLE")) {
                 historyReporter.invalidate(historyAttempt); historyAttempt = null; historyClock.clear()
+                resumeOnFocusGain = false
                 requestScope.cancel(); generation++; leaseId = ""; resourceReady = false
                 finishRecording("NAS 已切换，录音片段已保留"); player.stop(); player.clearMediaItems()
                 state = "ERROR"; message = "NAS 已切换，请重新选歌"; publish()
@@ -628,6 +669,7 @@ class PlaybackService : MediaSessionService() {
         require(karaoke.phase !in listOf("RECORDING", "FINALIZING", "RENDERING")) { "请先处理当前录音" }
         karaoke.testMicrophone(false)
         require(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) { "请先允许麦克风权限" }
+        resumeOnFocusGain = false
         player.pause(); countdown = 3; val token = ++countdownGeneration
         showRecordingForeground()
         fun count() {
@@ -676,11 +718,12 @@ class PlaybackService : MediaSessionService() {
     }
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
         if (::karaoke.isInitialized && (karaoke.phase == "RECORDING" || countdown > 0)) showRecordingForeground()
-        else super.onUpdateNotification(session, startInForegroundRequired)
+        else super.onUpdateNotification(session, startInForegroundRequired || resumeOnFocusGain)
     }
     fun playWork(id: String) {
         require(karaoke.phase !in listOf("RECORDING", "FINALIZING", "RENDERING")) { "请先结束当前录音" }
         val record = karaoke.works.get(id); val file = karaoke.works.playable(id)
+        resumeOnFocusGain = false; playAfterPreparation = true
         finishHistory("STOPPED")
         requestScope.cancel()
         generation++; cancelResource(leaseId); leaseId = ""; workId = id; resourceMode = "LOCAL"; rangeA = 0; rangeB = 0
@@ -695,7 +738,17 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun requestFocus(): Boolean {
-        return if (Build.VERSION.SDK_INT >= 26) {
+        // Android 15 requires a foreground service BEFORE a background focus request.
+        // Media3 1.5 updates its notification after play(), which is too late here.
+        if (Build.VERSION.SDK_INT >= 35 && !isPlaybackOngoing && resourceReady) {
+            try { onUpdateNotification(session, true) }
+            catch (_: IllegalStateException) {
+                trace("foregroundPlaybackDenied")
+                message = "请返回应用后继续播放"
+                return false
+            }
+        }
+        val granted = if (Build.VERSION.SDK_INT >= 26) {
             if (focusRequest == null) focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
                 .setOnAudioFocusChangeListener(focus, main).setWillPauseWhenDucked(true).build()
@@ -704,6 +757,12 @@ class PlaybackService : MediaSessionService() {
             @Suppress("DEPRECATION")
             (audio.requestAudioFocus(focus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         }
+        trace("requestAudioFocus=$granted")
+        if (!granted) {
+            message = "暂时无法取得音频焦点，请稍后继续"
+            onUpdateNotification(session, false)
+        }
+        return granted
     }
     private fun abandonFocus() {
         if (Build.VERSION.SDK_INT >= 26) focusRequest?.let { audio.abandonAudioFocusRequest(it) }

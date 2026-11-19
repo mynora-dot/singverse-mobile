@@ -182,66 +182,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> initialize() async {
     try {
-      origin = await api.restore();
-      LoginRecord? automatic;
-      if (automaticLogin) {
-        final id = preferences.getString(_automaticLoginRecordKey);
-        automatic = (await loginStore.load())
-            .where((record) => record.id == id && record.hasPassword)
-            .firstOrNull;
-        if (automatic == null) {
-          await setAutomaticLogin(null);
-        } else {
-          origin = automatic.origin;
-        }
-      }
-      if (origin.isNotEmpty) {
-        instanceId = preferences.getString('server-instance:$origin') ?? '';
-        await refreshPersonal();
-        final info = await api.inspect(origin) as Json;
-        _checkServer(info);
-        if (automatic != null && automatic.instanceId != info['instanceId']) {
-          await setAutomaticLogin(null);
-          throw const FormatException('此地址的曲库身份已变化，请重新登录');
-        }
-        serverName = info['name'] is String ? info['name'] as String : '';
-        instanceId = info['instanceId'] as String;
-        await preferences.setString('server-instance:$origin', instanceId);
-        await refreshPersonal();
-        if (automatic != null) await api.configure(origin);
-        updates.connect(origin);
-        // Preserve existing session restoration until the user has made an
-        // explicit choice with the new control. Turning it off requires a
-        // manual login on the next launch, even if a cookie is still valid.
-        if (preferences.getBool(_automaticLoginKey) != false) {
-          try {
-            await readSession();
-          } on ApiFailure catch (e) {
-            if (e.status != 401) rethrow;
-          }
-          if (automatic != null &&
-              (!authenticated || accountName != automatic.username)) {
-            authenticated = false;
-            _clearFavorites();
-            accountName = '';
-            await api.forget();
-            final secret = await loginStore.password(automatic);
-            if (secret == null || secret.isEmpty) {
-              await setAutomaticLogin(null);
-              throw const FormatException('已保存的密码不可用，请重新登录');
-            }
-            try {
-              await _authenticate(secret, username: automatic.username);
-            } on ApiFailure catch (e) {
-              if (e.status == 401 || e.status == 403) {
-                await setAutomaticLogin(null);
-              }
-              rethrow;
-            }
-            if (mfaRequired) error = '自动登录需要验证身份，请输入动态码或恢复码';
-          }
-        }
-      }
+      await _restoreConnection(startup: true);
     } catch (e) {
       error = e is FormatException ? e.message : e.toString();
       if (e is ApiFailure) retryAfter = e.retryAfter;
@@ -249,6 +190,75 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     initialized = true;
     notifyListeners();
     if (nativeEnabled) unawaited(refreshWorks());
+  }
+
+  Future<void> _restoreConnection({bool startup = false}) async {
+    if (startup) origin = await api.restore();
+    LoginRecord? automatic;
+    if (automaticLogin) {
+      final id = preferences.getString(_automaticLoginRecordKey);
+      automatic = (await loginStore.load())
+          .where((record) => record.id == id && record.hasPassword)
+          .firstOrNull;
+      if (automatic == null) {
+        await setAutomaticLogin(null);
+      } else if (startup) {
+        origin = automatic.origin;
+      } else if (automatic.origin != origin) {
+        // Resuming must not undo a manual NAS switch.
+        return;
+      }
+    }
+    if (!startup && automatic == null) return;
+    if (origin.isNotEmpty) {
+      instanceId = preferences.getString('server-instance:$origin') ?? '';
+      await refreshPersonal();
+      final info = await api.inspect(origin) as Json;
+      _checkServer(info);
+      if (automatic != null && automatic.instanceId != info['instanceId']) {
+        await setAutomaticLogin(null);
+        throw const FormatException('此地址的曲库身份已变化，请重新登录');
+      }
+      serverName = info['name'] is String ? info['name'] as String : '';
+      instanceId = info['instanceId'] as String;
+      await preferences.setString('server-instance:$origin', instanceId);
+      await refreshPersonal();
+      if (automatic != null) await api.configure(origin);
+      updates.connect(origin);
+      // Preserve existing session restoration until the user has made an
+      // explicit choice with the new control. Turning it off requires a
+      // manual login on the next launch, even if a cookie is still valid.
+      if (preferences.getBool(_automaticLoginKey) != false) {
+        try {
+          await readSession();
+        } on ApiFailure catch (e) {
+          if (e.status != 401) rethrow;
+        }
+        if (automatic != null &&
+            automaticLoginFor(automatic) &&
+            (!authenticated || accountName != automatic.username)) {
+          authenticated = false;
+          _clearFavorites();
+          accountName = '';
+          await api.forget();
+          final secret = await loginStore.password(automatic);
+          if (secret == null || secret.isEmpty) {
+            await setAutomaticLogin(null);
+            throw const FormatException('已保存的密码不可用，请重新登录');
+          }
+          if (!automaticLoginFor(automatic)) return;
+          try {
+            await _authenticate(secret, username: automatic.username);
+          } on ApiFailure catch (e) {
+            if (e.status == 401 || e.status == 403) {
+              await setAutomaticLogin(null);
+            }
+            rethrow;
+          }
+          if (mfaRequired) error = '自动登录需要验证身份，请输入动态码或恢复码';
+        }
+      }
+    }
   }
 
   void _checkServer(Json info) {
@@ -486,11 +496,30 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _favoritesForeground = state == AppLifecycleState.resumed;
-    if (_favoritesForeground && authenticated) {
-      unawaited(refreshFavorites());
+    if (_favoritesForeground) {
+      unawaited(_refreshForegroundConnection());
     } else {
       _favoritesTimer?.cancel();
     }
+  }
+
+  Future<void> _refreshForegroundConnection() async {
+    if (authenticated) await refreshFavorites();
+    if (_disposed ||
+        !_favoritesForeground ||
+        !initialized ||
+        authenticated ||
+        !automaticLogin ||
+        busy ||
+        mfaRequired ||
+        taking ||
+        singingPhase == 'RENDERING') {
+      return;
+    }
+    // A warm return does not run initialize(). If the session expired while
+    // backgrounded, reuse the same identity-checked login as a cold start.
+    // _run serializes restoration with manual login and connection changes.
+    await _run(() => _restoreConnection());
   }
 
   Future<void> refreshFavorites() async {

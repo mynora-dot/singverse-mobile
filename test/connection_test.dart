@@ -112,6 +112,7 @@ class LoginApi extends FakeApi {
   final loginBodies = <Map>[];
   final resetBodies = <Map>[];
   ApiFailure? verifyFailure, resetFailure;
+  Completer<void>? pendingInspection;
   @override
   Future<void> configure(String value) async {
     if (value != origin) loggedIn = false;
@@ -120,6 +121,7 @@ class LoginApi extends FakeApi {
 
   @override
   Future<dynamic> inspect(String origin, {String? invitation}) async {
+    await pendingInspection?.future;
     if (offline) throw ApiFailure(0, 'NAS 不可达');
     return {
       'service': 'singverse',
@@ -141,6 +143,9 @@ class LoginApi extends FakeApi {
     }
     if (path.endsWith('/auth/session') && loggedIn) {
       return {'username': username};
+    }
+    if (path.startsWith('/api/v1/favorites') && !loggedIn) {
+      throw ApiFailure(401, '请登录');
     }
     if (path.endsWith('/mfa/verify') && verifyFailure != null) {
       throw verifyFailure!;
@@ -460,30 +465,249 @@ void main() {
     },
   );
 
+  testWidgets('foreground return renews an expired automatic login', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    api.origin = saved.origin;
+    api.loggedIn = true;
+    await state.initialize();
+    expect(state.authenticated, isTrue);
+    expect(api.loginBodies, isEmpty);
+
+    state.didChangeAppLifecycleState(AppLifecycleState.paused);
+    api.loggedIn = false;
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(state.authenticated, isTrue);
+    expect(state.accountName, saved.username);
+    expect(logins.passwordReads, 1);
+    expect(api.loginBodies, hasLength(1));
+    expect(state.automaticLoginFor(saved), isTrue);
+    expect(state.favoritesReady, isTrue);
+    expect(state.error, isNull);
+  });
+
+  testWidgets('foreground return retries an offline automatic startup', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    api.offline = true;
+    await state.initialize();
+    expect(state.authenticated, isFalse);
+    expect(state.error, 'NAS 不可达');
+
+    state.didChangeAppLifecycleState(AppLifecycleState.paused);
+    api.offline = false;
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(state.authenticated, isTrue);
+    expect(state.accountName, saved.username);
+    expect(logins.passwordReads, 1);
+    expect(api.loginBodies, hasLength(1));
+    expect(state.error, isNull);
+  });
+
   testWidgets(
-    'optical focus follows the active field without changing credentials or sending requests',
+    'foreground return keeps a valid session without reading secrets',
+    (tester) async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      api.origin = saved.origin;
+      api.loggedIn = true;
+      await state.initialize();
+
+      state.didChangeAppLifecycleState(AppLifecycleState.paused);
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+
+      expect(state.authenticated, isTrue);
+      expect(logins.passwordReads, 0);
+      expect(api.loginBodies, isEmpty);
+    },
+  );
+
+  testWidgets('foreground return honors disabled automatic login', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(null);
+    api.origin = state.origin = saved.origin;
+    state.instanceId = saved.instanceId;
+    api.loggedIn = state.authenticated = true;
+
+    state.didChangeAppLifecycleState(AppLifecycleState.paused);
+    api.loggedIn = false;
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(state.authenticated, isFalse);
+    expect(logins.passwordReads, 0);
+    expect(api.loginBodies, isEmpty);
+    expect(logins.secrets[saved.id], 'remembered password');
+  });
+
+  testWidgets('foreground automatic login never switches to a previous NAS', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    state.origin = api.origin = 'http://other-nas.local:18080';
+    state.instanceId = 'nas-b';
+
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(state.origin, 'http://other-nas.local:18080');
+    expect(api.origin, state.origin);
+    expect(logins.passwordReads, 0);
+    expect(api.loginBodies, isEmpty);
+  });
+
+  testWidgets(
+    'foreground automatic login checks the NAS before reading secrets',
+    (tester) async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      state.origin = api.origin = saved.origin;
+      api.identity = 'replacement';
+
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+
+      expect(state.authenticated, isFalse);
+      expect(state.automaticLogin, isFalse);
+      expect(logins.passwordReads, 0);
+      expect(api.loginBodies, isEmpty);
+      expect(state.error, contains('曲库身份已变化'));
+    },
+  );
+
+  testWidgets('foreground automatic login still waits for MFA verification', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    state.origin = api.origin = saved.origin;
+    api.loginState = 'mfaRequired';
+
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(state.authenticated, isFalse);
+    expect(state.mfaRequired, isTrue);
+    expect(api.loginBodies, hasLength(1));
+
+    state.didChangeAppLifecycleState(AppLifecycleState.paused);
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(api.loginBodies, hasLength(1));
+
+    await open(tester);
+    await enter(tester, 'nas-mfa-field', '123456');
+    await submit(tester);
+    expect(state.authenticated, isTrue);
+    expect(state.automaticLogin, isTrue);
+  });
+
+  testWidgets('rejected foreground credentials stop later automatic attempts', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    state.origin = api.origin = saved.origin;
+    api.loginFailure = ApiFailure(401, '密码错误');
+
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(state.authenticated, isFalse);
+    expect(state.automaticLogin, isFalse);
+    expect(state.error, '密码错误');
+
+    state.didChangeAppLifecycleState(AppLifecycleState.paused);
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(api.loginBodies, hasLength(1));
+    expect(logins.secrets[saved.id], 'remembered password');
+  });
+
+  testWidgets(
+    'overlapping foreground events make one automatic login attempt',
+    (tester) async {
+      final saved = record();
+      logins.seed(saved);
+      await state.setAutomaticLogin(saved);
+      state.origin = api.origin = saved.origin;
+      final inspection = api.pendingInspection = Completer<void>();
+
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(state.busy, isTrue);
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      inspection.complete();
+      await tester.pumpAndSettle();
+
+      expect(state.authenticated, isTrue);
+      expect(api.loginBodies, hasLength(1));
+      expect(logins.passwordReads, 1);
+      expect(state.busy, isFalse);
+    },
+  );
+
+  testWidgets('foreground automatic login waits until recording is finished', (
+    tester,
+  ) async {
+    final saved = record();
+    logins.seed(saved);
+    await state.setAutomaticLogin(saved);
+    state.origin = api.origin = saved.origin;
+    state.singing = {'phase': 'RECORDING'};
+
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(api.loginBodies, isEmpty);
+    expect(logins.passwordReads, 0);
+
+    state.singing = {'phase': 'IDLE'};
+    state.didChangeAppLifecycleState(AppLifecycleState.paused);
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(state.authenticated, isTrue);
+    expect(api.loginBodies, hasLength(1));
+  });
+
+  testWidgets(
+    'focus follows the active field without changing credentials or sending requests',
     (tester) async {
       await open(tester);
       await enter(tester, 'nas-address-field', 'nas.local:18080');
       await enter(tester, 'nas-username-field', 'family-admin');
       await enter(tester, 'nas-password-field', 'test password');
-      Glass surfaceFor(String key) => tester.widget<Glass>(
-        find.descendant(
-          of: find
-              .ancestor(
-                of: find.byKey(ValueKey(key)),
-                matching: find.byType(GlassField),
-              )
-              .first,
-          matching: find.byType(Glass),
-        ),
-      );
-      expect(surfaceFor('nas-password-field').focused, isTrue);
-      expect(surfaceFor('nas-username-field').focused, isFalse);
+      FocusNode focusFor(String key) => tester
+          .widget<EditableText>(
+            find.descendant(
+              of: find.byKey(ValueKey(key)),
+              matching: find.byType(EditableText),
+            ),
+          )
+          .focusNode;
+      expect(focusFor('nas-password-field').hasFocus, isTrue);
+      expect(focusFor('nas-username-field').hasFocus, isFalse);
       final username = find.byKey(const ValueKey('nas-username-field'));
       await tap(tester, username);
-      expect(surfaceFor('nas-username-field').focused, isTrue);
-      expect(surfaceFor('nas-password-field').focused, isFalse);
+      expect(focusFor('nas-username-field').hasFocus, isTrue);
+      expect(focusFor('nas-password-field').hasFocus, isFalse);
       expect(
         tester.widget<TextField>(username).controller!.text,
         'family-admin',
