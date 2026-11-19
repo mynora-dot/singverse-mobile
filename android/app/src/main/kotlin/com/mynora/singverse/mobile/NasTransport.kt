@@ -1,6 +1,7 @@
 package com.mynora.singverse.mobile
 
 import android.content.Context
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -138,6 +139,9 @@ class NasTransport internal constructor(context: Context) {
             jar.get(URI(url), emptyMap())["Cookie"]?.joinToString("; ") ?: ""
         }
         val builder = Request.Builder().url(url).header("Accept", "application/json").header("Cookie", cookie)
+        if (path == "/api/v1/client-releases/mobile") {
+            builder.header("X-SingVerse-ABI", requireNotNull(UpdateAbi.preferred(Build.SUPPORTED_ABIS.toList())) { "此手机处理器没有可用的安装包" })
+        }
         if (csrf != null) builder.header("X-CSRF-Token", csrf)
         builder.method(method, if (method in listOf("GET", "HEAD")) null else (body ?: "").toRequestBody("application/json".toMediaType()))
         val call = client.newCall(builder.build())

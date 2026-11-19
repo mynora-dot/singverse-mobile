@@ -1,6 +1,6 @@
 .PHONY: help setup check build release native-check audio-test release-check
 help:
-	@printf '%s\n' 'setup: restore locked Flutter dependencies' 'check: Dart format/analyze/tests and Android unit tests' 'build: debug universal APK' 'release: signed universal APK + release.json + SHA256SUMS' 'audio-test: isolated Android instrumentation (requires device)'
+	@printf '%s\n' 'setup: restore locked Flutter dependencies' 'check: Dart format/analyze/tests and Android unit tests' 'build: debug universal APK' 'release: signed ARMv7/ARM64/x86_64 APKs + release.json + SHA256SUMS' 'audio-test: isolated Android instrumentation (requires device)'
 setup:
 	flutter --no-version-check pub get --enforce-lockfile
 check: setup

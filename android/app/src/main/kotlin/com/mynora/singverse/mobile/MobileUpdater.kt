@@ -90,7 +90,8 @@ internal class MobileUpdater(
         val temporary = File(directory, "download-$ticket.part")
         val file = File(directory, "singverse-mobile-$ticket.apk")
         require(directory.usableSpace > size + 10485760) { "手机存储空间不足" }
-        val request = Request.Builder().url(server.origin + manifest.getString("url")).build()
+        val request = Request.Builder().url(server.origin + manifest.getString("url"))
+            .apply { UpdateAbi.preferred(Build.SUPPORTED_ABIS.toList(), supported)?.let { header("X-SingVerse-ABI", it) } }.build()
         val download = transport.mediaClient().newCall(request)
         synchronized(lock) { check(ticket, server); call = download }
         try {

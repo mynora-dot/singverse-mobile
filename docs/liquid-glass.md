@@ -47,7 +47,7 @@
 
 ### 本轮设备验证与命令
 
-本轮所有运行验收仅使用已指定物理机 `10AE9J2E5Q000FJ`，使用隔离的 `.e2e` 包；不运行本机 unit / widget 测试或模拟器。验证分为两层，结果必须分开记录：
+本轮所有运行验收仅使用已指定物理机 `YOUR_DEVICE_SERIAL`，使用隔离的 `.e2e` 包；不运行本机 unit / widget 测试或模拟器。验证分为两层，结果必须分开记录：
 
 | runner target | 验证层 | 数据与能力边界 |
 | --- | --- | --- |
@@ -60,12 +60,12 @@
 ```sh
 python3 scripts/check-player-console.py \
   --target library_glass \
-  --device 10AE9J2E5Q000FJ \
+  --device YOUR_DEVICE_SERIAL \
   --output build/reports/liquid-glass-20261118-library-new-run
 
 python3 scripts/check-player-console.py \
   --target nas_glass \
-  --device 10AE9J2E5Q000FJ \
+  --device YOUR_DEVICE_SERIAL \
   --output build/reports/liquid-glass-20261118-nas-new-run
 ```
 
@@ -74,7 +74,7 @@ python3 scripts/check-player-console.py \
 ```sh
 python3 scripts/check-player-console.py \
   --target player_console \
-  --device 10AE9J2E5Q000FJ \
+  --device YOUR_DEVICE_SERIAL \
   --voice-sample /absolute/path/to/generated/voice-test.wav \
   --output build/reports/liquid-glass-20261118-native-new-run
 ```
@@ -89,7 +89,7 @@ python3 scripts/check-player-console.py \
 
 ### 本轮执行结果
 
-2026-11-18，物理机 vivo V2417A（`10AE9J2E5Q000FJ`），Android 15 / API 35，1260×2800、density 560（逻辑 360×800）。运行包为 `com.mynora.singverse.mobile.e2e`，profile / Impeller。所有运行测试均在这台手机完成，没有运行宿主 unit / widget 测试或模拟器；宿主执行静态分析、格式检查与 APK 构建。
+2026-11-18，物理机 vivo V2417A（`YOUR_DEVICE_SERIAL`），Android 15 / API 35，1260×2800、density 560（逻辑 360×800）。运行包为 `com.mynora.singverse.mobile.e2e`，profile / Impeller。所有运行测试均在这台手机完成，没有运行宿主 unit / widget 测试或模拟器；宿主执行静态分析、格式检查与 APK 构建。
 
 `build/reports/apple-prototype-20261118/bundle-06/` 三套功能验收全部通过，包含曲库 / NAS UI fixture、21 项真实原生链路检查及 40 张场景截图。覆盖搜索、筛选草稿与取消、焦点和滚动保持、底栏收展与键盘避让、浅深色 / 不透明 / 性能 / 长辈模式，以及实际 Media3 播放、全屏返回、收藏、调音、音轨切换、选段应用 / 取消、拖动收起与迷你播放器展开、系统 200% 字号、AudioRecord / AAC 和录音回听。报告核对四种原生控制标记全部到达，结束后系统字号恢复为 1.0，日常包版本与更新时间保持不变。
 
@@ -121,7 +121,7 @@ python3 scripts/check-player-console.py \
 实际测试启动入口（runner 先订阅 VM 日志，再由 driver 恢复暂停的 isolate）：
 
 ```sh
-adb -s 10AE9J2E5Q000FJ shell am start \
+adb -s YOUR_DEVICE_SERIAL shell am start \
   -a android.intent.action.MAIN -c android.intent.category.LAUNCHER \
   --ez start-paused true --ez enable-dart-profiling true \
   --ez enable-impeller true --ez disable-service-auth-codes true \
@@ -134,7 +134,7 @@ adb -s 10AE9J2E5Q000FJ shell am start \
 
 性能模式与减少透明效果现在分别明确显示“已开启”或“已关闭”，开关打开即启用该项。减少透明效果关闭、但长辈模式或性能模式仍开启时，会明确说明该模式仍使用实底。原有正向布尔值、默认值和保存方式不变。
 
-`build/reports/performance-switch-20261118/phone-02/` 在同一 vivo V2417A（`10AE9J2E5Q000FJ`）的 profile / Impeller `.e2e` 包通过曲库与主框架验收，保存 22 张截图。实际点击两个开关，检查状态文字、开关值、AppState、受控偏好值和渲染策略一致；返回设置后保持选中状态。减少透明效果单独开启时不关闭动效；性能模式开启后，再开关减少透明效果仍保持性能实底；退出两个模式后恢复外观效果。默认 / 性能模式滚动窗口分别纳入 437 / 436 帧，超 16.667ms 帧均为 0。该项为真实手机上的受控 UI fixture，不是新增原生播放 / 录音或跨进程偏好持久化专项验收。
+`build/reports/performance-switch-20261118/phone-02/` 在同一 vivo V2417A（`YOUR_DEVICE_SERIAL`）的 profile / Impeller `.e2e` 包通过曲库与主框架验收，保存 22 张截图。实际点击两个开关，检查状态文字、开关值、AppState、受控偏好值和渲染策略一致；返回设置后保持选中状态。减少透明效果单独开启时不关闭动效；性能模式开启后，再开关减少透明效果仍保持性能实底；退出两个模式后恢复外观效果。默认 / 性能模式滚动窗口分别纳入 437 / 436 帧，超 16.667ms 帧均为 0。该项为真实手机上的受控 UI fixture，不是新增原生播放 / 录音或跨进程偏好持久化专项验收。
 
 状态截图为同目录的 `14-performance-switch-on.png`、`15-performance-switch-off.png`、`16-transparency-switch-on.png`、`17-transparency-switch-off.png`；功能结果与逐帧记录见 `acceptance.json` 和 `report.json`。`phone-01/` 保留加入减少透明效果调整前、性能模式单项通过的记录。本次没有启动镜像或打开浏览器面板，截图来自 runner 的 ADB 采集；启动入口与包名同上。字号核对为 1.0，ADB 正反向映射均为空，日常包版本与更新时间未变。
 
@@ -278,7 +278,7 @@ flutter --no-version-check test --no-pub test/mobile_redesign_test.dart \
 
 ### 历史：Android profile 验收
 
-用户已指定后续实测使用当前连接的物理机。2026-11-17 连接的设备为 vivo V2417A（Android 15，serial `10AE9J2E5Q000FJ`）；实测命令必须显式绑定该物理机，不再默认使用模拟器。使用独立 `.e2e` 包，不覆盖日常应用或触碰其账号、作品与录音。历史模拟器结果保留并明确标注来源。
+用户已指定后续实测使用当前连接的物理机。2026-11-17 连接的设备为 vivo V2417A（Android 15，serial `YOUR_DEVICE_SERIAL`）；实测命令必须显式绑定该物理机，不再默认使用模拟器。使用独立 `.e2e` 包，不覆盖日常应用或触碰其账号、作品与录音。历史模拟器结果保留并明确标注来源。
 
 沿用 README 中的独立 NAS 样本流程，服务必须使用新建临时数据目录和 `18181` 端口。为滚动场景提供足够的独立歌曲。只使用 `.e2e` 包；脚本拒绝连接日常 NAS。已有录音不允许被 profile 中断。
 

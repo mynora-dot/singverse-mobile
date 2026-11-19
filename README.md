@@ -64,7 +64,11 @@ make build
 SINGVERSE_VERSION=0.0.2 make release
 ```
 
-缺少正式签名立即失败，不回退 debug。输出 `build/mobile-release/singverse-mobile.apk`（通用 APK）、`release.json`、`SHA256SUMS`。元数据来自真实 APK 的 aapt/apksigner 结果，包含 versionCode/versionName、packageName、minSdk、abis、size、sha256、certificateSha256、notes；证书摘要为小写 64 位十六进制。APK 的版本必须匹配 Actions 注入的版本。更新说明默认读取 `RELEASE_NOTES`，CI 使用 GitHub Release 正文；可用 `scripts/prepare-release.py --notes <文本文件>` 覆盖。说明最多 16000 UTF-8 字节。
+缺少正式签名立即失败，不回退 debug。正式构建使用 `--split-per-abi`，只输出 ARMv7、ARM64、x86_64 三个单架构 APK：`build/mobile-release/singverse-mobile-{armeabi-v7a|arm64-v8a|x86_64}.apk`，另附 `release.json` 和 `SHA256SUMS`。不生成或上传通用 APK；各包 `versionCode` 均等于标签派生值，关闭 Flutter 的 ABI 版本号偏移。
+
+`release.json` 使用 schemaVersion=2，公共字段包含 platform、versionCode/versionName、packageName、minSdk、certificateSha256、notes；variants 每项记录 abi、fileName、size、sha256。三个 APK 必须全部存在且各自只包含一个正确 ABI，版本和签名一致。元数据来自真实 APK 的 aapt/apksigner 结果，证书摘要为小写 64 位十六进制。历史 schemaVersion=1 清单仍用于签名连续性检查；同标签重试逐一比较全部架构文件。更新说明默认读取 `RELEASE_NOTES`，CI 使用 GitHub Release 正文；可用 `scripts/prepare-release.py --notes <文本文件>` 覆盖。说明最多 16000 UTF-8 字节。
+
+应用内检查更新和下载通过 `X-SingVerse-ABI` 告知 NAS 设备架构；下载继续固定在当前 NAS 的 `/api/v1/client-releases/mobile/apk`，并固定使用已核对的清单架构。NAS 下载页提供各架构选择。需要同步更新 Go 镜像和下载页；新客户端继续支持旧 NAS 的通用包。旧客户端没有架构请求头，默认获取 ARM64，不支持该架构时先从下载页安装匹配架构的新版本。
 
 GitHub Actions 仅在正式 GitHub Release（如 `v0.0.2`）发布后构建和上传资产；排除 draft/prerelease，普通 push/PR 不触发。工作流不运行测试、格式检查或静态分析，只保留发布版本、APK 签名和已有资产保护。仓库 Secrets：`MOBILE_KEYSTORE_BASE64`、`MOBILE_STORE_PASSWORD`、`MOBILE_KEY_ALIAS`、`MOBILE_KEY_PASSWORD`。签名文件仅暂存在 runner 临时目录并清理。发布前排除当前 tag、比较上一正式版本的元数据，拒绝版本不递增、缺失/损坏元数据或签名证书变化。无历史正式版本才允许首次发布。重试逐字节比对已上传资产，相同文件复用，仅上传缺失文件；不同内容失败，标签不可重用。管理平台镜像构建会下载并锁定正式 Release 中的 APK，用户从 NAS 下载，无需运行时访问 GitHub。
 
@@ -76,7 +80,7 @@ CI 固定使用 Ubuntu 24.04，保留 Android SDK/JDK，复用 Flutter 与 Gradl
 
 「常唱 → NAS 共享收藏」与后台「曲库 → 收藏」、电视收藏共用服务端数据。按钮提交明确的目标状态，收到 NAS 成功响应后才改变收藏状态；分页读取完整且修订一致的集合。页面进入、应用回到前台、写入后及前台约 30 秒重新读取；切 NAS、退出或登录失效清空旧集合，丢弃迟到响应。读取失败保留上次成功内容并标明，缺失歌曲可取消且不能播放。不读取、导入或上传旧 SQLite 收藏，也不持久化新收藏或建立离线写队列；同表练唱历史及录音作品保留。详见 [共享收藏契约](contracts/favorites.md)。
 
-`make check` 提供格式、分析、Flutter 行为测试及 Android 单元测试和发布边界检查（`make release-check` 可单独执行）；`make audio-test` 提供独立 `.e2e` 原生设备检查。这些是工程入口说明，不是本轮执行记录。2026-11-18 界面改造的运行验收仅使用指定物理机 `10AE9J2E5Q000FJ`，不运行本机 unit / widget 测试或模拟器。
+`make check` 提供格式、分析、Flutter 行为测试及 Android 单元测试和发布边界检查（`make release-check` 可单独执行）；`make audio-test` 提供独立 `.e2e` 原生设备检查。这些是工程入口说明，不是本轮执行记录。2026-11-18 界面改造的运行验收仅使用指定物理机 `YOUR_DEVICE_SERIAL`，不运行本机 unit / widget 测试或模拟器。
 
 设备 runner 为 `scripts/check-player-console.py --target <target> --device <物理机序列号> --output <全新报告目录>`。`--target library_glass` 与 `--target nas_glass` 在真实手机渲染器上运行受控 UI fixture，不连接日常 NAS 或真实音频，不需要语音样本。`--target player_console` 为默认目标，验证实际原生播放与录音链路，必须额外提供 `--voice-sample <生成的 voice-test.wav>`；先用 `scripts/setup-mobile-karaoke-fixtures.py` 生成自制媒体（需 FFmpeg，可用 `FFMPEG` 指定），并启动新数据目录的隔离 Go / compute，经 adb reverse 连接 `127.0.0.1:18181`。
 
