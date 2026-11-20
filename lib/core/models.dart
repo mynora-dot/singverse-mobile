@@ -29,15 +29,34 @@ class Song {
 
 class TextLine {
   const TextLine(this.startMs, this.endMs, this.text);
-  final int startMs;
+  const TextLine.untimed(this.text) : startMs = null, endMs = null;
+
+  /// Null for plain lyrics that have no media timeline.
+  final int? startMs;
   final int? endMs;
   final String text;
 }
 
 List<TextLine> parseText(String format, String text) {
+  format = format.toLowerCase();
+  text = text
+      .replaceFirst(RegExp(r'^\uFEFF'), '')
+      .replaceAll(RegExp(r'\r\n?'), '\n');
+  if (format == 'text') {
+    final metadata = RegExp(
+      r'^\[(?:ti|ar|al|by|offset|length):.*\]$',
+      caseSensitive: false,
+    );
+    return text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty && !metadata.hasMatch(line))
+        .map(TextLine.untimed)
+        .toList();
+  }
   final result = <TextLine>[];
-  if (format.toLowerCase() == 'lrc') {
-    final stamp = RegExp(r'\[(\d+):(\d{2})(?:\.(\d{1,3}))?\]');
+  if (format == 'lrc') {
+    final stamp = RegExp(r'\[(\d+):(\d{2})(?:[.,](\d{1,3}))?\]');
     final offset =
         int.tryParse(
           RegExp(
@@ -64,6 +83,7 @@ List<TextLine> parseText(String format, String text) {
         );
       }
     }
+    if (result.isEmpty) return parseText('text', text);
   } else {
     int time(String v) {
       final parts = v.replaceAll(',', '.').split(':');
@@ -87,7 +107,7 @@ List<TextLine> parseText(String format, String text) {
       );
     }
   }
-  result.sort((a, b) => a.startMs.compareTo(b.startMs));
+  result.sort((a, b) => a.startMs!.compareTo(b.startMs!));
   return result;
 }
 

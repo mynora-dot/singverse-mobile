@@ -7,6 +7,22 @@ class PlayerLyrics {
   final List<TextLine> lines;
   final List<(String, String)> credits;
 
+  factory PlayerLyrics.fromTracks(Iterable<Json> tracks, Song song) {
+    List<TextLine>? untimed;
+    for (final track in tracks) {
+      final lines = parseText(
+        track['format'] as String,
+        track['text'] as String,
+      );
+      if (!lines.any((line) => line.text.trim().isNotEmpty)) continue;
+      if (lines.any((line) => line.startMs != null)) {
+        return PlayerLyrics.fromLines(lines, song);
+      }
+      untimed ??= lines;
+    }
+    return PlayerLyrics.fromLines(untimed ?? [], song);
+  }
+
   factory PlayerLyrics.fromLines(List<TextLine> source, Song song) {
     final lines = <TextLine>[];
     final credits = <(String, String)>[];

@@ -18,6 +18,65 @@ class _CountingTextScaler extends TextScaler {
 }
 
 void main() {
+  for (final currentOnly in [false, true]) {
+    testWidgets(
+      'plain lyrics scroll manually across progress updates (overlay: $currentOnly)',
+      (tester) async {
+        final lines = parseText(
+          'text',
+          List.generate(30, (index) => '第 $index 句歌词').join('\n'),
+        );
+        final seeks = <int>[];
+        var backgroundTaps = 0;
+        Future<void> show(int position, {List<TextLine>? track}) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: SizedBox(
+                    width: 320,
+                    height: 240,
+                    child: LyricsView(
+                      lines: track ?? lines,
+                      positionMs: position,
+                      senior: false,
+                      currentOnly: currentOnly,
+                      enabled: true,
+                      onSeek: seeks.add,
+                      onBackgroundTap: () => backgroundTaps++,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+
+        await show(12000);
+        expect(find.text('第 0 句歌词'), findsOneWidget);
+        expect(find.text('第 1 句歌词'), findsOneWidget);
+        await tester.tap(find.text('第 0 句歌词'));
+        expect(seeks, isEmpty);
+        expect(backgroundTaps, currentOnly ? 1 : 0);
+        final viewport = find.byKey(const ValueKey('lyrics-viewport'));
+        await tester.drag(viewport, const Offset(0, -150));
+        await tester.pumpAndSettle();
+        final scrollable = tester.state<ScrollableState>(
+          find.descendant(of: viewport, matching: find.byType(Scrollable)),
+        );
+        final position = scrollable.position.pixels;
+        expect(position, greaterThan(0));
+        await show(120000);
+        expect(scrollable.position.pixels, position);
+        await show(180000, track: parseText('text', '新歌曲第一句\n新歌曲第二句'));
+        expect(find.text('新歌曲第一句'), findsOneWidget);
+        expect(scrollable.position.pixels, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'progress reuses lyric geometry while track and layout changes remeasure it',
     (tester) async {

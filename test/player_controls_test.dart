@@ -84,6 +84,29 @@ void main() {
   }
 
   testWidgets(
+    'plain API lyrics display while range selection still uses media time',
+    (tester) async {
+      (state.api as FakeApi).textTracks = [
+        {'id': 'metadata-lyrics', 'format': 'text', 'text': '第一句歌词\n第二句歌词'},
+      ];
+      await player(tester, const Size(390, 844));
+      expect(find.text('第一句歌词'), findsOneWidget);
+      expect(find.text('第二句歌词'), findsOneWidget);
+      expect(find.text('暂无独立歌词'), findsNothing);
+      await tester.tap(find.text('第一句歌词'));
+      await tester.pumpAndSettle();
+      expect(native.commands, isEmpty);
+
+      await tester.tap(find.text('选段'));
+      await tester.pumpAndSettle();
+      expect(find.text('按歌词选段：先点起句，再点结束句'), findsNothing);
+      expect(find.byKey(const ValueKey('player-range-start')), findsOneWidget);
+      expect(find.byKey(const ValueKey('player-range-end')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'native ticks update clocks and lyrics without rebuilding controls',
     (tester) async {
       (state.api as FakeApi).textTracks = [

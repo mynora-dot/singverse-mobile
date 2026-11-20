@@ -286,13 +286,11 @@ class _PlayerPageState extends State<PlayerPage> {
       final data = await widget.state.get(
         '/api/v1/mobile/library/songs/${Uri.encodeComponent(song.id)}/text-tracks',
       ) as Json;
-      final usable = (data['items'] as List)
-          .cast<Json>()
-          .map((i) => parseText(i['format'] as String, i['text'] as String))
-          .where((l) => l.isNotEmpty)
-          .firstOrNull;
       if (mounted && generation == lyricsGeneration) {
-        final display = PlayerLyrics.fromLines(usable ?? [], song);
+        final display = PlayerLyrics.fromTracks(
+          (data['items'] as List).cast<Json>(),
+          song,
+        );
         setState(() {
           lines = display.lines;
           lyricCredits = display.credits;
@@ -419,6 +417,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final state = widget.state;
     if (state.durationMs <= 0 || state.taking) return;
     final duration = state.durationMs.toDouble();
+    final timedLines = lines.where((line) => line.startMs != null).toList();
     // Native playback keeps the committed loop while this sheet owns a draft.
     var values = RangeValues(
       state.rangeA.toDouble().clamp(0, duration),
@@ -540,7 +539,7 @@ class _PlayerPageState extends State<PlayerPage> {
                               ),
                             ],
                           ),
-                          if (lines.isNotEmpty) ...[
+                          if (timedLines.isNotEmpty) ...[
                             const Divider(height: 32),
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
@@ -554,23 +553,26 @@ class _PlayerPageState extends State<PlayerPage> {
                                     ),
                               ),
                             ),
-                            for (var i = 0; i < lines.length; i++)
+                            for (var i = 0; i < timedLines.length; i++)
                               ListTile(
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                 ),
                                 selected:
-                                    lines[i].startMs >= values.start &&
-                                    lines[i].startMs < values.end,
-                                leading: Text(durationLabel(lines[i].startMs)),
-                                title: Text(lines[i].text),
+                                    timedLines[i].startMs! >= values.start &&
+                                    timedLines[i].startMs! < values.end,
+                                leading: Text(
+                                  durationLabel(timedLines[i].startMs!),
+                                ),
+                                title: Text(timedLines[i].text),
                                 onTap: committing
                                     ? null
                                     : () => update(() {
                                         final end =
-                                            (lines[i].endMs ??
-                                                    (i + 1 < lines.length
-                                                        ? lines[i + 1].startMs
+                                            (timedLines[i].endMs ??
+                                                    (i + 1 < timedLines.length
+                                                        ? timedLines[i + 1]
+                                                              .startMs!
                                                         : state.durationMs))
                                                 .toDouble();
                                         if (!selectingEnd ||
@@ -578,7 +580,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                             i < startLine!) {
                                           startLine = i;
                                           selectingEnd = true;
-                                          final start = lines[i].startMs
+                                          final start = timedLines[i].startMs!
                                               .toDouble()
                                               .clamp(0, duration)
                                               .toDouble();
@@ -2809,6 +2811,17 @@ class _LyricsViewState extends State<LyricsView> {
   final offsets = <double>[];
   DateTime manualUntil = DateTime.fromMillisecondsSinceEpoch(0);
   @override
+  void didUpdateWidget(LyricsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.lines, widget.lines) &&
+        !widget.lines.any((line) => line.startMs != null)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && controller.hasClients) controller.jumpTo(0);
+      });
+    }
+  }
+
+  @override
   void dispose() {
     controller.dispose();
     super.dispose();
@@ -2819,17 +2832,22 @@ class _LyricsViewState extends State<LyricsView> {
     builder: (context, size) {
       final scaler = MediaQuery.textScalerOf(context);
       final scheme = Theme.of(context).colorScheme;
-      final hasRange = widget.rangeB > widget.rangeA;
+      final timed = widget.lines.any((line) => line.startMs != null);
+      final hasRange = timed && widget.rangeB > widget.rangeA;
       final rangeStart = hasRange
-          ? widget.lines.lastIndexWhere((line) => line.startMs <= widget.rangeA)
+          ? widget.lines.lastIndexWhere(
+              (line) => line.startMs! <= widget.rangeA,
+            )
           : -1;
       final rangeEnd = hasRange
-          ? widget.lines.lastIndexWhere((line) => line.startMs < widget.rangeB)
+          ? widget.lines.lastIndexWhere((line) => line.startMs! < widget.rangeB)
           : -1;
-      final active = widget.lines.lastIndexWhere(
-        (line) => line.startMs <= widget.positionMs,
-      );
-      if (widget.currentOnly) {
+      final active = timed
+          ? widget.lines.lastIndexWhere(
+              (line) => line.startMs! <= widget.positionMs,
+            )
+          : -1;
+      if (widget.currentOnly && timed) {
         if (widget.lines.isEmpty) return const SizedBox.shrink();
         final index = active < 0 ? 0 : active;
         return GestureDetector(
@@ -2848,7 +2866,7 @@ class _LyricsViewState extends State<LyricsView> {
                   child: InkWell(
                     onTap: widget.enabled
                         ? () => widget.onSeek(
-                            widget.lines[index].startMs.clamp(0, 1 << 53),
+                            widget.lines[index].startMs!.clamp(0, 1 << 53),
                           )
                         : null,
                     child: Padding(
@@ -2884,7 +2902,9 @@ class _LyricsViewState extends State<LyricsView> {
         );
       }
       TextStyle styleFor(int index) => TextStyle(
-        fontSize: widget.stage && !widget.senior
+        fontSize: widget.currentOnly
+            ? (widget.senior ? 26 : 20)
+            : widget.stage && !widget.senior
             ? (index == active ? 26 : 18)
             : _lyricFontSize(context, widget.senior, active: index == active),
         height: 1.4,
@@ -2894,7 +2914,7 @@ class _LyricsViewState extends State<LyricsView> {
                   : FontWeight.w500)
             : FontWeight.w400,
       );
-      final measurementStyle = styleFor(active);
+      final measurementStyle = styleFor(timed ? active : -2);
       final direction = Directionality.of(context);
       final measurementsChanged =
           !identical(measuredLines, widget.lines) ||
@@ -2937,10 +2957,11 @@ class _LyricsViewState extends State<LyricsView> {
           painter.dispose();
         }
       }
-      final topPadding = size.maxHeight * .16;
-      if (active != lastActive ||
-          measurementsChanged ||
-          size.maxHeight != lastHeight) {
+      final topPadding = timed ? size.maxHeight * .16 : 16.0;
+      if (timed &&
+          (active != lastActive ||
+              measurementsChanged ||
+              size.maxHeight != lastHeight)) {
         lastActive = active;
         lastHeight = size.maxHeight;
         final offset = active < 0 ? 0.0 : offsets[active];
@@ -2988,13 +3009,13 @@ class _LyricsViewState extends State<LyricsView> {
             24,
             topPadding,
             24,
-            size.maxHeight * .58,
+            timed ? size.maxHeight * .58 : 16,
           ),
           itemCount: widget.lines.length,
           itemExtentBuilder: (index, dimensions) => heights[index],
           itemBuilder: (context, index) => Semantics(
-            button: widget.enabled,
-            selected: index == active,
+            button: widget.enabled && timed,
+            selected: timed ? index == active : null,
             label: index == rangeStart && index == rangeEnd
                 ? '选段起止句'
                 : index == rangeStart
@@ -3003,11 +3024,11 @@ class _LyricsViewState extends State<LyricsView> {
                 ? '选段结束句'
                 : null,
             child: InkWell(
-              onTap: widget.enabled
+              onTap: widget.enabled && timed
                   ? () {
                       manualUntil = DateTime.fromMillisecondsSinceEpoch(0);
                       widget.onSeek(
-                        widget.lines[index].startMs.clamp(0, 1 << 53),
+                        widget.lines[index].startMs!.clamp(0, 1 << 53),
                       );
                     }
                   : null,
@@ -3018,19 +3039,24 @@ class _LyricsViewState extends State<LyricsView> {
                   color: scheme.primary,
                 ),
                 child: Align(
-                  alignment: widget.stage
+                  alignment: widget.stage || widget.currentOnly
                       ? Alignment.center
                       : Alignment.centerLeft,
                   child: Text(
                     key: ValueKey('lyrics-line-$index'),
                     widget.lines[index].text,
-                    textAlign: widget.stage
+                    textAlign: widget.stage || widget.currentOnly
                         ? TextAlign.center
                         : TextAlign.start,
                     style: styleFor(index).copyWith(
-                      color: index == active
+                      color: widget.currentOnly
+                          ? Colors.white
+                          : index == active
                           ? (widget.stage ? scheme.onSurface : scheme.primary)
                           : scheme.onSurfaceVariant,
+                      shadows: widget.currentOnly
+                          ? const [Shadow(color: Colors.black, blurRadius: 6)]
+                          : null,
                     ),
                   ),
                 ),
@@ -3053,6 +3079,13 @@ class _LyricsViewState extends State<LyricsView> {
                 ],
                 stops: [0, .07, .88, 1],
               ).createShader(bounds),
+              child: viewport,
+            )
+          : widget.currentOnly
+          ? GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: widget.onBackgroundTap,
               child: viewport,
             )
           : viewport;

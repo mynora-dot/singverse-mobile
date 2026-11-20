@@ -130,7 +130,7 @@ void main() {
       await frames();
       final lyrics = tester.widget<LyricsView>(find.byType(LyricsView));
       final active = lyrics.lines.lastIndexWhere(
-        (line) => line.startMs <= lyrics.positionMs,
+        (line) => line.startMs != null && line.startMs! <= lyrics.positionMs,
       );
       expect(lyrics.lines[active].text, '每一次开口都值得期待');
       final viewport = tester.getRect(
