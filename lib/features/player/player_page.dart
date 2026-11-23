@@ -1242,82 +1242,109 @@ class _PlayerPageState extends State<PlayerPage> {
     final state = widget.state;
     final enabled =
         !actionBusy && (ready || state.recording || state.countdown > 0);
-    return FilledButton.icon(
-      key: key ?? const ValueKey('player-record'),
-      style: FilledButton.styleFrom(
-        minimumSize: Size(
-          48,
-          state.senior
-              ? 56
-              : compact
-              ? 48
-              : 54,
-        ),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 12 : 20,
-          vertical: 12,
-        ),
-        textStyle: _theme.textTheme.labelLarge?.copyWith(
-          fontSize: state.senior
-              ? 19
-              : compact
-              ? 13
-              : 16,
-          fontWeight: FontWeight.w500,
-        ),
-        backgroundColor: recordingControl,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: _theme.colorScheme.onSurface.withValues(
-          alpha: .05,
-        ),
-        disabledForegroundColor: _theme.colorScheme.onSurface.withValues(
-          alpha: .38,
-        ),
-        shape: const StadiumBorder(),
+    final height = state.senior
+        ? 56.0
+        : compact
+        ? 48.0
+        : 54.0;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: enabled
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppPalette.brand, AppPalette.recording],
+              )
+            : null,
+        border: enabled
+            ? Border.all(color: Colors.white.withValues(alpha: .28), width: .8)
+            : null,
+        boxShadow: enabled && !state.performanceMode
+            ? [
+                BoxShadow(
+                  color: AppPalette.brand.withValues(
+                    alpha: state.recording ? .60 : .42,
+                  ),
+                  blurRadius: state.recording ? 28 : 22,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 10),
+                ),
+              ]
+            : null,
       ),
-      onPressed: enabled ? record : null,
-      icon: AnimatedSwitcher(
-        duration: AppMotionScope.durationOf(
-          context,
-          const Duration(milliseconds: 180),
-        ),
-        child: Icon(
-          state.recording
-              ? Icons.stop_rounded
-              : state.countdown > 0
-              ? Icons.close_rounded
-              : Icons.fiber_manual_record_rounded,
-          key: ValueKey((state.recording, state.countdown > 0)),
-          size: 18,
-        ),
-      ),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              state.recording
-                  ? '结束录音'
-                  : state.countdown > 0
-                  ? '取消倒数'
-                  : '开始录音',
-            ),
+      child: FilledButton.icon(
+        key: key ?? const ValueKey('player-record'),
+        style: FilledButton.styleFrom(
+          minimumSize: Size(48, height),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 12 : 20,
+            vertical: 12,
           ),
-          if (state.recording && !compact) ...[
-            const SizedBox(width: 12),
-            ListenableBuilder(
-              listenable: state.playback,
-              builder: (context, _) => Text(
-                durationLabel(
-                  (state.singing['recordedMs'] as num? ?? 0).toInt(),
-                ),
-                style: const TextStyle(
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
+          textStyle: _theme.textTheme.labelLarge?.copyWith(
+            fontSize: state.senior
+                ? 19
+                : compact
+                ? 13
+                : 16,
+            fontWeight: FontWeight.w600,
+          ),
+          backgroundColor: enabled
+              ? Colors.transparent
+              : _theme.colorScheme.onSurface.withValues(alpha: .08),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: _theme.colorScheme.onSurface.withValues(
+            alpha: .06,
+          ),
+          disabledForegroundColor: _theme.colorScheme.onSurface.withValues(
+            alpha: .38,
+          ),
+          shape: const StadiumBorder(),
+        ),
+        onPressed: enabled ? record : null,
+        icon: AnimatedSwitcher(
+          duration: AppMotionScope.durationOf(
+            context,
+            const Duration(milliseconds: 180),
+          ),
+          child: Icon(
+            state.recording
+                ? Icons.stop_rounded
+                : state.countdown > 0
+                ? Icons.close_rounded
+                : Icons.fiber_manual_record_rounded,
+            key: ValueKey((state.recording, state.countdown > 0)),
+            size: 18,
+          ),
+        ),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                state.recording
+                    ? '结束录音'
+                    : state.countdown > 0
+                    ? '取消倒数'
+                    : '开始录音',
               ),
             ),
+            if (state.recording && !compact) ...[
+              const SizedBox(width: 12),
+              ListenableBuilder(
+                listenable: state.playback,
+                builder: (context, _) => Text(
+                  durationLabel(
+                    (state.singing['recordedMs'] as num? ?? 0).toInt(),
+                  ),
+                  style: const TextStyle(
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1584,11 +1611,12 @@ class _PlayerPageState extends State<PlayerPage> {
     required IconData icon,
     required VoidCallback onPressed,
     Color? color,
+    Color? tint,
   }) => Glass(
     state: widget.state,
     radius: 24,
     material: GlassMaterialSpec.stageControl,
-    tint: Colors.white,
+    tint: tint ?? Colors.white,
     child: IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
@@ -1596,264 +1624,244 @@ class _PlayerPageState extends State<PlayerPage> {
       icon: AnimatedSwitcher(
         duration: AppMotionScope.durationOf(
           context,
-          const Duration(milliseconds: 140),
+          const Duration(milliseconds: 200),
+        ),
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: Tween<double>(begin: .76, end: 1).animate(animation),
+          child: FadeTransition(opacity: animation, child: child),
         ),
         child: Icon(icon, key: ValueKey(icon), size: 21),
       ),
     ),
   );
 
-  Widget stageHeader(Song song) => SizedBox(
-    height: widget.state.senior ? 64 : 56,
-    child: Row(
-      children: [
-        const SizedBox(width: 20),
-        stageIcon(
-          tooltip: '收起演唱',
-          onPressed: close,
-          icon: Icons.keyboard_arrow_down_rounded,
-        ),
-        Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragStart: (_) => setState(() => stageDragging = true),
-            onVerticalDragUpdate: (details) => setState(
-              () => stageDrag = (stageDrag + details.delta.dy).clamp(
-                0,
-                MediaQuery.sizeOf(context).height * .65,
+  Widget stageHeader(Song song) {
+    final favorite = widget.state.isFavorite(song);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 8),
+      child: SizedBox(
+        height: widget.state.senior ? 64 : 52,
+        child: Row(
+          children: [
+            stageIcon(
+              tooltip: '收起演唱',
+              onPressed: close,
+              icon: Icons.keyboard_arrow_down_rounded,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragStart: (_) =>
+                    setState(() => stageDragging = true),
+                onVerticalDragUpdate: (details) => setState(
+                  () => stageDrag = (stageDrag + details.delta.dy).clamp(
+                    0,
+                    MediaQuery.sizeOf(context).height * .65,
+                  ),
+                ),
+                onVerticalDragCancel: () => setState(() {
+                  stageDragging = false;
+                  stageDrag = 0;
+                }),
+                onVerticalDragEnd: (details) {
+                  final dismiss =
+                      stageDrag >= 80 ||
+                      (stageDrag > 28 &&
+                          details.velocity.pixelsPerSecond.dy > 600);
+                  setState(() {
+                    stageDragging = false;
+                    if (!dismiss) stageDrag = 0;
+                  });
+                  if (dismiss) close();
+                },
+                child: Tooltip(
+                  message: '歌曲信息',
+                  child: Glass(
+                    state: widget.state,
+                    radius: 26,
+                    material: GlassMaterialSpec.stageControl,
+                    tint: Colors.white,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(26),
+                      onTap: () => panel(
+                        () => showSong(
+                          context,
+                          widget.state,
+                          song,
+                          credits: lyricCredits,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 5, 14, 5),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Artwork(
+                                state: widget.state,
+                                path: song.cover,
+                                label: song.title,
+                                revision: song.data['revision']?.toString(),
+                                size: 36,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    song.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _theme.textTheme.bodyMedium
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.2,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    song.artist.isEmpty ? '歌手未知' : song.artist,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _theme.textTheme.bodySmall?.copyWith(
+                                      color: Colors.white.withValues(
+                                        alpha: .68,
+                                      ),
+                                      fontSize: 11.5,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-            onVerticalDragCancel: () => setState(() {
-              stageDragging = false;
-              stageDrag = 0;
-            }),
-            onVerticalDragEnd: (details) {
-              final dismiss =
-                  stageDrag >= 80 ||
-                  (stageDrag > 28 && details.velocity.pixelsPerSecond.dy > 600);
-              setState(() {
-                stageDragging = false;
-                if (!dismiss) stageDrag = 0;
-              });
-              if (dismiss) close();
-            },
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '正在练唱',
-                  textAlign: TextAlign.center,
-                  style: _theme.textTheme.bodyMedium?.copyWith(
-                    color: _theme.colorScheme.onSurface,
-                    fontSize: widget.state.senior ? 17 : 14,
-                    fontWeight: FontWeight.w600,
-                    height: 1.3,
-                  ),
-                ),
-                Text(
-                  widget.state.serverName.isEmpty
-                      ? '家庭曲库'
-                      : widget.state.serverName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _theme.textTheme.bodySmall?.copyWith(
-                    color: _theme.colorScheme.onSurfaceVariant,
-                    fontSize: widget.state.senior ? 14 : 12,
-                    height: 1.3,
-                  ),
-                ),
-              ],
+            const SizedBox(width: 10),
+            stageIcon(
+              tooltip: favorite ? '取消收藏' : '收藏歌曲',
+              onPressed: () =>
+                  uiTask(context, () => widget.state.favorite(song)),
+              icon: favorite
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              color: favorite ? AppPalette.stageAccent : Colors.white,
+              tint: favorite ? AppPalette.brand : Colors.white,
             ),
-          ),
+          ],
         ),
-        stageIcon(
-          tooltip: '歌曲信息',
-          onPressed: () => panel(
-            () => showSong(context, widget.state, song, credits: lyricCredits),
-          ),
-          icon: Icons.info_outline_rounded,
-        ),
-        const SizedBox(width: 20),
-      ],
-    ),
-  );
-
-  Widget stageSong(Song song, {bool centered = false}) {
-    final title = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: centered
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          song.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          style: _theme.textTheme.headlineSmall?.copyWith(
-            fontSize: centered
-                ? 26
-                : MediaQuery.sizeOf(context).width < 375
-                ? 22
-                : 26,
-            fontWeight: FontWeight.w600,
-            height: 1.18,
-            letterSpacing: -.4,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          song.artist.isEmpty ? '歌手未知' : song.artist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          style: _theme.textTheme.bodyMedium?.copyWith(
-            color: _theme.colorScheme.onSurfaceVariant,
-            fontSize: widget.state.senior ? 17 : 15,
-            height: 1.3,
-          ),
-        ),
-      ],
-    );
-    final favorite = IconButton(
-      tooltip: widget.state.isFavorite(song) ? '取消收藏' : '收藏歌曲',
-      onPressed: () => uiTask(context, () => widget.state.favorite(song)),
-      icon: Icon(
-        widget.state.isFavorite(song)
-            ? Icons.favorite_rounded
-            : Icons.favorite_border_rounded,
       ),
-      color: widget.state.isFavorite(song)
-          ? _theme.colorScheme.primary
-          : _theme.colorScheme.onSurfaceVariant,
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: centered
-          ? Stack(
-              alignment: Alignment.center,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 48),
-                  child: title,
-                ),
-                Align(alignment: Alignment.centerRight, child: favorite),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(child: title),
-                const SizedBox(width: 12),
-                favorite,
-              ],
-            ),
     );
   }
 
-  Widget stageVideo() => ClipRRect(
-    borderRadius: BorderRadius.circular(AppRadii.artwork),
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        video(),
-        Positioned(
-          right: 10,
-          bottom: 8,
-          child: Glass(
-            state: widget.state,
-            radius: 24,
-            material: GlassMaterialSpec.mediaOverlay,
-            tint: const Color(0xFF2C2C2E),
-            child: IconButton(
-              tooltip: '全屏视频',
-              onPressed: orientation,
-              color: AppPalette.stageText,
-              icon: const Icon(Icons.fullscreen_rounded, size: 22),
-            ),
-          ),
+  Widget stageVideo() => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.white.withValues(alpha: .16), width: .8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: .48),
+          blurRadius: 32,
+          offset: const Offset(0, 14),
         ),
       ],
     ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          video(),
+          Positioned(
+            right: 12,
+            bottom: 10,
+            child: Glass(
+              state: widget.state,
+              radius: 24,
+              material: GlassMaterialSpec.mediaOverlay,
+              tint: const Color(0xFF1A1A22),
+              child: IconButton(
+                tooltip: '全屏视频',
+                onPressed: orientation,
+                color: AppPalette.stageText,
+                icon: const Icon(Icons.fullscreen_rounded, size: 22),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
   );
-
-  double stageSongHeight(Song song, double width, {bool centered = false}) {
-    double measure(String text, TextStyle? style, int maxLines) {
-      final painter = TextPainter(
-        text: TextSpan(text: text, style: style),
-        maxLines: maxLines,
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout(maxWidth: math.max(1, width - (centered ? 136 : 100)));
-      final height = painter.height;
-      painter.dispose();
-      return height;
-    }
-
-    final title = measure(
-      song.title,
-      _theme.textTheme.headlineSmall?.copyWith(
-        fontSize: centered
-            ? 26
-            : MediaQuery.sizeOf(context).width < 375
-            ? 22
-            : 26,
-        fontWeight: FontWeight.w600,
-        height: 1.18,
-        letterSpacing: -.4,
-      ),
-      2,
-    );
-    final artist = measure(
-      song.artist.isEmpty ? '歌手未知' : song.artist,
-      _theme.textTheme.bodyMedium?.copyWith(
-        fontSize: widget.state.senior ? 17 : 15,
-        height: 1.3,
-      ),
-      1,
-    );
-    return 20 + math.max(48, title + 4 + artist);
-  }
 
   Widget stageMedia(Song song) => LayoutBuilder(
     builder: (context, size) {
       final videoSong = song.mediaType == 'VIDEO';
-      final titleHeight = stageSongHeight(
-        song,
-        size.maxWidth,
-        centered: !videoSong,
-      );
       final contentWidth = math.max(1.0, size.maxWidth - 40);
       final hasFeedback =
           recordingError != null ||
           widget.state.playbackError.isNotEmpty ||
           (!videoSong && (playbackFailure != null || preparingPlayback));
+      // Audio + lyrics: dedicate the full center stage to immersive Apple Music
+      // Sing lyrics (song title, artist & mini cover live cleanly in the glass pill).
+      if (!videoSong && !hasFeedback && lines.isNotEmpty) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: lyrics(stage: true),
+        );
+      }
       final readingHeight =
           lines.isNotEmpty || hasFeedback || lyricsLoading || lyricError != null
-          ? 64.0
+          ? 72.0
           : videoSong
           ? 0.0
-          : 32.0;
-      final available = math.max(
-        96.0,
-        size.maxHeight - titleHeight - readingHeight,
-      );
+          : 44.0;
+      final available = math.max(112.0, size.maxHeight - readingHeight - 16);
       final mediaHeight = videoSong
           ? math.min(contentWidth / widget.state.videoAspect, available)
-          : math.min(208.0, available);
+          : math.min(220.0, available);
       final artwork = videoSong
           ? Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: SizedBox(height: mediaHeight, child: stageVideo()),
             )
           : Center(
-              child: Artwork(
-                state: widget.state,
-                path: song.cover,
-                label: song.title,
-                size: mediaHeight,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .18),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .46),
+                      blurRadius: 32,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Artwork(
+                    state: widget.state,
+                    path: song.cover,
+                    label: song.title,
+                    size: mediaHeight,
+                  ),
+                ),
               ),
             );
-      final heading = stageSong(song, centered: !videoSong);
       final reading = hasFeedback
           ? SingleChildScrollView(child: status(song))
           : lines.isNotEmpty
@@ -1862,18 +1870,18 @@ class _PlayerPageState extends State<PlayerPage> {
           ? const SizedBox.shrink()
           : Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       lyricsLoading
                           ? '正在读取歌词…'
-                          : lyricError ?? (videoSong ? '' : '暂无独立歌词'),
+                          : lyricError ?? (videoSong ? '' : '暂无独立歌词，跟着伴奏轻松开唱'),
                       textAlign: TextAlign.center,
                       style: _theme.textTheme.bodySmall?.copyWith(
                         color: _theme.colorScheme.onSurfaceVariant,
-                        fontSize: widget.state.senior ? 14 : 12,
+                        fontSize: widget.state.senior ? 14 : 13,
                       ),
                     ),
                     if (lyricError != null)
@@ -1885,23 +1893,15 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
               ),
             );
-      if (mediaHeight + titleHeight + readingHeight > size.maxHeight) {
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              artwork,
-              heading,
-              SizedBox(height: math.max(96, readingHeight), child: reading),
-            ],
-          ),
-        );
-      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           artwork,
-          heading,
-          Expanded(child: reading),
+          if (readingHeight > 0) ...[
+            const SizedBox(height: 12),
+            Expanded(child: reading),
+          ],
         ],
       );
     },
@@ -2030,15 +2030,7 @@ class _PlayerPageState extends State<PlayerPage> {
               seekButton(15),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            '演唱模式',
-            style: _theme.textTheme.bodySmall?.copyWith(
-              color: _theme.colorScheme.onSurfaceVariant,
-              fontSize: state.senior ? 14 : 12,
-            ),
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 14),
           roles(stage: true),
           if (audioRoleHint != null) ...[const SizedBox(height: 8), roleHint()],
           const SizedBox(height: 12),
@@ -2597,6 +2589,38 @@ class _PlayerPageState extends State<PlayerPage> {
                       fit: StackFit.expand,
                       children: [
                         if (song != null && song.mediaType != 'VIDEO') ...[
+                          const Positioned.fill(
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: RadialGradient(
+                                    center: Alignment(-.55, -.62),
+                                    radius: 1.15,
+                                    colors: [
+                                      Color(0x52E63963),
+                                      Color(0x00101016),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const Positioned.fill(
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: RadialGradient(
+                                    center: Alignment(.65, .38),
+                                    radius: 1.1,
+                                    colors: [
+                                      Color(0x484460B8),
+                                      Color(0x00101016),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                           Positioned.fill(
                             child: AmbientArtwork(state: state, song: song),
                           ),
@@ -2607,10 +2631,10 @@ class _PlayerPageState extends State<PlayerPage> {
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
-                                    stops: [0, .52, 1],
+                                    stops: [0, .50, 1],
                                     colors: [
-                                      Color(0x52101016),
-                                      Color(0x88101016),
+                                      Color(0x42101016),
+                                      Color(0x78101016),
                                       Color(0xE8101016),
                                     ],
                                   ),

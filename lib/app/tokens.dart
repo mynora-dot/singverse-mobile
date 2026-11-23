@@ -10,7 +10,7 @@ abstract final class AppPalette {
   static const ink = Color(0xFF111114);
   static const inkDark = Color(0xFFF5F5F7);
 
-  // Subtle atmospheric mesh tints (Apple iOS 26 luminous backdrop depth).
+  // Luminous atmospheric mesh tints (Apple iOS 26 depth behind Liquid Glass).
   static const lightEnvironmentBlue = Color(0xFFC8DDFC);
   static const darkEnvironmentBlue = Color(0xFF243B6E);
   static const lightEnvironmentViolet = Color(0xFFFA2D55);
@@ -52,11 +52,11 @@ enum GlassBackdropContext { plain, content, media }
 @immutable
 class GlassMaterialSpec {
   const GlassMaterialSpec({
-    this.lightTint = .72,
-    this.darkTint = .74,
+    this.lightTint = .62,
+    this.darkTint = .60,
     this.blur = 20,
-    this.highlight = .52,
-    this.shadow = .22,
+    this.highlight = .72,
+    this.shadow = .32,
     this.refraction = false,
     this.grouped = false,
   }) : assert(lightTint >= 0 && lightTint <= 1),
@@ -65,41 +65,48 @@ class GlassMaterialSpec {
        assert(highlight >= 0 && highlight <= 1),
        assert(shadow >= 0 && shadow <= 1);
 
-  static const standard = GlassMaterialSpec(grouped: true);
+  static const standard = GlassMaterialSpec(
+    lightTint: .64,
+    darkTint: .62,
+    blur: 20,
+    highlight: .68,
+    shadow: .28,
+    grouped: true,
+  );
   static const search = GlassMaterialSpec(
-    lightTint: .74,
-    darkTint: .70,
-    blur: 24,
-    highlight: .58,
-    shadow: .26,
+    lightTint: .60,
+    darkTint: .56,
+    blur: 26,
+    highlight: .82,
+    shadow: .38,
   );
   static const shortcut = GlassMaterialSpec(
-    lightTint: .72,
-    darkTint: .64,
-    blur: 18,
-    highlight: .48,
-    shadow: .18,
+    lightTint: .56,
+    darkTint: .52,
+    blur: 20,
+    highlight: .72,
+    shadow: .26,
     grouped: true,
   );
   static const field = GlassMaterialSpec(
-    lightTint: .90,
-    darkTint: .86,
-    blur: 0,
-    highlight: .35,
-    shadow: .10,
+    lightTint: .70,
+    darkTint: .64,
+    blur: 16,
+    highlight: .65,
+    shadow: .18,
   );
   static const onColor = GlassMaterialSpec(
-    lightTint: .22,
-    darkTint: .22,
+    lightTint: .20,
+    darkTint: .20,
     blur: 16,
-    highlight: .55,
+    highlight: .75,
   );
   static const stageControl = GlassMaterialSpec(
-    lightTint: .16,
-    darkTint: .16,
+    lightTint: .13,
+    darkTint: .13,
     blur: 24,
-    highlight: .42,
-    shadow: .24,
+    highlight: .58,
+    shadow: .32,
   );
   // Native video cannot be sampled. Its small overlay uses the same optical
   // edge and touch light, with no backdrop filter or displacement.
@@ -107,31 +114,31 @@ class GlassMaterialSpec {
     lightTint: .72,
     darkTint: .72,
     blur: 0,
-    highlight: .36,
+    highlight: .48,
   );
   static const floating = GlassMaterialSpec(
-    lightTint: .60,
-    darkTint: .58,
-    blur: 24,
-    highlight: .72,
-    shadow: .52,
+    lightTint: .50,
+    darkTint: .48,
+    blur: 26,
+    highlight: .92,
+    shadow: .62,
     refraction: true,
   );
-  // Floating player capsule with luminous specular edge and soft diffusion.
+  // Floating player capsule with luminous specular edge and soft color wash.
   static const player = GlassMaterialSpec(
-    lightTint: .76,
-    darkTint: .72,
+    lightTint: .56,
+    darkTint: .52,
     blur: 28,
-    highlight: .68,
-    shadow: .54,
+    highlight: .88,
+    shadow: .64,
     refraction: true,
   );
   static const sheet = GlassMaterialSpec(
-    lightTint: .92,
-    darkTint: .90,
-    blur: 28,
-    highlight: .42,
-    shadow: .72,
+    lightTint: .86,
+    darkTint: .84,
+    blur: 32,
+    highlight: .62,
+    shadow: .78,
   );
 
   final double lightTint, darkTint, blur, highlight, shadow;
@@ -141,9 +148,9 @@ class GlassMaterialSpec {
     // Zero-blur materials include native video overlays and stable form fields.
     if (context == GlassBackdropContext.plain || blur == 0) return this;
     final content = context == GlassBackdropContext.content;
-    final minLight = content ? .78 : .70;
-    final minDark = content ? .74 : .68;
-    final minBlur = content ? 28.0 : 24.0;
+    final minLight = content ? .58 : .54;
+    final minDark = content ? .54 : .50;
+    final minBlur = content ? 26.0 : 24.0;
     return GlassMaterialSpec(
       lightTint: lightTint < minLight ? minLight : lightTint,
       darkTint: darkTint < minDark ? minDark : darkTint,
@@ -173,11 +180,11 @@ class AppSurfaces extends ThemeExtension<AppSurfaces> {
   factory AppSurfaces.forBrightness(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     return AppSurfaces(
-      background: dark ? const Color(0xFF09090D) : const Color(0xFFF3F4F8),
+      background: dark ? const Color(0xFF09090D) : const Color(0xFFF2F3F8),
       group: dark ? const Color(0xFF1F1F27) : const Color(0xFFE9EBF1),
-      glass: dark ? const Color(0xFF22222B) : Colors.white,
+      glass: dark ? const Color(0xFF22222C) : Colors.white,
       rim: Colors.white,
-      shadow: Colors.black.withValues(alpha: dark ? .42 : .10),
+      shadow: Colors.black.withValues(alpha: dark ? .46 : .12),
       spotlight: dark ? const Color(0xFF1D1B2A) : const Color(0xFF1F1D2C),
       onSpotlight: const Color(0xFFFFFFFF),
       spotlightMuted: const Color(0xFFD6D6DE),

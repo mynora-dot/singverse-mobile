@@ -338,25 +338,58 @@ class SongRow extends StatelessWidget {
                                       : scheme.onSurface,
                                 ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            [
-                              song.artist.isEmpty ? '歌手未知' : song.artist,
-                              if (!song.available) '暂不可用',
-                              if (song.data['version'] != null &&
-                                  song.data['version'] != 'UNKNOWN')
-                                song.version,
-                            ].join(' · '),
-                            maxLines: enlarged ? null : 1,
-                            overflow: enlarged ? null : TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  fontSize: 13,
-                                  height: 1.31,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  [
+                                    song.artist.isEmpty ? '歌手未知' : song.artist,
+                                    if (!song.available) '暂不可用',
+                                  ].join(' · '),
+                                  maxLines: enlarged ? null : 1,
+                                  overflow: enlarged
+                                      ? null
+                                      : TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        fontSize: 13,
+                                        height: 1.31,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
                                 ),
+                              ),
+                              if (!enlarged &&
+                                  song.data['version'] != null &&
+                                  song.data['version'] != 'UNKNOWN') ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1.5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: scheme.onSurface.withValues(
+                                      alpha: .07,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    song.version,
+                                    maxLines: 1,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.2,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ],
                       ),
@@ -602,10 +635,13 @@ class SongSpotlight extends StatelessWidget {
                                             horizontal: 14,
                                           ),
                                           shape: const StadiumBorder(),
-                                          textStyle: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                          textStyle: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                         ),
                                         onPressed: song.available ? open : null,
                                         icon: const Icon(
@@ -781,9 +817,9 @@ class _AmbientArtworkState extends State<AmbientArtwork> {
             future: image,
             builder: (context, snapshot) => snapshot.hasData
                 ? Opacity(
-                    opacity: .42,
+                    opacity: .62,
                     child: ImageFiltered(
-                      imageFilter: ui.ImageFilter.blur(sigmaX: 44, sigmaY: 44),
+                      imageFilter: ui.ImageFilter.blur(sigmaX: 52, sigmaY: 52),
                       child: Image.memory(
                         snapshot.data!,
                         cacheWidth: 96,

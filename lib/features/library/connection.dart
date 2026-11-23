@@ -744,15 +744,39 @@ class _ConnectionPageState extends State<ConnectionPage> {
             ],
           ),
           const SizedBox(height: 24),
-          FilledButton(
-            key: const ValueKey('nas-submit'),
-            style: FilledButton.styleFrom(
-              minimumSize: Size.fromHeight(state.senior ? 60 : 52),
-              shape: const StadiumBorder(),
-              textStyle: theme.textTheme.titleMedium,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              gradient: working
+                  ? null
+                  : const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppPalette.brand, AppPalette.brandDeep],
+                    ),
+              boxShadow: working || state.performanceMode
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: AppPalette.brand.withValues(alpha: .36),
+                        blurRadius: 22,
+                        spreadRadius: -4,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
             ),
-            onPressed: working ? null : submit,
-            child: Text(working ? '正在连接…' : '登录并连接'),
+            child: FilledButton(
+              key: const ValueKey('nas-submit'),
+              style: FilledButton.styleFrom(
+                minimumSize: Size.fromHeight(state.senior ? 60 : 52),
+                backgroundColor: working ? null : Colors.transparent,
+                foregroundColor: Colors.white,
+                shape: const StadiumBorder(),
+                textStyle: theme.textTheme.titleMedium,
+              ),
+              onPressed: working ? null : submit,
+              child: Text(working ? '正在连接…' : '登录并连接'),
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(

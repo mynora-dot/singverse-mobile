@@ -271,7 +271,16 @@ class _SongsPageState extends State<SongsPage> {
           const SizedBox(height: 8),
         ],
       );
+      final topFloatHeight = pinnedSearch
+          ? math.max(
+              114.0,
+              MediaQuery.textScalerOf(context).scale(30) * 1.25 +
+                  (state.senior ? 64.0 : 56.0) +
+                  24,
+            )
+          : 0.0;
       final body = RefreshIndicator(
+        edgeOffset: topFloatHeight,
         onRefresh: () => query.load(),
         child: CustomScrollView(
           controller: scroll,
@@ -282,7 +291,12 @@ class _SongsPageState extends State<SongsPage> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(pageInset, 4, pageInset, 0),
+              padding: EdgeInsets.fromLTRB(
+                pageInset,
+                pinnedSearch ? topFloatHeight + 6 : 4,
+                pageInset,
+                0,
+              ),
               sliver: SliverToBoxAdapter(child: header),
             ),
             SliverPadding(
@@ -332,33 +346,70 @@ class _SongsPageState extends State<SongsPage> {
           ],
         ),
       );
+      final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
       final content = pinnedSearch
-          ? Column(
+          ? Stack(
               children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(pageInset, 6, pageInset, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '点歌',
-                          style: Theme.of(context).textTheme.headlineLarge
-                              ?.copyWith(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -.8,
-                              ),
-                        ),
+                Positioned.fill(child: body),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0, .62, 1],
+                        colors: [
+                          scaffoldBg.withValues(alpha: .72),
+                          scaffoldBg.withValues(alpha: .36),
+                          scaffoldBg.withValues(alpha: 0),
+                        ],
                       ),
-                      widget.headerActions!,
-                    ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            pageInset,
+                            6,
+                            pageInset,
+                            10,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '点歌',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineLarge
+                                      ?.copyWith(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -.8,
+                                      ),
+                                ),
+                              ),
+                              widget.headerActions!,
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            pageInset,
+                            0,
+                            pageInset,
+                            8,
+                          ),
+                          child: searchHeader,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(pageInset, 0, pageInset, 4),
-                  child: searchHeader,
-                ),
-                Expanded(child: body),
               ],
             )
           : body;

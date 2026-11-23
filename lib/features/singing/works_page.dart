@@ -384,28 +384,46 @@ class _WorkRow extends StatelessWidget {
                         ),
                       ),
                       if (!draft && !senior)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: Icon(
-                            Icons.play_circle_fill_rounded,
-                            color: scheme.primary,
-                            size: 34,
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF34C759)
+                                .withValues(alpha: .15),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            status,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? const Color(0xFF30D158)
+                                      : const Color(0xFF248A3D),
+                                ),
                           ),
                         ),
                     ],
                   ),
-                  if (draft) ...[
-                    if (!missing && waveform.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: senior ? 64 : 46,
-                        child: Waveform(
-                          values: waveform,
-                          color: scheme.primary,
-                        ),
+                  if (!missing && waveform.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: senior ? 58 : 40,
+                      child: Waveform(
+                        values: waveform,
+                        color: scheme.primary,
+                        progress: draft ? .42 : .68,
                       ),
-                    ] else
-                      const SizedBox(height: 14),
+                    ),
+                  ],
+                  if (draft) ...[
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Container(
@@ -1194,12 +1212,12 @@ class _ReviewPageState extends State<ReviewPage> {
                                                 'review-play',
                                               ),
                                               style: FilledButton.styleFrom(
-                                                minimumSize: Size.square(64),
+                                                minimumSize: Size.square(60),
                                                 padding: EdgeInsets.zero,
                                                 shape: const CircleBorder(),
                                                 backgroundColor:
-                                                    scheme.onSurface,
-                                                foregroundColor: scheme.surface,
+                                                    AppPalette.brand,
+                                                foregroundColor: Colors.white,
                                               ),
                                               onPressed: canListen
                                                   ? play

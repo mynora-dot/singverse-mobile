@@ -35,23 +35,24 @@ void main() {
   vec2 faceNormal = q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
   vec2 normal = (max(q.x, q.y) > 0.0 ? cornerNormal : faceNormal) * sign(centered);
   float inside = -roundedBox(centered, halfSize, r);
-  float edge = 1.0 - smoothstep(0.0, 8.0, max(inside, 0.0));
-  // The rim compresses the scene inward; the readable center stays undistorted.
-  vec2 refracted = texturePoint - normal * (3.0 * edge * edge * u_scale);
-  // The inner Gaussian filter already scatters the scene. A single displaced
-  // sample avoids text ghosting and redundant full-resolution texture reads.
+  float edge = 1.0 - smoothstep(0.0, 10.0, max(inside, 0.0));
+  // Apple Liquid Glass lens bend: refracts scrolling color inward along the
+  // rounded capsule rim while keeping center text distortion-free.
+  vec2 refracted = texturePoint - normal * (3.6 * edge * edge * u_scale);
   vec4 scene = sampleBackdrop(refracted);
-  // Keep transmission neutral and monotonic. The material's tint and diffusion
-  // supply readability; the shader only compresses contrast and bends the rim.
   float luma = dot(scene.rgb, vec3(0.2126, 0.7152, 0.0722));
   vec3 chroma = scene.rgb - vec3(luma);
-  float lightLuma = mix(0.69, 0.95, luma);
-  float darkLuma = mix(0.06, 0.21, luma);
-  vec3 lightGlass = vec3(lightLuma) + chroma * 0.12;
-  vec3 darkGlass = vec3(darkLuma) + chroma * 0.14;
+  // Preserve and gently enrich backdrop saturation (like CSS saturate(170%))
+  // while softly compressing luminance extremes for crisp foreground legibility.
+  float lightLuma = mix(0.76, 0.98, luma);
+  float darkLuma = mix(0.08, 0.26, luma);
+  vec3 lightGlass = clamp(vec3(lightLuma) + chroma * 0.65, 0.0, 1.0);
+  vec3 darkGlass = clamp(vec3(darkLuma) + chroma * 0.72, 0.0, 1.0);
   vec3 glass = mix(lightGlass, darkGlass, u_dark);
-  vec3 transmitted = vec3(luma) + chroma * 0.26;
-  // A narrow, slightly clearer edge reveals the actual refracted backdrop.
-  glass = mix(glass, transmitted, 0.12 * edge * edge);
-  fragColor = vec4(glass, 1.0);
+  vec3 rimChroma = clamp(vec3(mix(lightLuma, darkLuma, u_dark)) + chroma * 1.15, 0.0, 1.0);
+  // Bright Fresnel optical glint along the top-left rim.
+  float topLight = clamp((-normal.y * 0.7 - normal.x * 0.3) * 0.5 + 0.5, 0.0, 1.0);
+  glass = mix(glass, rimChroma, 0.35 * edge * edge);
+  glass += vec3(mix(0.14, 0.10, u_dark)) * edge * edge * edge * topLight;
+  fragColor = vec4(clamp(glass, 0.0, 1.0), 1.0);
 }

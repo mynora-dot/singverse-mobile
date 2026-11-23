@@ -206,9 +206,7 @@ class _SingVerseAppState extends State<SingVerseApp> {
                             ].contains(page) &&
                             MediaQuery.viewInsetsOf(context).bottom == 0,
                         child: Material(
-                          color: page == 'connection'
-                              ? Colors.transparent
-                              : Theme.of(context).scaffoldBackgroundColor,
+                          color: Colors.transparent,
                           child: SafeArea(
                             top: false,
                             child: ValueListenableBuilder<bool>(

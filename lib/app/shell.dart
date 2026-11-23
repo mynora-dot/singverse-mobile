@@ -263,72 +263,43 @@ class _AppShellState extends State<AppShell> {
         MediaQuery.textScalerOf(context).scale(16) <= 21;
     final hasPlayer = state.current != null;
     final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
+    final duration = full ? AppMotion.expand : Duration.zero;
     final background = Theme.of(context).scaffoldBackgroundColor;
     final safe = MediaQuery.viewPaddingOf(context).bottom;
     final navHeight = compact ? 54.0 : navigationHeight(context, state);
-    final dockHeight =
-        (compact
-            ? navHeight
-            : navHeight +
-                  (hasPlayer ? MiniPlayer.heightOf(context, state) + 9 : 0)) +
-        safe +
-        10;
-    final controls = compact && hasPlayer
-        ? Row(
-            key: const ValueKey('dock-compact-row'),
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              SizedBox(
-                width: 148,
-                child: navigation(context, state, drafts, true),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: MiniPlayer(state: state, inset: false, compact: true),
-              ),
-            ],
-          )
-        : Column(
-            key: ValueKey('dock-expanded:$compact:$hasPlayer'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (hasPlayer) ...[
-                MiniPlayer(state: state, inset: false),
-                const SizedBox(height: 9),
-              ],
-              AnimatedContainer(
-                duration: full ? AppMotion.expand : Duration.zero,
-                curve: AppMotion.fluid,
-                width: compact ? 148 : MediaQuery.sizeOf(context).width,
-                child: navigation(context, state, drafts, compact),
-              ),
-            ],
-          );
+    final miniHeight = hasPlayer
+        ? MiniPlayer.heightOf(context, state, compact: compact)
+        : 0.0;
+    final controlsHeight = compact
+        ? math.max(navHeight, miniHeight)
+        : navHeight + (hasPlayer ? miniHeight + 9 : 0);
+    final dockHeight = controlsHeight + safe + 10;
     return ContentWidth(
       child: AnimatedContainer(
-        duration: full ? AppMotion.expand : Duration.zero,
+        duration: duration,
         curve: AppMotion.fluid,
         height: dockHeight,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
+            // Soft bottom safe-area veil ONLY; leave area behind floating glass
+            // open so scrolling covers visibly blur and refract through the dock.
             Positioned(
-              top: -44,
               left: 0,
               right: 0,
               bottom: 0,
+              height: safe + 64,
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      stops: const [0, .38, .76, 1],
+                      stops: const [0, .55, 1],
                       colors: [
                         background.withValues(alpha: 0),
-                        background.withValues(alpha: .80),
-                        background,
-                        background,
+                        background.withValues(alpha: .36),
+                        background.withValues(alpha: .78),
                       ],
                     ),
                   ),
@@ -339,19 +310,51 @@ class _AppShellState extends State<AppShell> {
               left: 14,
               right: 14,
               bottom: safe + 10,
-              child: AnimatedSwitcher(
-                duration: full ? AppMotion.expand : Duration.zero,
-                switchInCurve: AppMotion.fluid,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: .96, end: 1).animate(animation),
-                    alignment: Alignment.bottomCenter,
-                    child: child,
-                  ),
-                ),
-                child: controls,
+              height: controlsHeight,
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final totalWidth = box.maxWidth;
+                  const compactNavWidth = 148.0;
+                  const gap = 8.0;
+                  final compactRow =
+                      compact &&
+                      hasPlayer &&
+                      totalWidth >= compactNavWidth + gap + 120;
+                  final navWidth = compact ? compactNavWidth : totalWidth;
+                  final miniLeft = compactRow ? compactNavWidth + gap : 0.0;
+                  final miniWidth = compactRow
+                      ? totalWidth - compactNavWidth - gap
+                      : totalWidth;
+                  final miniBottom = compactRow ? 0.0 : navHeight + 9.0;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (hasPlayer)
+                        AnimatedPositioned(
+                          duration: duration,
+                          curve: AppMotion.fluid,
+                          left: miniLeft,
+                          bottom: miniBottom,
+                          width: miniWidth,
+                          height: miniHeight,
+                          child: MiniPlayer(
+                            state: state,
+                            inset: false,
+                            compact: compactRow,
+                          ),
+                        ),
+                      AnimatedPositioned(
+                        duration: duration,
+                        curve: AppMotion.fluid,
+                        left: 0,
+                        bottom: 0,
+                        width: navWidth,
+                        height: navHeight,
+                        child: navigation(context, state, drafts, compact),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -961,7 +964,20 @@ class SettingsPage extends StatelessWidget {
       return AppEnvironment(
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppToolbar(title: const Text('设置')),
+          appBar: AppToolbar(
+            leading: Navigator.canPop(context)
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+                    child: Glass(
+                      state: state,
+                      radius: 24,
+                      variant: GlassVariant.liquid,
+                      child: const BackButton(),
+                    ),
+                  )
+                : null,
+            title: const Text('设置'),
+          ),
           body: ContentWidth(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),

@@ -91,25 +91,19 @@ class _EnvironmentPainter extends CustomPainter {
       canvas.restore();
       return;
     }
-    // Whisper-soft multi-point ambient mesh gives Liquid Glass edges real
-    // luminous depth to refract without ever reducing content contrast.
-    final rose = dark
-        ? AppPalette.darkEnvironmentViolet
-        : AppPalette.lightEnvironmentViolet;
-    final sky = dark
-        ? AppPalette.darkEnvironmentBlue
-        : AppPalette.lightEnvironmentBlue;
-    final warm = dark
-        ? AppPalette.darkEnvironmentWarm
-        : AppPalette.lightEnvironmentWarm;
+    // Luminous multi-point atmospheric mesh gives Liquid Glass capsules real
+    // color depth to refract (matching Apple iOS 26 prototype environment).
+    final rose = dark ? const Color(0xFFFF375F) : const Color(0xFFFA2D55);
+    final sky = dark ? const Color(0xFF4882FF) : const Color(0xFF5CA4FF);
+    final warm = dark ? const Color(0xFFA855F7) : const Color(0xFFFFA880);
     canvas.drawRect(
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(-.72, -1.05),
+          center: const Alignment(-.74, -1.02),
           radius: 1.25,
           colors: [
-            rose.withValues(alpha: dark ? .26 : .075),
+            rose.withValues(alpha: dark ? .20 : .12),
             rose.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -118,10 +112,10 @@ class _EnvironmentPainter extends CustomPainter {
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(.86, -.85),
+          center: const Alignment(.88, -.82),
           radius: 1.15,
           colors: [
-            sky.withValues(alpha: dark ? .28 : .28),
+            sky.withValues(alpha: dark ? .18 : .15),
             sky.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -133,7 +127,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(0, 1.08),
           radius: 1.05,
           colors: [
-            warm.withValues(alpha: dark ? .18 : .16),
+            warm.withValues(alpha: dark ? .14 : .11),
             warm.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -583,21 +577,35 @@ class _LensRimPainter extends CustomPainter {
       );
       return;
     }
-    // Apple Liquid Glass Fresnel rim: bright top-edge specular catching light
-    // fading smoothly to a delicate bottom glass edge.
+    // Apple Liquid Glass dual-edge optical rim:
+    // 1. Subtle outer hairline defines the glass silhouette against light/dark canvas.
     paint
-      ..strokeWidth = field ? .8 : 1.0
+      ..strokeWidth = .6
+      ..shader = null
+      ..color = dark
+          ? Colors.white.withValues(alpha: .12)
+          : Colors.black.withValues(alpha: .075);
+    canvas.drawRRect(shape, paint);
+
+    // 2. Crisp inner Fresnel top-bevel highlight catching overhead light.
+    final innerRect = rect.deflate(.85);
+    final innerShape = RRect.fromRectAndRadius(
+      innerRect,
+      Radius.circular(math.max(0, radius - 1.4)),
+    );
+    paint
+      ..strokeWidth = field ? 1.0 : 1.25
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          reflection(dark ? .46 : .94),
-          reflection(dark ? .14 : .42),
-          reflection(dark ? .26 : .62),
+          reflection(dark ? .42 : .96),
+          reflection(dark ? .10 : .32),
+          reflection(dark ? .24 : .64),
         ],
-        stops: const [0, .5, 1],
-      ).createShader(rect);
-    canvas.drawRRect(shape, paint);
+        stops: const [0, .48, 1],
+      ).createShader(innerRect);
+    canvas.drawRRect(innerShape, paint);
 
     // Subtle pointer-following specular bloom on touch/hover.
     if (touch > 0) {
