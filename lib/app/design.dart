@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_state.dart';
+import 'icons.dart';
 import 'motion.dart';
 import 'surfaces.dart';
 
+export 'icons.dart';
 export 'motion.dart';
 export 'surfaces.dart';
 
@@ -394,6 +396,7 @@ class AppSegments<T> extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.senior = false,
+    this.compact = false,
     this.enabled = true,
     this.disabled = const {},
     this.keyFor,
@@ -402,12 +405,13 @@ class AppSegments<T> extends StatelessWidget {
     this.glass = false,
     this.accent = false,
     this.liquid = false,
+    this.plain = false,
     this.material,
   });
   final List<(T, String)> values;
   final T selected;
   final ValueChanged<T> onChanged;
-  final bool senior, enabled, glass, accent, liquid;
+  final bool senior, compact, enabled, glass, accent, liquid, plain;
   final Set<T> disabled;
   final Key Function(T)? keyFor;
   final Widget Function(T, String)? labelBuilder;
@@ -417,6 +421,60 @@ class AppSegments<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (plain) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < values.length; i++) ...[
+            if (i > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Text(
+                  '/',
+                  style: textStyle?.copyWith(
+                    fontWeight: FontWeight.w400,
+                    color: scheme.onSurfaceVariant.withValues(alpha: .35),
+                  ),
+                ),
+              ),
+            MergeSemantics(
+              child: Semantics(
+                selected: values[i].$1 == selected,
+                button: true,
+                child: InkWell(
+                  key: keyFor?.call(values[i].$1),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: enabled && !disabled.contains(values[i].$1)
+                      ? () => onChanged(values[i].$1)
+                      : null,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: senior ? 8 : 6,
+                      vertical: senior ? 6 : 4,
+                    ),
+                    child:
+                        labelBuilder?.call(values[i].$1, values[i].$2) ??
+                        Text(
+                          values[i].$2,
+                          style: textStyle?.copyWith(
+                            fontWeight: values[i].$1 == selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: values[i].$1 == selected
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant.withValues(
+                                    alpha: .60,
+                                  ),
+                          ),
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
     final dark = Theme.of(context).brightness == Brightness.dark;
     final solid = AppMotionScope.solidOf(context);
     final index = values.indexWhere((value) => value.$1 == selected);
@@ -429,7 +487,7 @@ class AppSegments<T> extends StatelessWidget {
         ? const Color(0xFF2E2E3A)
         : Colors.white;
     final content = Padding(
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(compact && !senior ? 3 : 4),
       child: Stack(
         children: [
           if (index >= 0)
@@ -452,10 +510,10 @@ class AppSegments<T> extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: thumbColor,
                       borderRadius: pillRadius,
-                      border: !solid
+                      border: !solid && !compact && glass
                           ? Border.all(
                               color: Colors.white.withValues(
-                                alpha: dark ? .22 : .85,
+                                alpha: dark ? .18 : .78,
                               ),
                               width: .6,
                             )
@@ -463,9 +521,11 @@ class AppSegments<T> extends StatelessWidget {
                       boxShadow: [
                         if (!solid)
                           BoxShadow(
-                            color: AppSurfaces.of(context).shadow,
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                            color: Colors.black.withValues(
+                              alpha: dark ? .22 : .07,
+                            ),
+                            blurRadius: compact ? 5 : 8,
+                            offset: Offset(0, compact ? 1.5 : 2),
                           ),
                       ],
                     ),
@@ -485,13 +545,24 @@ class AppSegments<T> extends StatelessWidget {
                         style: TextButton.styleFrom(
                           textStyle: textStyle,
                           shape: const StadiumBorder(),
+                          tapTargetSize: compact && !senior
+                              ? MaterialTapTargetSize.shrinkWrap
+                              : MaterialTapTargetSize.padded,
                           minimumSize: Size(
                             AppSizes.touch,
-                            senior ? AppSizes.seniorTouch : AppSizes.touch,
+                            senior
+                                ? AppSizes.seniorTouch
+                                : compact
+                                ? 28
+                                : AppSizes.touch,
                           ),
                           padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: senior ? 12 : 8,
+                            horizontal: compact && !senior ? 6 : 8,
+                            vertical: senior
+                                ? 12
+                                : compact
+                                ? 4
+                                : 8,
                           ),
                           foregroundColor: value.$1 == selected
                               ? (accent
@@ -521,24 +592,8 @@ class AppSegments<T> extends StatelessWidget {
         decoration: BoxDecoration(
           color: solid
               ? scheme.secondaryContainer
-              : (dark
-                    ? const Color(0xFF202028).withValues(alpha: .66)
-                    : Colors.white.withValues(alpha: .54)),
+              : scheme.onSurface.withValues(alpha: dark ? .10 : .055),
           borderRadius: pillRadius,
-          border: Border.all(
-            color: solid
-                ? scheme.outlineVariant
-                : Colors.white.withValues(alpha: dark ? .14 : .72),
-            width: .7,
-          ),
-          boxShadow: [
-            if (!solid)
-              BoxShadow(
-                color: Colors.black.withValues(alpha: dark ? .24 : .05),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
-              ),
-          ],
         ),
         child: content,
       );
@@ -552,7 +607,9 @@ class AppSegments<T> extends StatelessWidget {
           )
         : DecoratedBox(
             decoration: BoxDecoration(
-              color: scheme.secondaryContainer,
+              color: compact && !solid
+                  ? scheme.onSurface.withValues(alpha: dark ? .10 : .055)
+                  : scheme.secondaryContainer,
               borderRadius: pillRadius,
             ),
             child: content,
@@ -579,29 +636,44 @@ class SectionTitle extends StatelessWidget {
 }
 
 class SheetHeader extends StatelessWidget {
-  const SheetHeader(this.title, {super.key, this.done = '完成'});
+  const SheetHeader(this.title, {super.key, this.done = '完成', this.trailing});
   final String title, done;
+  final Widget? trailing;
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Text(title, style: Theme.of(context).textTheme.titleLarge),
-      ),
-      IconButton.filled(
-        tooltip: done,
-        style: IconButton.styleFrom(
-          backgroundColor: done == '完成'
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.secondaryContainer,
-          foregroundColor: done == '完成'
-              ? Theme.of(context).colorScheme.onPrimary
-              : Theme.of(context).colorScheme.onSurface,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return Row(
+      children: [
+        Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
+        if (trailing != null) ...[trailing!, const SizedBox(width: 6)],
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: IconButton(
+            tooltip: done,
+            padding: EdgeInsets.zero,
+            onPressed: () => Navigator.pop(context),
+            icon: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.onSurface.withValues(
+                  alpha: dark ? .11 : .07,
+                ),
+              ),
+              child: Icon(
+                Icons.close_rounded,
+                size: 19,
+                color: theme.colorScheme.onSurface.withValues(alpha: .82),
+              ),
+            ),
+          ),
         ),
-        onPressed: () => Navigator.pop(context),
-        icon: Icon(done == '完成' ? Icons.check_rounded : Icons.close_rounded),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class Glass extends StatelessWidget {
@@ -759,7 +831,14 @@ class GlassSearchField extends StatelessWidget {
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         prefixIconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        prefixIcon: Center(
+          widthFactor: 1,
+          child: AppVectorIcon(
+            AppGlyph.search,
+            size: 18,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         prefixIconConstraints: const BoxConstraints(
           minWidth: AppSizes.touch,
           minHeight: AppSizes.touch,
@@ -794,7 +873,7 @@ Future<T?> showAppSheet<T>({
   bool useSafeArea = false,
 }) {
   // Native video, camera and WebView layers cannot be sampled reliably.
-  final nativeSurface = const {
+  final avoidBackdrop = const {
     'player',
     'tv',
     'scan',
@@ -808,6 +887,7 @@ Future<T?> showAppSheet<T>({
   );
   final navigator = Navigator.of(context);
   final localizations = MaterialLocalizations.of(context);
+  final dark = Theme.of(context).brightness == Brightness.dark;
   final route = ModalBottomSheetRoute<T>(
     capturedThemes: InheritedTheme.capture(
       from: context,
@@ -817,7 +897,9 @@ Future<T?> showAppSheet<T>({
     barrierOnTapHint: localizations.scrimOnTapHint(
       localizations.bottomSheetLabel,
     ),
-    modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,
+    modalBarrierColor: avoidBackdrop
+        ? Colors.black.withValues(alpha: dark ? .64 : .36)
+        : Theme.of(context).bottomSheetTheme.modalBarrierColor,
     isScrollControlled: isScrollControlled,
     useSafeArea: useSafeArea,
     showDragHandle: false,
@@ -826,38 +908,46 @@ Future<T?> showAppSheet<T>({
     sheetAnimationStyle: AppMotion.modalStyle(context),
     builder: (context) => _SheetMotionGate(
       controller: controller,
-      child: GlassSurface(
-        radius: 32,
-        variant: GlassVariant.sheet,
-        solid: nativeSurface,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 64,
-              height: AppSizes.touch,
-              child: TextButton(
-                onPressed: () => Navigator.maybePop(context),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(AppSizes.touch, AppSizes.touch),
-                ),
-                child: Semantics(
-                  label: '关闭面板',
-                  child: Container(
-                    width: 36,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant
-                          .withValues(alpha: .55),
-                      borderRadius: BorderRadius.circular(3),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          child: GlassSurface(
+            radius: 32,
+            variant: GlassVariant.sheet,
+            material: avoidBackdrop
+                ? GlassMaterialSpec.sheetNative
+                : GlassMaterialSpec.sheet,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 64,
+                  height: AppSizes.touch,
+                  child: TextButton(
+                    onPressed: () => Navigator.maybePop(context),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(AppSizes.touch, AppSizes.touch),
+                    ),
+                    child: Semantics(
+                      label: '关闭面板',
+                      child: Container(
+                        width: 36,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant
+                              .withValues(alpha: .55),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+                Flexible(child: builder(context)),
+              ],
             ),
-            Flexible(child: builder(context)),
-          ],
+          ),
         ),
       ),
     ),

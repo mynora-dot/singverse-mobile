@@ -412,7 +412,9 @@ class _PlayerPageState extends State<PlayerPage> {
     final state = widget.state;
     if (state.durationMs <= 0 || state.taking) return;
     final duration = state.durationMs.toDouble();
-    final timedLines = lines.where((line) => line.startMs != null).toList();
+    final timedLines = lines
+        .where((line) => line.startMs != null && line.text.trim().isNotEmpty)
+        .toList();
     // Native playback keeps the committed loop while this sheet owns a draft.
     var values = RangeValues(
       state.rangeA.toDouble().clamp(0, duration),
@@ -449,168 +451,404 @@ class _PlayerPageState extends State<PlayerPage> {
                   }
                 });
 
-            Widget endpoint(String label, bool start) => Semantics(
-              label: '选段$label',
-              child: Slider(
-                key: ValueKey(
-                  start ? 'player-range-start' : 'player-range-end',
-                ),
-                value: start ? values.start : values.end,
-                max: duration,
-                label: durationLabel(
-                  (start ? values.start : values.end).round(),
-                ),
-                semanticFormatterCallback: (value) =>
-                    '$label ${durationLabel(value.round())}',
-                onChanged: committing
-                    ? null
-                    : (value) => update(() {
-                        values = start
-                            ? RangeValues(
-                                value.clamp(0, values.end),
-                                values.end,
-                              )
-                            : RangeValues(
-                                values.start,
-                                value.clamp(values.start, duration),
-                              );
-                      }),
+            Widget endpoint(String label, bool start) {
+              final current = (start ? values.start : values.end).round();
+              final theme = Theme.of(context);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        label,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        durationLabel(current),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SliderTheme(
+                    data: theme.sliderTheme.copyWith(
+                      trackHeight: 4,
+                      activeTrackColor: AppPalette.brand,
+                      inactiveTrackColor: theme.colorScheme.onSurface
+                          .withValues(alpha: .14),
+                      thumbColor: Colors.white,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 7,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 15,
+                      ),
+                    ),
+                    child: Semantics(
+                      label: '选段$label',
+                      child: Slider(
+                        key: ValueKey(
+                          start ? 'player-range-start' : 'player-range-end',
+                        ),
+                        value: start ? values.start : values.end,
+                        max: duration,
+                        label: durationLabel(current),
+                        semanticFormatterCallback: (value) =>
+                            '$label ${durationLabel(value.round())}',
+                        onChanged: committing
+                            ? null
+                            : (value) => update(() {
+                                values = start
+                                    ? RangeValues(
+                                        value.clamp(0, values.end),
+                                        values.end,
+                                      )
+                                    : RangeValues(
+                                        values.start,
+                                        value.clamp(values.start, duration),
+                                      );
+                              }),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            final theme = Theme.of(context);
+            final dark = theme.brightness == Brightness.dark;
+            final cardColor = theme.colorScheme.onSurface.withValues(
+              alpha: dark ? .06 : .04,
+            );
+            final cardBorder = theme.colorScheme.onSurface.withValues(
+              alpha: dark ? .09 : .07,
+            );
+            final canApply = !committing && values.end > values.start;
+
+            final rangeCard = Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: cardBorder, width: .7),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  endpoint('起点', true),
+                  const SizedBox(height: 6),
+                  endpoint('终点', false),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.tonal(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.onSurface
+                                .withValues(alpha: dark ? .09 : .06),
+                            foregroundColor: theme.colorScheme.onSurface,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 11,
+                            ),
+                            shape: const StadiumBorder(),
+                            textStyle: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          onPressed: committing
+                              ? null
+                              : () => update(
+                                  () => values = RangeValues(
+                                    state.positionMs.toDouble().clamp(
+                                      0,
+                                      values.end,
+                                    ),
+                                    values.end,
+                                  ),
+                                ),
+                          child: const Text(
+                            '当前位置设为起点',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.tonal(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.onSurface
+                                .withValues(alpha: dark ? .09 : .06),
+                            foregroundColor: theme.colorScheme.onSurface,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 11,
+                            ),
+                            shape: const StadiumBorder(),
+                            textStyle: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          onPressed: committing
+                              ? null
+                              : () => update(
+                                  () => values = RangeValues(
+                                    values.start,
+                                    state.positionMs.toDouble().clamp(
+                                      values.start,
+                                      duration,
+                                    ),
+                                  ),
+                                ),
+                          child: const Text(
+                            '当前位置设为终点',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             );
 
+            final actions = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: canApply
+                        ? const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [AppPalette.brand, AppPalette.brandDeep],
+                          )
+                        : null,
+                    boxShadow: canApply && !state.performanceMode
+                        ? [
+                            BoxShadow(
+                              color: AppPalette.brand.withValues(alpha: .32),
+                              blurRadius: 18,
+                              spreadRadius: -4,
+                              offset: const Offset(0, 8),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: FilledButton(
+                    key: const ValueKey('player-range-apply'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(50),
+                      backgroundColor: canApply ? Colors.transparent : null,
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                      textStyle: theme.textTheme.titleMedium?.copyWith(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onPressed: canApply ? commit : null,
+                    child: Text(committing ? '正在应用…' : '循环练唱这一段'),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextButton(
+                  key: const ValueKey('player-range-clear'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                    minimumSize: const Size.fromHeight(44),
+                  ),
+                  onPressed: committing ? null : () => commit(wholeSong: true),
+                  child: const Text('恢复整首练唱'),
+                ),
+              ],
+            );
+
+            if (timedLines.isEmpty) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SheetHeader('选段练唱', done: '取消'),
+                    const SizedBox(height: 6),
+                    Text(
+                      '起点 ${durationLabel(values.start.round())} — 终点 ${durationLabel(values.end.round())}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    rangeCard,
+                    const SizedBox(height: 18),
+                    actions,
+                  ],
+                ),
+              );
+            }
+
             return SizedBox(
-              height: (MediaQuery.sizeOf(context).height * .82).clamp(
-                320.0,
-                720.0,
+              height: (MediaQuery.sizeOf(context).height * .78).clamp(
+                360.0,
+                680.0,
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SheetHeader('选段练唱', done: '取消'),
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          const SizedBox(height: 12),
-                          Text(
-                            '起点 ${durationLabel(values.start.round())} — 终点 ${durationLabel(values.end.round())}',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 12),
-                          endpoint('起点', true),
-                          endpoint('终点', false),
-                          Wrap(
-                            spacing: 8,
-                            children: [
-                              TextButton(
-                                onPressed: committing
-                                    ? null
-                                    : () => update(
-                                        () => values = RangeValues(
-                                          state.positionMs.toDouble().clamp(
-                                            0,
-                                            values.end,
-                                          ),
-                                          values.end,
-                                        ),
-                                      ),
-                                child: const Text('当前位置设为起点'),
-                              ),
-                              TextButton(
-                                onPressed: committing
-                                    ? null
-                                    : () => update(
-                                        () => values = RangeValues(
-                                          values.start,
-                                          state.positionMs.toDouble().clamp(
-                                            values.start,
-                                            duration,
-                                          ),
-                                        ),
-                                      ),
-                                child: const Text('当前位置设为终点'),
-                              ),
-                            ],
-                          ),
-                          if (timedLines.isNotEmpty) ...[
-                            const Divider(height: 32),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Text(
-                                selectingEnd ? '再点一句作为结束句' : '按歌词选段：先点起句，再点结束句',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                              ),
-                            ),
-                            for (var i = 0; i < timedLines.length; i++)
-                              ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                selected:
-                                    timedLines[i].startMs! >= values.start &&
-                                    timedLines[i].startMs! < values.end,
-                                leading: Text(
-                                  durationLabel(timedLines[i].startMs!),
-                                ),
-                                title: Text(timedLines[i].text),
-                                onTap: committing
-                                    ? null
-                                    : () => update(() {
-                                        final end =
-                                            (timedLines[i].endMs ??
-                                                    (i + 1 < timedLines.length
-                                                        ? timedLines[i + 1]
-                                                              .startMs!
-                                                        : state.durationMs))
-                                                .toDouble();
-                                        if (!selectingEnd ||
-                                            startLine == null ||
-                                            i < startLine!) {
-                                          startLine = i;
-                                          selectingEnd = true;
-                                          final start = timedLines[i].startMs!
-                                              .toDouble()
-                                              .clamp(0, duration)
-                                              .toDouble();
-                                          values = RangeValues(
-                                            start,
-                                            end.clamp(start, duration),
-                                          );
-                                        } else {
-                                          values = RangeValues(
-                                            values.start,
-                                            end.clamp(values.start, duration),
-                                          );
-                                          selectingEnd = false;
-                                        }
-                                      }),
-                              ),
-                          ],
-                        ],
+                    const SizedBox(height: 6),
+                    Text(
+                      '起点 ${durationLabel(values.start.round())} — 终点 ${durationLabel(values.end.round())}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                     const SizedBox(height: 12),
-                    FilledButton(
-                      key: const ValueKey('player-range-apply'),
-                      onPressed: committing || values.end <= values.start
-                          ? null
-                          : commit,
-                      child: Text(committing ? '正在应用…' : '循环练唱这一段'),
+                    Expanded(
+                      child: ShaderMask(
+                        blendMode: BlendMode.dstIn,
+                        shaderCallback: (bounds) => const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: [0, .88, 1],
+                          colors: [
+                            Colors.black,
+                            Colors.black,
+                            Colors.transparent,
+                          ],
+                        ).createShader(bounds),
+                        child: ListView(
+                          padding: const EdgeInsets.only(bottom: 18),
+                          children: [
+                            rangeCard,
+                            const SizedBox(height: 16),
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 4,
+                                bottom: 8,
+                              ),
+                              child: Text(
+                                selectingEnd ? '再点一句作为结束句' : '按歌词选段：先点起句，再点结束句',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            for (var i = 0; i < timedLines.length; i++) ...[
+                              () {
+                                final inRange =
+                                    timedLines[i].startMs! >= values.start &&
+                                    timedLines[i].startMs! < values.end;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: ListTile(
+                                    dense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 2,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    tileColor: inRange
+                                        ? AppPalette.brand.withValues(
+                                            alpha: dark ? .14 : .08,
+                                          )
+                                        : Colors.transparent,
+                                    leading: Text(
+                                      durationLabel(timedLines[i].startMs!),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: inRange
+                                                ? theme.colorScheme.primary
+                                                : theme
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                            fontWeight: inRange
+                                                ? FontWeight.w600
+                                                : FontWeight.w400,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                    ),
+                                    title: Text(
+                                      timedLines[i].text,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: inRange
+                                                ? theme.colorScheme.onSurface
+                                                : theme
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                            fontWeight: inRange
+                                                ? FontWeight.w500
+                                                : FontWeight.w400,
+                                          ),
+                                    ),
+                                    onTap: committing
+                                        ? null
+                                        : () => update(() {
+                                            final end =
+                                                (timedLines[i].endMs ??
+                                                        (i + 1 <
+                                                                timedLines
+                                                                    .length
+                                                            ? timedLines[i + 1]
+                                                                  .startMs!
+                                                            : state.durationMs))
+                                                    .toDouble();
+                                            if (!selectingEnd ||
+                                                startLine == null ||
+                                                i < startLine!) {
+                                              startLine = i;
+                                              selectingEnd = true;
+                                              final start = timedLines[i]
+                                                  .startMs!
+                                                  .toDouble()
+                                                  .clamp(0, duration)
+                                                  .toDouble();
+                                              values = RangeValues(
+                                                start,
+                                                end.clamp(start, duration),
+                                              );
+                                            } else {
+                                              values = RangeValues(
+                                                values.start,
+                                                end.clamp(
+                                                  values.start,
+                                                  duration,
+                                                ),
+                                              );
+                                              selectingEnd = false;
+                                            }
+                                          }),
+                                  ),
+                                );
+                              }(),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
-                    TextButton(
-                      key: const ValueKey('player-range-clear'),
-                      onPressed: committing
-                          ? null
-                          : () => commit(wholeSong: true),
-                      child: const Text('恢复整首练唱'),
-                    ),
+                    const SizedBox(height: 12),
+                    actions,
                   ],
                 ),
               ),
@@ -628,40 +866,103 @@ class _PlayerPageState extends State<PlayerPage> {
       useSafeArea: true,
       builder: (context) => ListenableBuilder(
         listenable: widget.state.performance,
-        builder: (context, _) => SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SheetHeader('更多功能', done: '关闭'),
-              ListTile(
-                leading: const Icon(Icons.repeat_rounded),
-                title: const Text('选段练唱'),
-                onTap: widget.state.taking
-                    ? null
-                    : () {
-                        Navigator.pop(context);
-                        range();
-                      },
-              ),
-              SwitchListTile(
-                value: widget.state.loop,
-                title: const Text('单曲循环'),
-                onChanged: widget.state.taking
-                    ? null
-                    : (v) => uiTask(
-                        context,
-                        () => widget.state.command('loop', v),
+        builder: (context, _) {
+          final theme = Theme.of(context);
+          final dark = theme.brightness == Brightness.dark;
+          final dividerColor = theme.colorScheme.onSurface.withValues(
+            alpha: dark ? .08 : .06,
+          );
+          final chevronColor = theme.colorScheme.onSurfaceVariant.withValues(
+            alpha: .62,
+          );
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SheetHeader('更多功能', done: '关闭'),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurface.withValues(
+                      alpha: dark ? .06 : .04,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: dark ? .09 : .07,
                       ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.headphones_rounded),
-                title: const Text('音轨与播放设置'),
-                onTap: () => panel(() => audioSettings(context, widget.state)),
-              ),
-            ],
-          ),
-        ),
+                      width: .7,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(20),
+                          ),
+                        ),
+                        leading: const Icon(Icons.repeat_rounded),
+                        title: const Text('选段练唱'),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: chevronColor,
+                        ),
+                        onTap: widget.state.taking
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                range();
+                              },
+                      ),
+                      Divider(
+                        height: 1,
+                        indent: 54,
+                        endIndent: 16,
+                        color: dividerColor,
+                      ),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.repeat_one_rounded),
+                        value: widget.state.loop,
+                        title: const Text('单曲循环'),
+                        onChanged: widget.state.taking
+                            ? null
+                            : (v) => uiTask(
+                                context,
+                                () => widget.state.command('loop', v),
+                              ),
+                      ),
+                      Divider(
+                        height: 1,
+                        indent: 54,
+                        endIndent: 16,
+                        color: dividerColor,
+                      ),
+                      ListTile(
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(20),
+                          ),
+                        ),
+                        leading: const Icon(Icons.headphones_rounded),
+                        title: const Text('音轨与播放设置'),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: chevronColor,
+                        ),
+                        onTap: () =>
+                            panel(() => audioSettings(context, widget.state)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     ),
   );
@@ -966,9 +1267,11 @@ class _PlayerPageState extends State<PlayerPage> {
     );
     final slider = SliderTheme(
       data: _theme.sliderTheme.copyWith(
-        trackHeight: 3,
+        trackHeight: stacked ? (drag != null ? 7.0 : 5.0) : 3.0,
         thumbShape: _PracticeThumb(
           animate: AppMotionScope.levelOf(context) == AppMotionLevel.full,
+          sleek: stacked,
+          dragging: drag != null,
         ),
         overlayShape: AppMotionScope.levelOf(context) == AppMotionLevel.full
             ? const RoundSliderOverlayShape(overlayRadius: 14)
@@ -1121,7 +1424,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 children: [
                   Icon(
                     role == 'original'
-                        ? Icons.mic_none_rounded
+                        ? Icons.mic_rounded
                         : Icons.music_note_rounded,
                     size: 18,
                   ),
@@ -1376,11 +1679,11 @@ class _PlayerPageState extends State<PlayerPage> {
           ),
           if (includeRestart)
             (
-              Icons.replay_rounded,
+              Icons.skip_previous_rounded,
               '重唱',
               ready && !state.taking ? restart : null,
             ),
-          (Icons.linear_scale_rounded, '选段', !state.taking ? range : null),
+          (Icons.repeat_rounded, '选段', !state.taking ? range : null),
           (Icons.more_horiz_rounded, '更多', !state.taking ? more : null),
         ];
         final columns =
@@ -1693,11 +1996,10 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(6, 5, 14, 5),
+                        padding: const EdgeInsets.fromLTRB(6, 5, 10, 5),
                         child: Row(
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
+                            ClipOval(
                               child: Artwork(
                                 state: widget.state,
                                 path: song.cover,
@@ -1739,6 +2041,12 @@ class _PlayerPageState extends State<PlayerPage> {
                                   ),
                                 ],
                               ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: Colors.white.withValues(alpha: .42),
                             ),
                           ],
                         ),
@@ -1784,18 +2092,37 @@ class _PlayerPageState extends State<PlayerPage> {
         children: [
           video(),
           Positioned(
-            right: 12,
-            bottom: 10,
-            child: Glass(
-              state: widget.state,
-              radius: 24,
-              material: GlassMaterialSpec.mediaOverlay,
-              tint: const Color(0xFF1A1A22),
-              child: IconButton(
-                tooltip: '全屏视频',
-                onPressed: orientation,
-                color: AppPalette.stageText,
-                icon: const Icon(Icons.fullscreen_rounded, size: 22),
+            right: 8,
+            bottom: 8,
+            child: Semantics(
+              button: true,
+              label: '全屏视频',
+              child: Tooltip(
+                message: '全屏视频',
+                child: InkWell(
+                  onTap: orientation,
+                  borderRadius: BorderRadius.circular(22),
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: Glass(
+                        state: widget.state,
+                        radius: 17,
+                        material: GlassMaterialSpec.mediaOverlay,
+                        tint: const Color(0xFF1A1A22),
+                        child: const Center(
+                          child: Icon(
+                            Icons.fullscreen_rounded,
+                            size: 18,
+                            color: AppPalette.stageText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1807,7 +2134,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget stageMedia(Song song) => LayoutBuilder(
     builder: (context, size) {
       final videoSong = song.mediaType == 'VIDEO';
-      final contentWidth = math.max(1.0, size.maxWidth - 40);
+      final contentWidth = math.max(1.0, size.maxWidth - 28);
       final hasFeedback =
           recordingError != null ||
           widget.state.playbackError.isNotEmpty ||
@@ -1832,7 +2159,7 @@ class _PlayerPageState extends State<PlayerPage> {
           : math.min(220.0, available);
       final artwork = videoSong
           ? Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: SizedBox(height: mediaHeight, child: stageVideo()),
             )
           : Center(
@@ -1931,12 +2258,17 @@ class _PlayerPageState extends State<PlayerPage> {
         : state.rangeB > state.rangeA
         ? '选段 ${durationLabel(state.rangeA)} — ${durationLabel(state.rangeB)}'
         : '尚未录音';
+    final dotColor = recording || state.taking
+        ? recordingControl
+        : state.isPlaying
+        ? const Color(0xFF34D399)
+        : Colors.white.withValues(alpha: .38);
     return Semantics(
       key: const ValueKey('player-status'),
       liveRegion: state.taking,
       child: Row(
         children: [
-          const Icon(Icons.circle, size: 5, color: recordingControl),
+          Icon(Icons.circle, size: 6, color: dotColor),
           const SizedBox(width: 7),
           Text(
             practice,
@@ -1982,28 +2314,7 @@ class _PlayerPageState extends State<PlayerPage> {
             ),
           )
         : null,
-    icon: SizedBox(
-      width: 32,
-      height: 32,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(
-            seconds < 0
-                ? Icons.rotate_left_rounded
-                : Icons.rotate_right_rounded,
-            size: 32,
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(
-              '15',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    ),
+    icon: _SeekSecondsIcon(seconds: seconds),
   );
 
   Widget stageControls() {
@@ -2033,18 +2344,11 @@ class _PlayerPageState extends State<PlayerPage> {
           const SizedBox(height: 14),
           roles(stage: true),
           if (audioRoleHint != null) ...[const SizedBox(height: 8), roleHint()],
-          const SizedBox(height: 12),
-          Glass(
-            state: state,
-            radius: 22,
-            material: GlassMaterialSpec.stageControl,
-            tint: Colors.white,
-            enabled: !state.taking,
-            child: tools(stage: true),
-          ),
+          const SizedBox(height: 8),
+          tools(stage: true),
           if (state.singing['clipped'] == true)
             Text('声音偏大，请稍微远离麦克风', style: _theme.textTheme.bodySmall),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           recordButton(),
         ],
       ),
@@ -2706,9 +3010,101 @@ void _paintPracticeBracket(
   );
 }
 
+class _SeekSecondsIcon extends StatelessWidget {
+  const _SeekSecondsIcon({required this.seconds});
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = IconTheme.of(context).color ?? Colors.white;
+    final amount = seconds.abs();
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(34, 34),
+            painter: _SeekArcPainter(forward: seconds > 0, color: color),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              '$amount',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 9.5,
+                height: 1.0,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+                color: color,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SeekArcPainter extends CustomPainter {
+  const _SeekArcPainter({required this.forward, required this.color});
+  final bool forward;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    if (forward) {
+      canvas.translate(size.width, 0);
+      canvas.scale(-1, 1);
+    }
+    final center = Offset(size.width / 2, size.height / 2 + 1.5);
+    const radius = 11.5;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.9
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // Clean 285-degree circular sweep from 12 o'clock clockwise, leaving a
+    // crisp gap before the top-left return, matching Apple SF Symbols style.
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      math.pi * 1.58,
+      false,
+      paint,
+    );
+
+    // Directional chevron at 12 o'clock pointing counter-clockwise (mirrored
+    // for forward).
+    final tip = Offset(center.dx - 1.2, center.dy - radius);
+    final arrow = Path()
+      ..moveTo(tip.dx + 4.0, tip.dy - 3.3)
+      ..lineTo(tip.dx, tip.dy)
+      ..lineTo(tip.dx + 4.0, tip.dy + 3.3);
+    canvas.drawPath(arrow, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SeekArcPainter oldDelegate) =>
+      forward != oldDelegate.forward || color != oldDelegate.color;
+}
+
 class _PracticeThumb extends SliderComponentShape {
-  const _PracticeThumb({required this.animate});
+  const _PracticeThumb({
+    required this.animate,
+    this.sleek = false,
+    this.dragging = false,
+  });
   final bool animate;
+  final bool sleek;
+  final bool dragging;
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(16, 16);
@@ -2733,7 +3129,10 @@ class _PracticeThumb extends SliderComponentShape {
       sliderTheme.thumbColor,
       enableAnimation.value,
     )!;
-    final radius = 5.0 + (animate ? activationAnimation.value * 2 : 0.0);
+    final radius = sleek
+        ? (dragging ? 6.5 : (animate ? activationAnimation.value * 6.0 : 0.0))
+        : 5.0 + (animate ? activationAnimation.value * 2 : 0.0);
+    if (radius <= 0.1) return;
     context.canvas.drawCircle(center, radius, Paint()..color = color);
   }
 }
@@ -2758,7 +3157,7 @@ class _PracticeTrack extends RoundedRectSliderTrackShape {
     Offset? secondaryOffset,
     bool isDiscrete = false,
     bool isEnabled = false,
-    double additionalActiveTrackHeight = 2,
+    double additionalActiveTrackHeight = 0,
   }) {
     super.paint(
       context,

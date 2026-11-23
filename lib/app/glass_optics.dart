@@ -100,10 +100,10 @@ class _EnvironmentPainter extends CustomPainter {
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(-.74, -1.02),
-          radius: 1.25,
+          center: const Alignment(-.72, -.98),
+          radius: 1.30,
           colors: [
-            rose.withValues(alpha: dark ? .20 : .12),
+            rose.withValues(alpha: dark ? .24 : .15),
             rose.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -112,10 +112,10 @@ class _EnvironmentPainter extends CustomPainter {
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(.88, -.82),
-          radius: 1.15,
+          center: const Alignment(.86, -.80),
+          radius: 1.22,
           colors: [
-            sky.withValues(alpha: dark ? .18 : .15),
+            sky.withValues(alpha: dark ? .20 : .17),
             sky.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -124,10 +124,10 @@ class _EnvironmentPainter extends CustomPainter {
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(0, 1.08),
-          radius: 1.05,
+          center: const Alignment(0, 1.05),
+          radius: 1.15,
           colors: [
-            warm.withValues(alpha: dark ? .14 : .11),
+            warm.withValues(alpha: dark ? .16 : .13),
             warm.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -309,9 +309,9 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                   ],
                   if (focus > 0)
                     BoxShadow(
-                      color: primary.withValues(alpha: .16 * focus),
+                      color: primary.withValues(alpha: .10 * focus),
                       blurRadius: 12,
-                      spreadRadius: 1.0,
+                      spreadRadius: .5,
                     ),
                 ],
               ),
@@ -357,22 +357,16 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                                     Color.alphaBlend(
                                       widget.rim.withValues(
                                         alpha:
-                                            ((dark ? .08 : .22) + touch * .06) *
+                                            ((dark ? .035 : .18) +
+                                                touch * .05) *
                                             widget.material.highlight,
                                       ),
                                       tint,
                                     ),
                                     tint,
-                                    Color.alphaBlend(
-                                      widget.rim.withValues(
-                                        alpha:
-                                            (dark ? .02 : .06) *
-                                            widget.material.highlight,
-                                      ),
-                                      tint,
-                                    ),
+                                    tint,
                                   ],
-                                  stops: const [0, .42, 1],
+                                  stops: const [0, .34, 1],
                                 ),
                         ),
                         child: child,
@@ -577,44 +571,32 @@ class _LensRimPainter extends CustomPainter {
       );
       return;
     }
-    // Apple Liquid Glass dual-edge optical rim:
-    // 1. Subtle outer hairline defines the glass silhouette against light/dark canvas.
+    // Apple iOS 26 single-hairline directional Fresnel specular rim:
+    // razor-thin top-left glint that fades cleanly along the sides so dark
+    // capsules stay crystal-clear instead of showing thick plastic borders.
     paint
-      ..strokeWidth = .6
-      ..shader = null
-      ..color = dark
-          ? Colors.white.withValues(alpha: .12)
-          : Colors.black.withValues(alpha: .075);
-    canvas.drawRRect(shape, paint);
-
-    // 2. Crisp inner Fresnel top-bevel highlight catching overhead light.
-    final innerRect = rect.deflate(.85);
-    final innerShape = RRect.fromRectAndRadius(
-      innerRect,
-      Radius.circular(math.max(0, radius - 1.4)),
-    );
-    paint
-      ..strokeWidth = field ? 1.0 : 1.25
+      ..strokeWidth = field ? .65 : .80
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          reflection(dark ? .42 : .96),
-          reflection(dark ? .10 : .32),
-          reflection(dark ? .24 : .64),
+          reflection(dark ? .30 : .86),
+          reflection(dark ? .04 : .12),
+          reflection(dark ? .03 : .08),
+          reflection(dark ? .12 : .40),
         ],
-        stops: const [0, .48, 1],
-      ).createShader(innerRect);
-    canvas.drawRRect(innerShape, paint);
+        stops: const [0, .34, .70, 1],
+      ).createShader(rect);
+    canvas.drawRRect(shape, paint);
 
     // Subtle pointer-following specular bloom on touch/hover.
     if (touch > 0) {
       paint
-        ..strokeWidth = 1.15
+        ..strokeWidth = 1.0
         ..shader = RadialGradient(
           center: light,
           radius: .9,
-          colors: [reflection((dark ? .55 : .95) * touch), reflection(0)],
+          colors: [reflection((dark ? .40 : .82) * touch), reflection(0)],
           stops: const [0, .72],
         ).createShader(rect);
       canvas.drawRRect(shape, paint);
@@ -622,14 +604,14 @@ class _LensRimPainter extends CustomPainter {
 
     if (focus > 0) {
       paint
-        ..strokeWidth = 1.5
+        ..strokeWidth = 1.0
         ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            primary.withValues(alpha: .82 * focus),
-            primary.withValues(alpha: .28 * focus),
-            primary.withValues(alpha: .66 * focus),
+            primary.withValues(alpha: .46 * focus),
+            primary.withValues(alpha: .18 * focus),
+            primary.withValues(alpha: .38 * focus),
           ],
         ).createShader(rect);
       canvas.drawRRect(shape, paint);

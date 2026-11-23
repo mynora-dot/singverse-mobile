@@ -469,52 +469,71 @@ class _ConnectionPageState extends State<ConnectionPage> {
 
   Widget loginForm(AppState state) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
     final inputStyle = theme.textTheme.bodyMedium?.copyWith(
       fontSize: state.senior ? 18 : 16,
-      height: 1.25,
+      height: 1.3,
     );
     final labelStyle = theme.textTheme.bodySmall?.copyWith(
-      fontSize: state.senior ? 17 : 13,
-      height: 1.4,
-      fontWeight: FontWeight.w400,
-      color: theme.colorScheme.onSurfaceVariant,
+      fontSize: state.senior ? 16 : 12.5,
+      height: 1.35,
+      fontWeight: FontWeight.w600,
+      color: colors.onSurfaceVariant,
     );
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
-    );
-    InputDecoration decoration({
+    InputDecoration groupedDecoration({
       String? hint,
-      String? prefix,
+      Widget? prefixIcon,
       Widget? suffix,
     }) => InputDecoration(
       hintText: hint,
       hintStyle: inputStyle?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
+        color: colors.onSurfaceVariant.withValues(alpha: .72),
       ),
-      prefixText: prefix,
-      prefixStyle: inputStyle,
+      prefixIcon: prefixIcon,
+      prefixIconConstraints: prefixIcon != null
+          ? const BoxConstraints(minWidth: 0, minHeight: 0)
+          : null,
       suffixIcon: suffix,
+      suffixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
       isDense: true,
-      filled: true,
-      fillColor: theme.colorScheme.surface,
-      constraints: BoxConstraints(minHeight: state.senior ? 64 : 52),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      border: border,
-      enabledBorder: border,
-      disabledBorder: border,
-      focusedBorder: border.copyWith(
-        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.2),
+      filled: false,
+      constraints: BoxConstraints(minHeight: state.senior ? 52 : 42),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 0,
+        vertical: state.senior ? 10 : 8,
       ),
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      disabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
     );
-    Widget labelledField(String label, Widget field) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ExcludeSemantics(child: Text(label, style: labelStyle)),
-        const SizedBox(height: 8),
-        Semantics(label: label, child: field),
-      ],
-    );
+    Widget groupedSection(String label, Widget field, {Widget? trailing}) =>
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            18,
+            state.senior ? 16 : 14,
+            14,
+            state.senior ? 10 : 8,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: ExcludeSemantics(
+                      child: Text(label, style: labelStyle),
+                    ),
+                  ),
+                  ?trailing,
+                ],
+              ),
+              SizedBox(height: trailing != null ? 6 : 2),
+              Semantics(label: label, child: field),
+            ],
+          ),
+        );
     Widget option(
       String label,
       String key,
@@ -523,28 +542,37 @@ class _ConnectionPageState extends State<ConnectionPage> {
     ) => MergeSemantics(
       child: InkWell(
         onTap: working ? null : () => action(!value),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(999),
         child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: state.senior ? 56 : 48),
+          constraints: BoxConstraints(minHeight: state.senior ? 52 : 44),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Checkbox(
-                key: ValueKey(key),
-                value: value,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                onChanged: working ? null : (value) => action(value ?? false),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Text(
-                  label,
-                  style: labelStyle?.copyWith(
-                    fontWeight: FontWeight.w400,
-                    color: theme.colorScheme.onSurface,
+              SizedBox(
+                width: state.senior ? 32 : 26,
+                height: state.senior ? 32 : 26,
+                child: Checkbox(
+                  key: ValueKey(key),
+                  value: value,
+                  shape: const CircleBorder(),
+                  activeColor: AppPalette.brand,
+                  checkColor: Colors.white,
+                  side: BorderSide(
+                    color: colors.outline.withValues(alpha: .55),
+                    width: 1.4,
                   ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: working ? null : (value) => action(value ?? false),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: state.senior ? 16 : 13.5,
+                  fontWeight: FontWeight.w500,
+                  color: colors.onSurface,
                 ),
               ),
             ],
@@ -561,8 +589,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
           if (!state.senior) ...[
             Center(
               child: Container(
-                width: 60,
-                height: 60,
+                width: 62,
+                height: 62,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   gradient: const LinearGradient(
@@ -572,15 +600,16 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.brand.withValues(alpha: .32),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
+                      color: AppPalette.brand.withValues(alpha: .34),
+                      blurRadius: 24,
+                      spreadRadius: -4,
+                      offset: const Offset(0, 12),
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.dns_rounded,
-                  size: 28,
+                  size: 30,
                   color: Colors.white,
                 ),
               ),
@@ -593,34 +622,85 @@ class _ConnectionPageState extends State<ConnectionPage> {
               '连接你的家庭曲库',
               textAlign: state.senior ? TextAlign.start : TextAlign.center,
               style: theme.textTheme.headlineLarge?.copyWith(
-                fontSize: state.senior ? 32 : 26,
-                height: 1.25,
+                fontSize: state.senior ? 32 : 25,
+                height: 1.24,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -.6,
               ),
             ),
           ),
+          if (!state.senior) ...[
+            const SizedBox(height: 6),
+            Text(
+              '输入局域网 NAS 地址和管理员账号',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: 13.5,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
-          LayoutBuilder(
-            builder: (context, size) => Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 16,
-              runSpacing: 12,
+          Glass(
+            state: state,
+            radius: 26,
+            material: GlassMaterialSpec.standard,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ExcludeSemantics(child: Text('NAS 地址', style: labelStyle)),
-                SizedBox(
-                  width: (160 * MediaQuery.textScalerOf(context).scale(14) / 14)
-                      .clamp(160, size.maxWidth),
-                  child: Semantics(
+                groupedSection(
+                  'NAS 地址',
+                  TextField(
+                    key: const ValueKey('nas-address-field'),
+                    style: inputStyle,
+                    controller: address,
+                    enabled: !working,
+                    keyboardType: TextInputType.url,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.next,
+                    decoration: groupedDecoration(
+                      hint: '192.168.1.10:18080',
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: Text(
+                          '$scheme://',
+                          style: inputStyle?.copyWith(
+                            color: colors.onSurfaceVariant.withValues(
+                              alpha: .72,
+                            ),
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ),
+                    onChanged: (value) => setState(() {
+                      invalidateSaved();
+                      final match = RegExp(
+                        r'^(https?)://',
+                        caseSensitive: false,
+                      ).firstMatch(value);
+                      if (match != null) {
+                        scheme = match[1]!.toLowerCase();
+                        address.text = value.substring(match.end);
+                        address.selection = TextSelection.collapsed(
+                          offset: address.text.length,
+                        );
+                      }
+                    }),
+                  ),
+                  trailing: Semantics(
                     label: '连接协议',
                     child: AppSegments<String>(
                       key: const ValueKey('nas-protocol'),
-                      liquid: true,
+                      plain: true,
                       values: const [('http', 'HTTP'), ('https', 'HTTPS')],
                       selected: scheme,
                       senior: state.senior,
                       enabled: !working,
-                      textStyle: labelStyle,
+                      textStyle: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: state.senior ? 15 : 12.5,
+                      ),
                       onChanged: (value) {
                         if (value == scheme) return;
                         setState(() {
@@ -631,119 +711,130 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     ),
                   ),
                 ),
+                Divider(
+                  indent: 18,
+                  endIndent: 18,
+                  height: 1,
+                  color: colors.onSurface.withValues(alpha: dark ? .09 : .07),
+                ),
+                groupedSection(
+                  '管理员账号',
+                  TextField(
+                    key: const ValueKey('nas-username-field'),
+                    style: inputStyle,
+                    controller: username,
+                    enabled: !working,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    autofillHints: const [AutofillHints.username],
+                    textInputAction: TextInputAction.next,
+                    decoration: groupedDecoration(hint: '输入管理员账号'),
+                    onChanged: (_) => setState(invalidateSaved),
+                  ),
+                ),
+                Divider(
+                  indent: 18,
+                  endIndent: 18,
+                  height: 1,
+                  color: colors.onSurface.withValues(alpha: dark ? .09 : .07),
+                ),
+                groupedSection(
+                  useSavedPassword ? '已保存密码' : '密码',
+                  TextField(
+                    key: const ValueKey('nas-password-field'),
+                    style: inputStyle,
+                    controller: password,
+                    enabled: !working,
+                    obscureText: !visible,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    autofillHints: remember
+                        ? const [AutofillHints.password]
+                        : null,
+                    textInputAction: TextInputAction.go,
+                    decoration: groupedDecoration(
+                      hint: useSavedPassword ? '登录时自动填入' : '输入 NAS 账号密码',
+                      suffix: IconButton(
+                        tooltip: visible ? '隐藏密码' : '显示密码',
+                        onPressed: working
+                            ? null
+                            : () => setState(() => visible = !visible),
+                        icon: Icon(
+                          visible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    onChanged: (_) => setState(() {
+                      formRevision++;
+                      useSavedPassword = false;
+                    }),
+                    onSubmitted: (_) => submit(),
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          Semantics(
-            label: 'NAS 地址',
-            child: TextField(
-              key: const ValueKey('nas-address-field'),
-              style: inputStyle,
-              controller: address,
-              enabled: !working,
-              keyboardType: TextInputType.url,
-              autocorrect: false,
-              enableSuggestions: false,
-              textInputAction: TextInputAction.next,
-              decoration: decoration(
-                hint: '192.168.1.10:18080',
-                prefix: '$scheme://',
-                suffix: IconButton(
-                  key: const ValueKey('nas-history'),
-                  tooltip: '历史登录',
-                  onPressed: working ? null : showHistory,
-                  icon: const Icon(Icons.history_rounded, size: 20),
-                ),
-              ),
-              onChanged: (value) => setState(() {
-                invalidateSaved();
-                final match = RegExp(
-                  r'^(https?)://',
-                  caseSensitive: false,
-                ).firstMatch(value);
-                if (match != null) {
-                  scheme = match[1]!.toLowerCase();
-                  address.text = value.substring(match.end);
-                  address.selection = TextSelection.collapsed(
-                    offset: address.text.length,
-                  );
-                }
-              }),
-            ),
-          ),
-          const SizedBox(height: 24),
-          labelledField(
-            '管理员账号',
-            TextField(
-              key: const ValueKey('nas-username-field'),
-              style: inputStyle,
-              controller: username,
-              enabled: !working,
-              autocorrect: false,
-              enableSuggestions: false,
-              autofillHints: const [AutofillHints.username],
-              textInputAction: TextInputAction.next,
-              decoration: decoration(hint: '管理员账号'),
-              onChanged: (_) => setState(invalidateSaved),
-            ),
-          ),
-          const SizedBox(height: 20),
-          labelledField(
-            useSavedPassword ? '已保存密码' : '密码',
-            TextField(
-              key: const ValueKey('nas-password-field'),
-              style: inputStyle,
-              controller: password,
-              enabled: !working,
-              obscureText: !visible,
-              autocorrect: false,
-              enableSuggestions: false,
-              autofillHints: remember ? const [AutofillHints.password] : null,
-              textInputAction: TextInputAction.go,
-              decoration: decoration(
-                hint: useSavedPassword ? '登录时自动填入' : '输入 NAS 账号密码',
-                suffix: IconButton(
-                  tooltip: visible ? '隐藏密码' : '显示密码',
-                  onPressed: working
-                      ? null
-                      : () => setState(() => visible = !visible),
-                  icon: Icon(
-                    visible
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 20,
-                  ),
-                ),
-              ),
-              onChanged: (_) => setState(() {
-                formRevision++;
-                useSavedPassword = false;
-              }),
-              onSubmitted: (_) => submit(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              option('记住密码', 'remember-password', remember, changeRemember),
-              option('自动登录', 'automatic-login', automatic, changeAutomatic),
-              TextButton(
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compactRow =
+                  !state.senior &&
+                  constraints.maxWidth >= 310 &&
+                  MediaQuery.textScalerOf(context).scale(14) <= 18;
+              final forgot = TextButton(
                 key: const ValueKey('forgot-password'),
                 style: TextButton.styleFrom(
-                  textStyle: labelStyle?.copyWith(fontWeight: FontWeight.w400),
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: state.senior ? 16 : 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  foregroundColor: colors.onSurfaceVariant,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size(44, state.senior ? 52 : 44),
                 ),
                 onPressed: working ? null : forgotPassword,
                 child: const Text('忘记密码？'),
-              ),
-            ],
+              );
+              if (compactRow) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    children: [
+                      option(
+                        '记住密码',
+                        'remember-password',
+                        remember,
+                        changeRemember,
+                      ),
+                      const SizedBox(width: 14),
+                      option(
+                        '自动登录',
+                        'automatic-login',
+                        automatic,
+                        changeAutomatic,
+                      ),
+                      const Spacer(),
+                      forgot,
+                    ],
+                  ),
+                );
+              }
+              return Wrap(
+                spacing: 14,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  option('记住密码', 'remember-password', remember, changeRemember),
+                  option('自动登录', 'automatic-login', automatic, changeAutomatic),
+                  forgot,
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(999),
@@ -754,21 +845,27 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       end: Alignment.bottomRight,
                       colors: [AppPalette.brand, AppPalette.brandDeep],
                     ),
+              border: working
+                  ? null
+                  : Border.all(
+                      color: Colors.white.withValues(alpha: .28),
+                      width: .8,
+                    ),
               boxShadow: working || state.performanceMode
                   ? null
                   : [
                       BoxShadow(
                         color: AppPalette.brand.withValues(alpha: .36),
-                        blurRadius: 22,
+                        blurRadius: 24,
                         spreadRadius: -4,
-                        offset: const Offset(0, 10),
+                        offset: const Offset(0, 12),
                       ),
                     ],
             ),
             child: FilledButton(
               key: const ValueKey('nas-submit'),
               style: FilledButton.styleFrom(
-                minimumSize: Size.fromHeight(state.senior ? 60 : 52),
+                minimumSize: Size.fromHeight(state.senior ? 60 : 54),
                 backgroundColor: working ? null : Colors.transparent,
                 foregroundColor: Colors.white,
                 shape: const StadiumBorder(),
@@ -778,25 +875,37 @@ class _ConnectionPageState extends State<ConnectionPage> {
               child: Text(working ? '正在连接…' : '登录并连接'),
             ),
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            spacing: 8,
-            children: [
-              TextButton.icon(
+          const SizedBox(height: 12),
+          MotionPress(
+            child: Glass(
+              state: state,
+              radius: 999,
+              material: GlassMaterialSpec.shortcut,
+              child: OutlinedButton.icon(
                 key: const ValueKey('nas-discover'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: Size.fromHeight(state.senior ? 58 : 50),
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: colors.onSurface,
+                  side: BorderSide.none,
+                  shape: const StadiumBorder(),
+                  textStyle: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: state.senior ? 18 : 14.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onPressed: working ? null : discover,
-                icon: const Icon(Icons.radar_rounded, size: 20),
+                icon: Icon(
+                  Icons.radar_rounded,
+                  size: 19,
+                  color: colors.primary,
+                ),
                 label: const Text('查找局域网 NAS'),
               ),
-              TextButton.icon(
-                onPressed: working ? null : showHistory,
-                icon: const Icon(Icons.history_rounded, size: 20),
-                label: const Text('历史登录'),
-              ),
-            ],
+            ),
           ),
-          if (editing && state.authenticated)
+          if (editing && state.authenticated) ...[
+            const SizedBox(height: 8),
             TextButton(
               onPressed: working
                   ? null
@@ -813,6 +922,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     }),
               child: const Text('取消修改'),
             ),
+          ],
         ],
       ),
     );
@@ -1048,9 +1158,30 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     ),
                   )
                 : null,
-            title: Text(
-              state.authenticated && !editing ? 'NAS 连接与账号' : '连接 NAS',
-            ),
+            title: state.authenticated && !editing
+                ? const Text('NAS 连接与账号')
+                : null,
+            actions: [
+              if (!state.mfaRequired && !(state.authenticated && !editing))
+                Padding(
+                  padding: const EdgeInsets.only(right: 16, top: 4, bottom: 4),
+                  child: Glass(
+                    state: state,
+                    radius: 26,
+                    variant: GlassVariant.liquid,
+                    child: IconButton(
+                      key: const ValueKey('nas-history'),
+                      tooltip: '历史登录',
+                      style: IconButton.styleFrom(
+                        minimumSize: Size.square(state.senior ? 56 : 44),
+                        padding: EdgeInsets.zero,
+                      ),
+                      onPressed: working ? null : showHistory,
+                      icon: const Icon(Icons.history_rounded, size: 20),
+                    ),
+                  ),
+                ),
+            ],
           ),
           body: BackdropGroup(
             backdropKey: backdrop,
@@ -1062,7 +1193,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: EdgeInsets.fromLTRB(
                     MediaQuery.sizeOf(context).width < 375 ? 16 : 20,
-                    24,
+                    state.authenticated && !editing ? 16 : 8,
                     MediaQuery.sizeOf(context).width < 375 ? 16 : 20,
                     32,
                   ),

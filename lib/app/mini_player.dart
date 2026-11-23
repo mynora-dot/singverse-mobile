@@ -159,13 +159,15 @@ class _MiniPlayerState extends State<MiniPlayer> {
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final artwork =
-                            !widget.compact || constraints.maxWidth >= 186;
+                            !widget.compact || constraints.maxWidth >= 152;
                         return Stack(
                           children: [
                             Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: widget.compact ? 6 : 8,
-                                vertical: 6,
+                              padding: EdgeInsets.fromLTRB(
+                                widget.compact ? (artwork ? 7 : 16) : 8,
+                                6,
+                                widget.compact ? 7 : 8,
+                                6,
                               ),
                               child: Row(
                                 children: [
@@ -178,7 +180,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                       size: state.senior
                                           ? 48
                                           : widget.compact
-                                          ? 38
+                                          ? 36
                                           : 42,
                                     ),
                                     SizedBox(width: widget.compact ? 8 : 11),
@@ -301,11 +303,10 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                             ),
                                         shape: const CircleBorder(),
                                       ),
-                                      constraints:
-                                          const BoxConstraints.tightFor(
-                                            width: 44,
-                                            height: 44,
-                                          ),
+                                      constraints: BoxConstraints.tightFor(
+                                        width: widget.compact ? 38 : 44,
+                                        height: widget.compact ? 38 : 44,
+                                      ),
                                       padding: EdgeInsets.zero,
                                       icon: AnimatedSwitcher(
                                         duration: AppMotionScope.durationOf(
@@ -323,11 +324,13 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                                 child: child,
                                               ),
                                             ),
-                                        child: Icon(
+                                        child: AppVectorIcon(
                                           state.isPlaying
-                                              ? Icons.pause_rounded
-                                              : Icons.play_arrow_rounded,
+                                              ? AppGlyph.pause
+                                              : AppGlyph.play,
                                           key: ValueKey(state.isPlaying),
+                                          size: 16.5,
+                                          color: scheme.onSurface,
                                         ),
                                       ),
                                     ),
@@ -336,9 +339,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
                             ),
                             if (!widget.compact)
                               Positioned(
-                                left: 26,
-                                right: 26,
-                                bottom: 0,
+                                left: 30,
+                                right: 30,
+                                bottom: 1.5,
                                 child: ExcludeSemantics(
                                   child: ListenableBuilder(
                                     listenable: state.playback,

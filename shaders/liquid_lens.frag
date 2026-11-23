@@ -35,24 +35,25 @@ void main() {
   vec2 faceNormal = q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
   vec2 normal = (max(q.x, q.y) > 0.0 ? cornerNormal : faceNormal) * sign(centered);
   float inside = -roundedBox(centered, halfSize, r);
-  float edge = 1.0 - smoothstep(0.0, 10.0, max(inside, 0.0));
-  // Apple Liquid Glass lens bend: refracts scrolling color inward along the
-  // rounded capsule rim while keeping center text distortion-free.
-  vec2 refracted = texturePoint - normal * (3.6 * edge * edge * u_scale);
+  float edge = 1.0 - smoothstep(0.0, 3.8, max(inside, 0.0));
+  // Subtle Apple Liquid Glass bevel refraction restricted to the tight outer
+  // crystal lip so the interior stays crisp and distortion-free.
+  vec2 refracted = texturePoint - normal * (2.4 * edge * edge * u_scale);
   vec4 scene = sampleBackdrop(refracted);
   float luma = dot(scene.rgb, vec3(0.2126, 0.7152, 0.0722));
   vec3 chroma = scene.rgb - vec3(luma);
-  // Preserve and gently enrich backdrop saturation (like CSS saturate(170%))
-  // while softly compressing luminance extremes for crisp foreground legibility.
-  float lightLuma = mix(0.76, 0.98, luma);
-  float darkLuma = mix(0.08, 0.26, luma);
-  vec3 lightGlass = clamp(vec3(lightLuma) + chroma * 0.65, 0.0, 1.0);
-  vec3 darkGlass = clamp(vec3(darkLuma) + chroma * 0.72, 0.0, 1.0);
+  // Keep dark glass deep and clear (never lifting pure black into grey mud)
+  // while enriching underlying cover colors like CSS saturate(160%).
+  float lightLuma = mix(0.76, 0.99, luma);
+  float darkLuma = mix(0.025, 0.42, luma);
+  vec3 lightGlass = clamp(vec3(lightLuma) + chroma * 0.85, 0.0, 1.0);
+  vec3 darkGlass = clamp(vec3(darkLuma) + chroma * 1.12, 0.0, 1.0);
   vec3 glass = mix(lightGlass, darkGlass, u_dark);
-  vec3 rimChroma = clamp(vec3(mix(lightLuma, darkLuma, u_dark)) + chroma * 1.15, 0.0, 1.0);
-  // Bright Fresnel optical glint along the top-left rim.
-  float topLight = clamp((-normal.y * 0.7 - normal.x * 0.3) * 0.5 + 0.5, 0.0, 1.0);
-  glass = mix(glass, rimChroma, 0.35 * edge * edge);
-  glass += vec3(mix(0.14, 0.10, u_dark)) * edge * edge * edge * topLight;
+  vec3 rimChroma = clamp(vec3(mix(lightLuma, darkLuma, u_dark)) + chroma * 1.25, 0.0, 1.0);
+  // Whisper-thin directional specular glint along the top-left crystal lip.
+  float topLight = clamp((-normal.y * 0.72 - normal.x * 0.28) * 0.5 + 0.5, 0.0, 1.0);
+  float rimSharp = edge * edge * edge * edge;
+  glass = mix(glass, rimChroma, 0.28 * edge * edge);
+  glass += vec3(mix(0.10, 0.055, u_dark)) * rimSharp * topLight;
   fragColor = vec4(clamp(glass, 0.0, 1.0), 1.0);
 }

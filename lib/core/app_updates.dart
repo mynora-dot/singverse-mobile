@@ -190,7 +190,9 @@ class AppUpdates extends ChangeNotifier with WidgetsBindingObserver {
       if (_current(ticket, server)) {
         release = null;
         ready = false;
-        status = e is PlatformException
+        status = e is FormatException
+            ? e.message
+            : e is PlatformException
             ? e.message ?? '检查更新失败，请重试'
             : e.toString();
         // Failed checks retry after 24 hours in the foreground; manual retry is immediate.
@@ -264,7 +266,9 @@ class AppUpdates extends ChangeNotifier with WidgetsBindingObserver {
       status = '安装包已校验，可确认安装';
     } catch (e) {
       if (_current(ticket, server)) {
-        status = e is PlatformException
+        status = e is FormatException
+            ? e.message
+            : e is PlatformException
             ? e.message ?? '下载失败，请重试'
             : e.toString();
       }
@@ -302,7 +306,9 @@ class AppUpdates extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       if (!_current(ticket, server)) return;
       ready = false;
-      status = e is PlatformException
+      status = e is FormatException
+          ? e.message
+          : e is PlatformException
           ? e.message ?? '无法打开安装程序，请重新下载'
           : e.toString();
     }

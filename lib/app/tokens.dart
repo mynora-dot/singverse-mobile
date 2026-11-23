@@ -67,46 +67,47 @@ class GlassMaterialSpec {
 
   static const standard = GlassMaterialSpec(
     lightTint: .64,
-    darkTint: .62,
-    blur: 20,
-    highlight: .68,
-    shadow: .28,
+    darkTint: .42,
+    blur: 22,
+    highlight: .42,
+    shadow: .18,
     grouped: true,
   );
   static const search = GlassMaterialSpec(
-    lightTint: .60,
-    darkTint: .56,
-    blur: 26,
-    highlight: .82,
-    shadow: .38,
+    lightTint: .56,
+    darkTint: .22,
+    blur: 18,
+    highlight: .28,
+    shadow: .08,
+    grouped: true,
   );
   static const shortcut = GlassMaterialSpec(
-    lightTint: .56,
-    darkTint: .52,
-    blur: 20,
-    highlight: .72,
-    shadow: .26,
+    lightTint: .54,
+    darkTint: .18,
+    blur: 16,
+    highlight: .22,
+    shadow: .06,
     grouped: true,
   );
   static const field = GlassMaterialSpec(
     lightTint: .70,
-    darkTint: .64,
+    darkTint: .48,
     blur: 16,
-    highlight: .65,
-    shadow: .18,
+    highlight: .34,
+    shadow: .10,
   );
   static const onColor = GlassMaterialSpec(
-    lightTint: .20,
-    darkTint: .20,
-    blur: 16,
-    highlight: .75,
+    lightTint: .16,
+    darkTint: .16,
+    blur: 18,
+    highlight: .52,
   );
   static const stageControl = GlassMaterialSpec(
-    lightTint: .13,
-    darkTint: .13,
+    lightTint: .12,
+    darkTint: .12,
     blur: 24,
-    highlight: .58,
-    shadow: .32,
+    highlight: .44,
+    shadow: .22,
   );
   // Native video cannot be sampled. Its small overlay uses the same optical
   // edge and touch light, with no backdrop filter or displacement.
@@ -114,31 +115,42 @@ class GlassMaterialSpec {
     lightTint: .72,
     darkTint: .72,
     blur: 0,
-    highlight: .48,
+    highlight: .36,
   );
   static const floating = GlassMaterialSpec(
-    lightTint: .50,
-    darkTint: .48,
-    blur: 26,
-    highlight: .92,
-    shadow: .62,
+    lightTint: .48,
+    darkTint: .26,
+    blur: 32,
+    highlight: .76,
+    shadow: .52,
     refraction: true,
   );
   // Floating player capsule with luminous specular edge and soft color wash.
   static const player = GlassMaterialSpec(
-    lightTint: .56,
-    darkTint: .52,
-    blur: 28,
-    highlight: .88,
-    shadow: .64,
+    lightTint: .54,
+    darkTint: .30,
+    blur: 32,
+    highlight: .72,
+    shadow: .52,
     refraction: true,
   );
   static const sheet = GlassMaterialSpec(
-    lightTint: .86,
-    darkTint: .84,
-    blur: 32,
-    highlight: .62,
-    shadow: .78,
+    lightTint: .76,
+    darkTint: .46,
+    blur: 36,
+    highlight: .82,
+    shadow: .74,
+  );
+  // Unified zero-blur smoked Liquid Glass for sheets over native routes
+  // (player audio & video, TV, scan, admin): high opacity eliminates sharp
+  // background ghosting while floating inset geometry and crisp Fresnel rim
+  // preserve the iOS 26 dark glass look.
+  static const sheetNative = GlassMaterialSpec(
+    lightTint: .94,
+    darkTint: .94,
+    blur: 0,
+    highlight: .90,
+    shadow: .82,
   );
 
   final double lightTint, darkTint, blur, highlight, shadow;
@@ -148,9 +160,9 @@ class GlassMaterialSpec {
     // Zero-blur materials include native video overlays and stable form fields.
     if (context == GlassBackdropContext.plain || blur == 0) return this;
     final content = context == GlassBackdropContext.content;
-    final minLight = content ? .58 : .54;
-    final minDark = content ? .54 : .50;
-    final minBlur = content ? 26.0 : 24.0;
+    final minLight = content ? .54 : .50;
+    final minDark = content ? .32 : .26;
+    final minBlur = content ? 30.0 : 26.0;
     return GlassMaterialSpec(
       lightTint: lightTint < minLight ? minLight : lightTint,
       darkTint: darkTint < minDark ? minDark : darkTint,
