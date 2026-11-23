@@ -317,137 +317,254 @@ class _TvPageState extends State<TvPage> {
     BuildContext context,
   ) => ValueListenableBuilder<MobileScannerState>(
     valueListenable: camera!,
-    builder: (context, scanner, _) => LayoutBuilder(
-      builder: (context, size) => SingleChildScrollView(
-        child: ContentWidth(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (tvSession.controller != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 12,
-                      children: [
-                        Text(
-                          '已连接${tvSession.deviceName ?? '电视'}',
-                          style: Theme.of(context).textTheme.bodySmall,
+    builder: (context, scanner, _) {
+      if (scanner.error != null) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 68, 24, 24),
+            child: ContentWidth(child: cameraFailure(context)),
+          ),
+        );
+      }
+      final torchOn = scanner.torchState == TorchState.on;
+      final torchAvailable = scanner.torchState != TorchState.unavailable;
+      return LayoutBuilder(
+        builder: (context, size) {
+          final side = math.min(
+            248.0,
+            math
+                .min(size.maxWidth - 72, size.maxHeight * .36)
+                .clamp(168.0, 248.0),
+          );
+          final windowCenterY = (size.maxHeight * .42)
+              .clamp(
+                side / 2 + 84,
+                math.max(side / 2 + 84, size.maxHeight - side / 2 - 170),
+              )
+              .toDouble();
+          final window = Rect.fromCenter(
+            center: Offset(size.maxWidth / 2, windowCenterY),
+            width: side,
+            height: side,
+          );
+          return Stack(
+            key: const ValueKey('tv-scanner-preview'),
+            fit: StackFit.expand,
+            children: [
+              MobileScanner(
+                key: ObjectKey(camera),
+                controller: camera,
+                scanWindow: window,
+                onDetect: (capture) {
+                  final raw = capture.barcodes.firstOrNull?.rawValue;
+                  if (raw != null) detected(raw);
+                },
+                errorBuilder: (_, _) => const SizedBox.shrink(),
+              ),
+              IgnorePointer(child: CustomPaint(painter: _ScanFrame(window))),
+              if (tvSession.controller != null)
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + kToolbarHeight + 8,
+                  left: 20,
+                  right: 20,
+                  child: Center(
+                    child: GlassSurface(
+                      radius: 999,
+                      material: GlassMaterialSpec.mediaOverlay,
+                      tint: const Color(0xFF1A1A22),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '已连接 ${tvSession.deviceName ?? '电视'}',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: Colors.white),
+                            ),
+                            const SizedBox(width: 4),
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppPalette.stageAccent,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                minimumSize: const Size(0, 32),
+                              ),
+                              onPressed: checking
+                                  ? null
+                                  : () async {
+                                      await camera?.stop();
+                                      if (mounted) {
+                                        setState(() {
+                                          scanning = false;
+                                          error = null;
+                                        });
+                                      }
+                                    },
+                              child: const Text('继续点歌'),
+                            ),
+                          ],
                         ),
-                        TextButton(
-                          onPressed: checking
-                              ? null
-                              : () async {
-                                  await camera?.stop();
-                                  if (mounted) {
-                                    setState(() {
-                                      scanning = false;
-                                      error = null;
-                                    });
-                                  }
-                                },
-                          child: const Text('继续点歌'),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                if (scanner.error != null)
-                  cameraFailure(context)
-                else ...[
-                  SizedBox(
-                    key: const ValueKey('tv-scanner-preview'),
-                    height: math.min(
-                      size.maxWidth - 40,
-                      math.max(220, size.maxHeight * .57),
+                ),
+              Positioned(
+                top: window.bottom + 24,
+                left: 28,
+                right: 28,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '对准电视上的二维码',
+                      key: const ValueKey('tv-scan-instructions'),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: LayoutBuilder(
-                        builder: (context, preview) {
-                          final side = math.min(
-                            244.0,
-                            math.min(preview.maxWidth, preview.maxHeight) * .72,
-                          );
-                          final window = Rect.fromCenter(
-                            center: Offset(
-                              preview.maxWidth / 2,
-                              preview.maxHeight / 2,
-                            ),
-                            width: side,
-                            height: side,
-                          );
-                          return Stack(
-                            fit: StackFit.expand,
+                    const SizedBox(height: 6),
+                    Text(
+                      '支持电视登录码与聚会点歌码',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: .70),
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (checking) ...[
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: 140,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: const LinearProgressIndicator(
+                            minHeight: 4,
+                            color: AppPalette.brand,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (error != null) ...[
+                      const SizedBox(height: 14),
+                      GlassSurface(
+                        radius: 18,
+                        material: GlassMaterialSpec.mediaOverlay,
+                        tint: const Color(0xFF1A1A22),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              MobileScanner(
-                                key: ObjectKey(camera),
-                                controller: camera,
-                                scanWindow: window,
-                                onDetect: (capture) {
-                                  final raw =
-                                      capture.barcodes.firstOrNull?.rawValue;
-                                  if (raw != null) detected(raw);
-                                },
-                                errorBuilder: (_, _) => const SizedBox.shrink(),
+                              Flexible(
+                                child: Text(
+                                  error!,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: Colors.white),
+                                ),
                               ),
-                              IgnorePointer(
-                                child: CustomPaint(painter: _ScanFrame(window)),
+                              if (!checking) ...[
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppPalette.stageAccent,
+                                    minimumSize: const Size(0, 32),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                  ),
+                                  onPressed: scan,
+                                  child: const Text('重试'),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: MediaQuery.paddingOf(context).bottom + 32,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Semantics(
+                      button: true,
+                      toggled: torchOn,
+                      label: torchOn ? '关闭手电筒' : '打开手电筒',
+                      child: InkWell(
+                        key: const ValueKey('tv-torch'),
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: torchAvailable
+                            ? () => uiTask(context, camera!.toggleTorch)
+                            : null,
+                        child: AnimatedContainer(
+                          duration: AppMotionScope.durationOf(
+                            context,
+                            AppMotion.release,
+                          ),
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: torchOn
+                                ? Colors.white
+                                : const Color(0x991A1A22),
+                            border: Border.all(
+                              color: Colors.white.withValues(
+                                alpha: torchOn ? .90 : .22,
+                              ),
+                              width: .9,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: .36),
+                                blurRadius: 18,
+                                offset: const Offset(0, 6),
                               ),
                             ],
-                          );
-                        },
+                          ),
+                          child: Icon(
+                            torchOn
+                                ? Icons.flashlight_on_rounded
+                                : Icons.flashlight_off_rounded,
+                            size: 24,
+                            color: !torchAvailable
+                                ? Colors.white.withValues(alpha: .32)
+                                : torchOn
+                                ? AppPalette.ink
+                                : Colors.white,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    '对准电视上的二维码',
-                    key: const ValueKey('tv-scan-instructions'),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '扫描登录码，将当前音乐库连接到电视；也可扫描聚会码参与点歌。',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('tv-torch'),
-                      onPressed: scanner.torchState == TorchState.unavailable
-                          ? null
-                          : () => uiTask(context, camera!.toggleTorch),
-                      icon: Icon(
-                        scanner.torchState == TorchState.on
-                            ? Icons.flashlight_off_rounded
-                            : Icons.flashlight_on_rounded,
-                        size: 20,
-                      ),
-                      label: Text(
-                        scanner.torchState == TorchState.on ? '关闭手电筒' : '打开手电筒',
+                    const SizedBox(height: 8),
+                    Text(
+                      torchOn ? '关闭手电筒' : '打开手电筒',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: .76),
+                        fontSize: 12,
                       ),
                     ),
-                  ),
-                ],
-                if (checking)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 16),
-                    child: LinearProgressIndicator(),
-                  ),
-                if (error != null)
-                  Notice(error!, action: checking ? null : scan),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    },
   );
 
   @override
@@ -466,20 +583,41 @@ class _TvPageState extends State<TvPage> {
           if (!didPop) back();
         },
         child: Scaffold(
-          backgroundColor: scanning ? const Color(0xFF111318) : null,
+          backgroundColor: scanning ? Colors.black : null,
+          extendBodyBehindAppBar: scanning,
           appBar: AppToolbar(
-            backgroundColor: scanning ? const Color(0xFF111318) : null,
-            leading: IconButton(
-              tooltip: '关闭',
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close_rounded),
-            ),
+            backgroundColor: scanning ? Colors.transparent : null,
+            leading: scanning
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+                    child: GlassSurface(
+                      radius: 24,
+                      material: GlassMaterialSpec.mediaOverlay,
+                      tint: const Color(0xFF1A1A22),
+                      child: IconButton(
+                        tooltip: '关闭',
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
             title: Text(
               scanning
                   ? '扫一扫'
                   : loginComplete != null
                   ? '电视已连接'
                   : tvSession.deviceName ?? '电视点歌',
+              style: scanning ? const TextStyle(color: Colors.white) : null,
             ),
             actions: [
               if (!scanning && loginComplete == null)
@@ -519,60 +657,62 @@ class _TvPageState extends State<TvPage> {
                 ),
             ],
           ),
-          body: SafeArea(
-            top: false,
-            child: loginComplete != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 56,
+          body: scanning
+              ? scannerBody(context)
+              : SafeArea(
+                  top: false,
+                  child: loginComplete != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(28),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_outline_rounded,
+                                  size: 56,
+                                ),
+                                const SizedBox(height: 20),
+                                Text(
+                                  '已连接 $loginComplete',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  '音乐库已在电视上打开，可以开始点歌了。',
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 28),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('完成'),
+                                ),
+                                TextButton(
+                                  onPressed: scan,
+                                  child: const Text('继续扫码点歌'),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 20),
-                          Text(
-                            '已连接 $loginComplete',
-                            style: Theme.of(context).textTheme.titleLarge,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            '音乐库已在电视上打开，可以开始点歌了。',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 28),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('完成'),
-                          ),
-                          TextButton(
-                            onPressed: scan,
-                            child: const Text('继续扫码点歌'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : scanning
-                ? scannerBody(context)
-                : tvSession.controller != null
-                ? Column(
-                    children: [
-                      if (error != null)
-                        Notice(
-                          error!,
-                          action: () => tvSession.controller!.reload(),
-                        ),
-                      Expanded(
-                        child: WebViewWidget(controller: tvSession.controller!),
-                      ),
-                    ],
-                  )
-                : Notice('未连接电视，请重新扫码。', action: scan),
-          ),
+                        )
+                      : tvSession.controller != null
+                      ? Column(
+                          children: [
+                            if (error != null)
+                              Notice(
+                                error!,
+                                action: () => tvSession.controller!.reload(),
+                              ),
+                            Expanded(
+                              child: WebViewWidget(
+                                controller: tvSession.controller!,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Notice('未连接电视，请重新扫码。', action: scan),
+                ),
         ),
       ),
     ),
@@ -591,13 +731,13 @@ class _ScanFrame extends CustomPainter {
     shade.fillType = PathFillType.evenOdd;
     canvas.drawPath(
       shade,
-      Paint()..color = Colors.black.withValues(alpha: .40),
+      Paint()..color = Colors.black.withValues(alpha: .58),
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(window, const Radius.circular(26)),
       Paint()
-        ..color = Colors.white.withValues(alpha: .22)
-        ..strokeWidth = 1
+        ..color = Colors.white.withValues(alpha: .16)
+        ..strokeWidth = .8
         ..style = PaintingStyle.stroke,
     );
     final border = Paint()
