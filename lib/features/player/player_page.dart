@@ -151,9 +151,9 @@ class _PlayerPageState extends State<PlayerPage> {
   (Brightness, bool, bool, AppMotionLevel)? cachedThemeKey;
   ThemeData get _theme {
     final size = MediaQuery.sizeOf(context);
-    final brightness = size.width > size.height
-        ? Brightness.dark
-        : Theme.of(context).brightness;
+    // Immersive atmospheric stage always uses deep dark velvet canvas so album
+    // art aura, frosted glass controls, and focused karaoke lyrics shine.
+    const brightness = Brightness.dark;
     final key = (
       brightness,
       widget.state.senior,
@@ -172,25 +172,20 @@ class _PlayerPageState extends State<PlayerPage> {
           ? AppMotionLevel.none
           : AppMotionScope.levelOf(context),
     );
-    final dark = brightness == Brightness.dark;
-    final background = dark ? const Color(0xFF121214) : const Color(0xFFF5F5F7);
-    final foreground = dark ? const Color(0xFFF5F5F7) : const Color(0xFF1D1D1F);
-    final muted = dark ? const Color(0xFFA1A1A6) : const Color(0xFF6E6E73);
+    const background = AppPalette.stage;
+    const foreground = AppPalette.stageText;
+    const muted = AppPalette.stageMuted;
     return cachedTheme = theme.copyWith(
       scaffoldBackgroundColor: background,
       colorScheme: theme.colorScheme.copyWith(
-        primary: foreground,
-        onPrimary: background,
-        surface: dark ? const Color(0xFF242426) : Colors.white,
+        primary: AppPalette.stageAccent,
+        onPrimary: Colors.white,
+        surface: AppPalette.stageSurface,
         onSurface: foreground,
         onSurfaceVariant: muted,
-        secondaryContainer: dark
-            ? const Color(0xFF252527)
-            : const Color(0xFFEBEBED),
+        secondaryContainer: const Color(0xFF23232E),
         onSecondaryContainer: foreground,
-        outlineVariant: dark
-            ? const Color(0xFF39393C)
-            : const Color(0xFFDADADD),
+        outlineVariant: const Color(0xFF383846),
       ),
       textTheme: theme.textTheme.apply(
         bodyColor: foreground,
@@ -199,7 +194,7 @@ class _PlayerPageState extends State<PlayerPage> {
       sliderTheme: theme.sliderTheme.copyWith(
         activeTrackColor: foreground,
         thumbColor: foreground,
-        inactiveTrackColor: foreground.withValues(alpha: .16),
+        inactiveTrackColor: foreground.withValues(alpha: .18),
       ),
     );
   }
@@ -1107,7 +1102,7 @@ class _PlayerPageState extends State<PlayerPage> {
           !state.senior &&
           !state.reduceTransparency &&
           !state.performanceMode,
-      material: stage ? GlassMaterialSpec.standard : null,
+      material: stage ? GlassMaterialSpec.stageControl : null,
       textStyle: _theme.textTheme.labelLarge?.copyWith(
         fontSize: state.senior
             ? 19
@@ -1278,18 +1273,23 @@ class _PlayerPageState extends State<PlayerPage> {
         disabledForegroundColor: _theme.colorScheme.onSurface.withValues(
           alpha: .38,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.control),
-        ),
+        shape: const StadiumBorder(),
       ),
       onPressed: enabled ? record : null,
-      icon: Icon(
-        state.recording
-            ? Icons.stop_rounded
-            : state.countdown > 0
-            ? Icons.close_rounded
-            : Icons.mic_none_rounded,
-        size: 18,
+      icon: AnimatedSwitcher(
+        duration: AppMotionScope.durationOf(
+          context,
+          const Duration(milliseconds: 180),
+        ),
+        child: Icon(
+          state.recording
+              ? Icons.stop_rounded
+              : state.countdown > 0
+              ? Icons.close_rounded
+              : Icons.fiber_manual_record_rounded,
+          key: ValueKey((state.recording, state.countdown > 0)),
+          size: 18,
+        ),
       ),
       label: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1587,7 +1587,8 @@ class _PlayerPageState extends State<PlayerPage> {
   }) => Glass(
     state: widget.state,
     radius: 24,
-    material: GlassMaterialSpec.standard,
+    material: GlassMaterialSpec.stageControl,
+    tint: Colors.white,
     child: IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
@@ -2043,8 +2044,9 @@ class _PlayerPageState extends State<PlayerPage> {
           const SizedBox(height: 12),
           Glass(
             state: state,
-            radius: AppRadii.control,
-            material: GlassMaterialSpec.standard,
+            radius: 22,
+            material: GlassMaterialSpec.stageControl,
+            tint: Colors.white,
             enabled: !state.taking,
             child: tools(stage: true),
           ),
@@ -2249,7 +2251,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget countdown() => ColoredBox(
-    color: const Color(0xDB0C1017),
+    color: const Color(0xD80A0A12),
     child: DefaultTextStyle.merge(
       style: const TextStyle(color: Colors.white),
       child: Center(
@@ -2258,20 +2260,48 @@ class _PlayerPageState extends State<PlayerPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('准备好，跟着音乐唱'),
-              Text(
-                '${widget.state.countdown}',
-                style: const TextStyle(
-                  fontSize: 76,
-                  fontWeight: FontWeight.w500,
+              const Text(
+                '准备好，跟着音乐唱',
+                style: TextStyle(fontSize: 16, color: Color(0xCCFFFFFF)),
+              ),
+              const SizedBox(height: 12),
+              AnimatedSwitcher(
+                duration: AppMotionScope.durationOf(
+                  context,
+                  const Duration(milliseconds: 360),
+                ),
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: Tween<double>(begin: 1.38, end: 1.0).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: AppMotion.bouncySpring,
+                    ),
+                  ),
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: Text(
+                  '${widget.state.countdown}',
+                  key: ValueKey(widget.state.countdown),
+                  style: const TextStyle(
+                    fontSize: 84,
+                    fontWeight: FontWeight.w700,
+                    height: 1.05,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
-              const Text('倒数结束后开始录音'),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              const Text(
+                '倒数结束后开始录音',
+                style: TextStyle(fontSize: 13, color: Color(0x99FFFFFF)),
+              ),
+              const SizedBox(height: 22),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: Colors.white12,
+                  side: BorderSide(color: Colors.white.withValues(alpha: .26)),
+                  shape: const StadiumBorder(),
                 ),
                 onPressed: record,
                 child: const Text('取消录音'),
@@ -2566,10 +2596,29 @@ class _PlayerPageState extends State<PlayerPage> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (song != null && song.mediaType != 'VIDEO')
+                        if (song != null && song.mediaType != 'VIDEO') ...[
                           Positioned.fill(
                             child: AmbientArtwork(state: state, song: song),
                           ),
+                          const Positioned.fill(
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    stops: [0, .52, 1],
+                                    colors: [
+                                      Color(0x52101016),
+                                      Color(0x88101016),
+                                      Color(0xE8101016),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         SafeArea(
                           child: song == null
                               ? Notice(
@@ -3042,9 +3091,12 @@ class _LyricsViewState extends State<LyricsView> {
                   alignment: widget.stage || widget.currentOnly
                       ? Alignment.center
                       : Alignment.centerLeft,
-                  child: Text(
-                    key: ValueKey('lyrics-line-$index'),
-                    widget.lines[index].text,
+                  child: AnimatedDefaultTextStyle(
+                    duration: AppMotionScope.durationOf(
+                      context,
+                      const Duration(milliseconds: 260),
+                    ),
+                    curve: AppMotion.fluid,
                     textAlign: widget.stage || widget.currentOnly
                         ? TextAlign.center
                         : TextAlign.start,
@@ -3053,10 +3105,22 @@ class _LyricsViewState extends State<LyricsView> {
                           ? Colors.white
                           : index == active
                           ? (widget.stage ? scheme.onSurface : scheme.primary)
+                          : widget.stage && timed && active >= 0
+                          ? scheme.onSurface.withValues(
+                              alpha: (index - active).abs() == 1 ? .58 : .34,
+                            )
                           : scheme.onSurfaceVariant,
                       shadows: widget.currentOnly
                           ? const [Shadow(color: Colors.black, blurRadius: 6)]
+                          : (widget.stage && index == active)
+                          ? const [
+                              Shadow(color: Color(0x48FFFFFF), blurRadius: 18),
+                            ]
                           : null,
+                    ),
+                    child: Text(
+                      key: ValueKey('lyrics-line-$index'),
+                      widget.lines[index].text,
                     ),
                   ),
                 ),

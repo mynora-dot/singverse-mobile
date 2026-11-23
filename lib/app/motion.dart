@@ -51,7 +51,7 @@ class AppMotionScope extends InheritedWidget {
 }
 
 class AppSpringCurve extends Curve {
-  AppSpringCurve({required Duration duration, double bounce = .08})
+  AppSpringCurve({required Duration duration, double bounce = .10})
     : seconds = duration.inMicroseconds / Duration.microsecondsPerSecond,
       simulation = SpringSimulation(
         SpringDescription.withDurationAndBounce(
@@ -71,14 +71,16 @@ class AppSpringCurve extends Curve {
 }
 
 abstract final class AppMotion {
-  static const press = Duration(milliseconds: 100);
-  static const release = Duration(milliseconds: 260);
-  static const navigation = Duration(milliseconds: 360);
-  static const page = Duration(milliseconds: 320);
-  static const sheet = Duration(milliseconds: 360);
-  static const expand = Duration(milliseconds: 280);
-  static final spring = AppSpringCurve(duration: navigation);
-  static final softSpring = AppSpringCurve(duration: release, bounce: .04);
+  static const press = Duration(milliseconds: 110);
+  static const release = Duration(milliseconds: 280);
+  static const navigation = Duration(milliseconds: 420);
+  static const page = Duration(milliseconds: 380);
+  static const sheet = Duration(milliseconds: 420);
+  static const expand = Duration(milliseconds: 360);
+  static const fluid = Cubic(0.32, 0.72, 0.0, 1.0);
+  static final spring = AppSpringCurve(duration: navigation, bounce: .14);
+  static final bouncySpring = AppSpringCurve(duration: expand, bounce: .18);
+  static final softSpring = AppSpringCurve(duration: release, bounce: .06);
 
   static AnimationStyle modalStyle(BuildContext context) => AnimationStyle(
     duration: AppMotionScope.durationOf(context, sheet),
@@ -101,6 +103,47 @@ abstract final class AppMotion {
     child: child ?? const SizedBox.shrink(),
   );
 }
+
+/// Fluid bottom-up Apple Music-style modal expand route for the Player stage.
+PageRoute<T> playerStageRoute<T>({
+  required WidgetBuilder builder,
+  required RouteSettings settings,
+}) => PageRouteBuilder<T>(
+  settings: settings,
+  transitionDuration: AppMotion.sheet,
+  reverseTransitionDuration: AppMotion.release,
+  pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+    final level = AppMotionScope.levelOf(context);
+    if (level == AppMotionLevel.none) return child;
+    if (level == AppMotionLevel.reduced) {
+      return FadeTransition(
+        opacity: animation.drive(CurveTween(curve: const Interval(0, .35))),
+        child: child,
+      );
+    }
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: AppMotion.fluid,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, .14),
+        end: Offset.zero,
+      ).animate(curved),
+      child: ScaleTransition(
+        scale: Tween<double>(begin: .96, end: 1.0).animate(curved),
+        child: FadeTransition(
+          opacity: animation.drive(
+            CurveTween(curve: const Interval(0, .55, curve: Curves.easeOut)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  },
+);
 
 /// Only the accessory's own extent animates. Keyboard dismissal is immediate,
 /// and outgoing controls stop accepting input or accessibility focus at once.
@@ -136,7 +179,7 @@ class _MotionVisibilityState extends State<MotionVisibility>
           context,
           widget.visible ? AppMotion.expand : AppMotion.release,
         ),
-        curve: Curves.easeOutCubic,
+        curve: AppMotion.fluid,
       );
     }
   }
@@ -198,7 +241,7 @@ class MotionFeedback extends StatelessWidget {
     final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
     return TweenAnimationBuilder<double>(
       tween: Tween(
-        end: !full || !enabled ? 1 : (pressed ? .98 : (hovered ? 1.01 : 1)),
+        end: !full || !enabled ? 1 : (pressed ? .965 : (hovered ? 1.012 : 1)),
       ),
       duration: full
           ? (pressed ? AppMotion.press : AppMotion.release)
@@ -284,7 +327,7 @@ class _MotionEntranceState extends State<MotionEntrance>
       started = true;
     } else if (!started) {
       started = true;
-      controller.duration = Duration(milliseconds: 240 + widget.index * 24);
+      controller.duration = Duration(milliseconds: 280 + widget.index * 28);
       controller.forward();
     }
     if (widget.key != null) {
@@ -303,14 +346,14 @@ class _MotionEntranceState extends State<MotionEntrance>
     animation: controller,
     child: widget.child,
     builder: (context, child) {
-      final delay = math.min(widget.index, 5) * 24 / (240 + widget.index * 24);
-      final t = Curves.easeOutCubic.transform(
+      final delay = math.min(widget.index, 5) * 28 / (280 + widget.index * 28);
+      final t = AppMotion.fluid.transform(
         ((controller.value - delay) / (1 - delay)).clamp(0, 1),
       );
       return Opacity(
         opacity: t,
         child: Transform.translate(
-          offset: Offset(0, 10 * (1 - t)),
+          offset: Offset(0, 12 * (1 - t)),
           child: child,
         ),
       );
@@ -319,6 +362,7 @@ class _MotionEntranceState extends State<MotionEntrance>
 }
 
 /// Keeps every tab mounted and suspends its ticker while another tab is visible.
+/// Adds fluid vertical rise + subtle depth scale on tab switch.
 class MotionTabPane extends StatefulWidget {
   const MotionTabPane({super.key, required this.active, required this.child});
   final bool active;
@@ -338,7 +382,7 @@ class _MotionTabPaneState extends State<MotionTabPane>
       if (level != AppMotionLevel.none) {
         controller.duration = AppMotionScope.durationOf(
           context,
-          AppMotion.release,
+          AppMotion.expand,
         );
         controller.forward(from: 0);
       }
@@ -360,8 +404,24 @@ class _MotionTabPaneState extends State<MotionTabPane>
   }
 
   @override
-  Widget build(BuildContext context) =>
-      FadeTransition(opacity: controller, child: widget.child);
+  Widget build(BuildContext context) {
+    final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
+    if (!full) return FadeTransition(opacity: controller, child: widget.child);
+    return AnimatedBuilder(
+      animation: controller,
+      child: widget.child,
+      builder: (context, child) {
+        final t = AppMotion.fluid.transform(controller.value);
+        return Opacity(
+          opacity: t.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, 10 * (1 - t)),
+            child: Transform.scale(scale: 0.988 + 0.012 * t, child: child),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class MotionExpand extends StatelessWidget {
@@ -380,8 +440,8 @@ class MotionExpand extends StatelessWidget {
   );
 }
 
-/// Keep Flutter's predictive-back recognizer mounted. A small content spring
-/// supplements ordinary navigation; platform views only use the native fade.
+/// Keep Flutter's predictive-back recognizer mounted. A fluid iOS-like slide
+/// and depth fade supplements ordinary navigation; platform views stay crisp.
 class AppPageTransitionsBuilder extends PageTransitionsBuilder {
   const AppPageTransitionsBuilder();
 
@@ -422,18 +482,21 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
         child: FadeTransition(
           opacity: route.popGestureInProgress
               ? const AlwaysStoppedAnimation(1)
-              : animation.drive(CurveTween(curve: Curves.easeOutCubic)),
+              : animation.drive(
+                  CurveTween(
+                    curve: const Interval(0, .7, curve: Curves.easeOutCubic),
+                  ),
+                ),
           child: child,
         ),
-        builder: (context, child) => Transform.translate(
-          offset: Offset(
-            0,
-            platformView || route.popGestureInProgress
-                ? 0
-                : 12 * (1 - AppMotion.softSpring.transform(animation.value)),
-          ),
-          child: child,
-        ),
+        builder: (context, child) {
+          if (platformView || route.popGestureInProgress) return child!;
+          final t = AppMotion.fluid.transform(animation.value);
+          return Transform.translate(
+            offset: Offset(22 * (1 - t), 0),
+            child: child,
+          );
+        },
       ),
     );
   }

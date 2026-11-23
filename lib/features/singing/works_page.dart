@@ -309,23 +309,14 @@ class _WorkRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: MotionPress(
-        child: Material(
-          color: scheme.surface,
-          borderRadius: BorderRadius.circular(24),
-          clipBehavior: Clip.antiAlias,
+        child: Glass(
+          state: state,
+          radius: 24,
+          material: GlassMaterialSpec.standard,
           child: InkWell(
             onTap: onTap,
-            child: Container(
+            child: Padding(
               padding: EdgeInsets.all(senior ? 20 : 18),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: draft && !missing
-                      ? scheme.primary.withValues(alpha: .18)
-                      : scheme.outlineVariant.withValues(alpha: .5),
-                  width: .6,
-                ),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -336,15 +327,15 @@ class _WorkRow extends StatelessWidget {
                         Artwork(
                           state: state,
                           path: cover,
-                          size: senior ? 56 : 48,
+                          size: senior ? 56 : 50,
                         )
                       else
                         Container(
-                          width: senior ? 56 : 48,
-                          height: senior ? 56 : 48,
+                          width: senior ? 56 : 50,
+                          height: senior ? 56 : 50,
                           decoration: BoxDecoration(
                             color: scheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(15),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                           child: Icon(
                             missing
@@ -353,7 +344,7 @@ class _WorkRow extends StatelessWidget {
                                 ? Icons.mic_none_rounded
                                 : Icons.graphic_eq_rounded,
                             color: missing ? scheme.error : scheme.primary,
-                            size: 25,
+                            size: 24,
                           ),
                         ),
                       const SizedBox(width: 14),
@@ -365,11 +356,11 @@ class _WorkRow extends StatelessWidget {
                               work['name'] as String? ?? '我的演唱',
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(
-                                    fontSize: senior ? 23 : 17,
+                                    fontSize: senior ? 23 : 16.5,
                                     fontWeight: FontWeight.w600,
                                   ),
                             ),
-                            const SizedBox(height: 5),
+                            const SizedBox(height: 4),
                             Text(
                               [
                                 durationLabel(
@@ -407,27 +398,38 @@ class _WorkRow extends StatelessWidget {
                     if (!missing && waveform.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       SizedBox(
-                        height: senior ? 64 : 52,
+                        height: senior ? 64 : 46,
                         child: Waveform(
                           values: waveform,
                           color: scheme.primary,
                         ),
                       ),
                     ] else
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                     Row(
                       children: [
-                        Expanded(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: (missing ? scheme.error : scheme.primary)
+                                .withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                           child: Text(
                             missing ? '$status · 无法回听' : status,
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
+                                  fontWeight: FontWeight.w600,
                                   color: missing
                                       ? scheme.error
-                                      : scheme.onSurfaceVariant,
+                                      : scheme.primary,
                                 ),
                           ),
                         ),
+                        const Spacer(),
                         Icon(
                           Icons.arrow_forward_rounded,
                           color: missing ? scheme.error : scheme.primary,
@@ -1099,13 +1101,12 @@ class _ReviewPageState extends State<ReviewPage> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      Card(
-                        margin: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
+                      Glass(
+                        state: state,
+                        radius: 26,
+                        material: GlassMaterialSpec.standard,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                          padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
                           child: Column(
                             children: [
                               Waveform(

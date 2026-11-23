@@ -32,12 +32,17 @@ class MiniPlayer extends StatefulWidget {
           state.senior
               ? 18
               : compact
-              ? 12
-              : 13,
+              ? 12.5
+              : 14,
         ) *
-        1.45;
-    final subtitle = compact ? 0.0 : scaler.scale(state.senior ? 14 : 12) * 1.5;
-    return math.max(state.senior ? 72 : 56, title + subtitle + 12);
+        1.5;
+    final subtitle = compact
+        ? 0.0
+        : scaler.scale(state.senior ? 14 : 12) * 1.55;
+    return math.max(
+      state.senior ? 72 : (compact ? 54 : 58),
+      title + subtitle + 16,
+    );
   }
 
   @override
@@ -48,18 +53,23 @@ class _MiniPlayerState extends State<MiniPlayer> {
   double drag = 0;
   bool dragging = false;
 
-  void open() => (widget.navigator ?? Navigator.of(context)).push(
-    MaterialPageRoute<void>(
-      settings: RouteSettings(
-        name:
-            widget.state.workId.isNotEmpty ||
-                widget.state.pendingReviewId.isNotEmpty
-            ? 'review'
-            : 'player',
-      ),
-      builder: (_) => performancePage(widget.state),
-    ),
-  );
+  void open() {
+    final isReview =
+        widget.state.workId.isNotEmpty ||
+        widget.state.pendingReviewId.isNotEmpty;
+    final settings = RouteSettings(name: isReview ? 'review' : 'player');
+    (widget.navigator ?? Navigator.of(context)).push(
+      isReview
+          ? MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) => performancePage(widget.state),
+            )
+          : playerStageRoute<void>(
+              settings: settings,
+              builder: (_) => performancePage(widget.state),
+            ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -68,6 +78,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
       final state = widget.state;
       if (state.current == null) return const SizedBox.shrink();
       final scheme = Theme.of(context).colorScheme;
+      final dark = Theme.of(context).brightness == Brightness.dark;
       final playbackLabel = switch (state.playbackState) {
         'PREPARING' => '正在准备',
         'BUFFERING' => '正在缓冲',
@@ -97,6 +108,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
           dragging || AppMotionScope.levelOf(context) != AppMotionLevel.full
           ? Duration.zero
           : AppMotion.release;
+      final radius = state.senior ? 24.0 : 30.0;
       return Padding(
         padding: widget.inset
             ? const EdgeInsets.fromLTRB(12, 8, 12, 8)
@@ -127,188 +139,257 @@ class _MiniPlayerState extends State<MiniPlayer> {
             duration: duration,
             curve: AppMotion.softSpring,
             transform: Matrix4.translationValues(0, drag, 0),
-            child: Glass(
-              state: state,
-              radius: 24,
-              variant: GlassVariant.regular,
-              material: GlassMaterialSpec.player,
-              backdropContext: GlassBackdropContext.content,
-              child: InkWell(
-                key: const Key('mini-player'),
-                onTap: open,
-                child: SizedBox(
-                  height: MiniPlayer.heightOf(
-                    context,
-                    state,
-                    compact: widget.compact,
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final artwork =
-                          !widget.compact || constraints.maxWidth >= 190;
-                      return Stack(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 6,
-                            ),
-                            child: Row(
-                              children: [
-                                if (artwork) ...[
-                                  Artwork(
-                                    state: state,
-                                    path: state.current!.cover,
-                                    label: state.current!.title,
-                                    size: state.senior ? 48 : 40,
-                                  ),
-                                  SizedBox(width: widget.compact ? 6 : 10),
-                                ],
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        state.current!.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              fontSize: state.senior
-                                                  ? 18
-                                                  : widget.compact
-                                                  ? 12
-                                                  : 13,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
-                                      if (!widget.compact)
-                                        ListenableBuilder(
-                                          listenable: state.playback,
-                                          builder: (context, _) => Text(
-                                            state.recording
-                                                ? '正在录音 · ${durationLabel((state.singing['recordedMs'] as num? ?? 0).toInt())}'
-                                                : state.countdown > 0
-                                                ? '录音倒数 ${state.countdown}'
-                                                : state.singingPhase ==
-                                                      'FINALIZING'
-                                                ? '正在保留录音'
-                                                : state
-                                                      .pendingReviewId
-                                                      .isNotEmpty
-                                                ? '录音已保留 · 点击回听'
-                                                : state.workId.isNotEmpty
-                                                ? '返回作品回听'
-                                                : '${state.current!.artist} · $playbackLabel',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  fontSize: state.senior
-                                                      ? 14
-                                                      : 12,
-                                                  color: state.taking
-                                                      ? scheme.error
-                                                      : scheme.onSurfaceVariant,
-                                                ),
-                                          ),
+            child: MotionPress(
+              child: Glass(
+                state: state,
+                radius: radius,
+                variant: GlassVariant.liquid,
+                material: GlassMaterialSpec.player,
+                backdropContext: GlassBackdropContext.content,
+                child: InkWell(
+                  key: const Key('mini-player'),
+                  borderRadius: BorderRadius.circular(radius),
+                  onTap: open,
+                  child: SizedBox(
+                    height: MiniPlayer.heightOf(
+                      context,
+                      state,
+                      compact: widget.compact,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final artwork =
+                            !widget.compact || constraints.maxWidth >= 186;
+                        return Stack(
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: widget.compact ? 6 : 8,
+                                vertical: 6,
+                              ),
+                              child: Row(
+                                children: [
+                                  if (artwork) ...[
+                                    Artwork(
+                                      state: state,
+                                      path: state.current!.cover,
+                                      label: state.current!.title,
+                                      round: !state.senior,
+                                      size: state.senior
+                                          ? 48
+                                          : widget.compact
+                                          ? 38
+                                          : 42,
+                                    ),
+                                    SizedBox(width: widget.compact ? 8 : 11),
+                                  ],
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          state.current!.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: state.senior
+                                                    ? 18
+                                                    : widget.compact
+                                                    ? 12.5
+                                                    : 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                         ),
-                                    ],
+                                        if (!widget.compact)
+                                          ListenableBuilder(
+                                            listenable: state.playback,
+                                            builder: (context, _) => Text(
+                                              state.recording
+                                                  ? '正在录音 · ${durationLabel((state.singing['recordedMs'] as num? ?? 0).toInt())}'
+                                                  : state.countdown > 0
+                                                  ? '录音倒数 ${state.countdown}'
+                                                  : state.singingPhase ==
+                                                        'FINALIZING'
+                                                  ? '正在保留录音'
+                                                  : state
+                                                        .pendingReviewId
+                                                        .isNotEmpty
+                                                  ? '录音已保留 · 点击回听'
+                                                  : state.workId.isNotEmpty
+                                                  ? '返回作品回听'
+                                                  : '${state.current!.artist} · $playbackLabel',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    fontSize: state.senior
+                                                        ? 14
+                                                        : 12,
+                                                    fontWeight: state.taking
+                                                        ? FontWeight.w600
+                                                        : FontWeight.w400,
+                                                    color: state.taking
+                                                        ? scheme.error
+                                                        : scheme
+                                                              .onSurfaceVariant,
+                                                  ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                if (state.recording)
-                                  TextButton(
-                                    onPressed: () => uiTask(context, () async {
-                                      final id = state.takeId;
-                                      await state.endTake();
-                                      if (!context.mounted) return;
-                                      await (widget.navigator ??
-                                              Navigator.of(context))
-                                          .push(
-                                            MaterialPageRoute<void>(
-                                              settings: const RouteSettings(
-                                                name: 'review',
-                                              ),
-                                              builder: (_) => ReviewPage(
-                                                state: state,
-                                                id: id,
+                                  if (state.recording)
+                                    TextButton(
+                                      onPressed: () => uiTask(
+                                        context,
+                                        () async {
+                                          final id = state.takeId;
+                                          await state.endTake();
+                                          if (!context.mounted) return;
+                                          await (widget.navigator ??
+                                                  Navigator.of(context))
+                                              .push(
+                                                MaterialPageRoute<void>(
+                                                  settings: const RouteSettings(
+                                                    name: 'review',
+                                                  ),
+                                                  builder: (_) => ReviewPage(
+                                                    state: state,
+                                                    id: id,
+                                                  ),
+                                                ),
+                                              );
+                                        },
+                                      ),
+                                      child: const Text('结束'),
+                                    )
+                                  else if (state.taking)
+                                    TextButton(
+                                      onPressed: open,
+                                      child: const Text('查看'),
+                                    )
+                                  else if (state.senior)
+                                    TextButton(
+                                      onPressed: playbackAction,
+                                      child: Text(
+                                        showState
+                                            ? '查看'
+                                            : state.isPlaying
+                                            ? '暂停'
+                                            : '继续',
+                                      ),
+                                    )
+                                  else
+                                    IconButton(
+                                      tooltip: actionLabel,
+                                      onPressed: playbackAction,
+                                      iconSize: 22,
+                                      color: scheme.onSurface,
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: scheme.onSurface
+                                            .withValues(
+                                              alpha: dark ? .10 : .06,
+                                            ),
+                                        shape: const CircleBorder(),
+                                      ),
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 44,
+                                            height: 44,
+                                          ),
+                                      padding: EdgeInsets.zero,
+                                      icon: AnimatedSwitcher(
+                                        duration: AppMotionScope.durationOf(
+                                          context,
+                                          const Duration(milliseconds: 180),
+                                        ),
+                                        transitionBuilder: (child, animation) =>
+                                            ScaleTransition(
+                                              scale: Tween<double>(
+                                                begin: .76,
+                                                end: 1,
+                                              ).animate(animation),
+                                              child: FadeTransition(
+                                                opacity: animation,
+                                                child: child,
                                               ),
                                             ),
-                                          );
-                                    }),
-                                    child: const Text('结束'),
-                                  )
-                                else if (state.taking)
-                                  TextButton(
-                                    onPressed: open,
-                                    child: const Text('查看'),
-                                  )
-                                else if (state.senior)
-                                  TextButton(
-                                    onPressed: playbackAction,
-                                    child: Text(
-                                      showState
-                                          ? '查看'
-                                          : state.isPlaying
-                                          ? '暂停'
-                                          : '继续',
-                                    ),
-                                  )
-                                else
-                                  IconButton(
-                                    tooltip: actionLabel,
-                                    onPressed: playbackAction,
-                                    iconSize: 24,
-                                    color: scheme.onSurface,
-                                    constraints: const BoxConstraints.tightFor(
-                                      width: 44,
-                                      height: 44,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    icon: Icon(
-                                      state.isPlaying
-                                          ? Icons.pause_rounded
-                                          : Icons.play_arrow_rounded,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (!widget.compact)
-                            Positioned(
-                              left: 56,
-                              right: 10,
-                              bottom: 0,
-                              child: ExcludeSemantics(
-                                child: ListenableBuilder(
-                                  listenable: state.playback,
-                                  builder: (context, _) =>
-                                      LinearProgressIndicator(
-                                        minHeight: 2,
-                                        value: state.durationMs > 0
-                                            ? (state.positionMs /
-                                                      state.durationMs)
-                                                  .clamp(0, 1)
-                                            : 0,
-                                        color: state.recording
-                                            ? scheme.error
-                                            : scheme.primary,
-                                        backgroundColor: scheme.onSurface
-                                            .withValues(alpha: .06),
+                                        child: Icon(
+                                          state.isPlaying
+                                              ? Icons.pause_rounded
+                                              : Icons.play_arrow_rounded,
+                                          key: ValueKey(state.isPlaying),
+                                        ),
                                       ),
-                                ),
+                                    ),
+                                ],
                               ),
                             ),
-                        ],
-                      );
-                    },
+                            if (!widget.compact)
+                              Positioned(
+                                left: 26,
+                                right: 26,
+                                bottom: 0,
+                                child: ExcludeSemantics(
+                                  child: ListenableBuilder(
+                                    listenable: state.playback,
+                                    builder: (context, _) {
+                                      final ratio = state.durationMs > 0
+                                          ? (state.positionMs /
+                                                    state.durationMs)
+                                                .clamp(0.0, 1.0)
+                                          : 0.0;
+                                      return ClipRRect(
+                                        borderRadius: BorderRadius.circular(99),
+                                        child: SizedBox(
+                                          height: 2.5,
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              ColoredBox(
+                                                color: scheme.onSurface
+                                                    .withValues(alpha: .07),
+                                              ),
+                                              FractionallySizedBox(
+                                                alignment: Alignment.centerLeft,
+                                                widthFactor: ratio,
+                                                child: DecoratedBox(
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      colors: state.recording
+                                                          ? [
+                                                              scheme.error,
+                                                              AppPalette.coral,
+                                                            ]
+                                                          : [
+                                                              AppPalette.brand,
+                                                              AppPalette.coral,
+                                                            ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),

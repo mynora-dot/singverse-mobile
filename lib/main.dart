@@ -68,7 +68,7 @@ class _SingVerseAppState extends State<SingVerseApp> {
           page != 'player' &&
           (page != 'review' || recordingBehindReview)) {
         navigator.currentState?.push(
-          MaterialPageRoute<void>(
+          playerStageRoute<void>(
             settings: const RouteSettings(name: 'player'),
             builder: (_) => performancePage(widget.state),
           ),

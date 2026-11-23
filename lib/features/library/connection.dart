@@ -558,18 +558,48 @@ class _ConnectionPageState extends State<ConnectionPage> {
         key: const ValueKey('nas-account-form'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (!state.senior) ...[
+            Center(
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppPalette.brand, AppPalette.coral],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppPalette.brand.withValues(alpha: .32),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.dns_rounded,
+                  size: 28,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           Semantics(
             header: true,
             child: Text(
               '连接你的家庭曲库',
+              textAlign: state.senior ? TextAlign.start : TextAlign.center,
               style: theme.textTheme.headlineLarge?.copyWith(
-                fontSize: state.senior ? 32 : 28,
+                fontSize: state.senior ? 32 : 26,
                 height: 1.25,
                 letterSpacing: -.6,
               ),
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           LayoutBuilder(
             builder: (context, size) => Wrap(
               alignment: WrapAlignment.spaceBetween,
@@ -585,6 +615,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     label: '连接协议',
                     child: AppSegments<String>(
                       key: const ValueKey('nas-protocol'),
+                      liquid: true,
                       values: const [('http', 'HTTP'), ('https', 'HTTPS')],
                       selected: scheme,
                       senior: state.senior,
@@ -717,9 +748,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
             key: const ValueKey('nas-submit'),
             style: FilledButton.styleFrom(
               minimumSize: Size.fromHeight(state.senior ? 60 : 52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: const StadiumBorder(),
               textStyle: theme.textTheme.titleMedium,
             ),
             onPressed: working ? null : submit,
@@ -818,15 +847,32 @@ class _ConnectionPageState extends State<ConnectionPage> {
   );
 
   List<Widget> accountManagement(AppState state) => [
-    Card(
+    Glass(
       key: const ValueKey('nas-status-card'),
+      state: state,
+      radius: 24,
+      material: GlassMaterialSpec.standard,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 6),
         child: Column(
           children: [
             Row(
               children: [
-                const Icon(Icons.dns_outlined, size: 20),
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: const LinearGradient(
+                      colors: [AppPalette.brand, AppPalette.coral],
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.dns_rounded,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -836,7 +882,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         '家里的曲库',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         checked ? '连接检查通过' : 'NAS 地址已保存',
                         style: Theme.of(context).textTheme.bodySmall,
@@ -877,7 +923,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
     const SizedBox(height: 24),
     managementHeading('连接管理'),
     const SizedBox(height: 8),
-    Card(
+    Glass(
+      state: state,
+      radius: 24,
+      material: GlassMaterialSpec.standard,
       child: Column(
         children: [
           management(
@@ -891,7 +940,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     if (mounted) setState(() => checked = state.error == null);
                   },
           ),
-          const Divider(indent: 16),
+          const Divider(indent: 16, endIndent: 16),
           management(
             Icons.edit_outlined,
             '修改 NAS 地址',
@@ -905,7 +954,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     loadRecent();
                   }),
           ),
-          const Divider(indent: 16),
+          const Divider(indent: 16, endIndent: 16),
           management(
             Icons.history_rounded,
             '历史登录',
@@ -918,7 +967,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
     const SizedBox(height: 24),
     managementHeading('账号'),
     const SizedBox(height: 8),
-    Card(
+    Glass(
+      state: state,
+      radius: 24,
+      material: GlassMaterialSpec.standard,
       child: management(
         Icons.logout_rounded,
         '退出登录',

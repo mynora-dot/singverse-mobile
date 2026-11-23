@@ -95,7 +95,7 @@ Future<void> openSinging(BuildContext context, AppState state, Song song) =>
       if (!context.mounted) return;
       await Navigator.push(
         context,
-        MaterialPageRoute<void>(
+        playerStageRoute<void>(
           settings: const RouteSettings(name: 'player'),
           builder: (_) => PlayerPage(state: state, song: same ? null : song),
         ),

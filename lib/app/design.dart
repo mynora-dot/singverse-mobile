@@ -28,55 +28,53 @@ ThemeData singVerseTheme(
         primary: dark ? const Color(0xFFFF526F) : AppPalette.brandText,
         onPrimary: dark ? ink : Colors.white,
         primaryContainer: dark
-            ? const Color(0xFF3C1E28)
-            : const Color(0xFFFFF0F3),
+            ? const Color(0xFF3E1926)
+            : const Color(0xFFFFEDF1),
         onPrimaryContainer: dark
-            ? const Color(0xFFFF9AAE)
+            ? const Color(0xFFFF9FB3)
             : AppPalette.brandText,
-        secondary: dark ? const Color(0xFFAEAEB2) : const Color(0xFF636366),
-        onSecondary: dark ? const Color(0xFF1C1C1E) : Colors.white,
-        tertiary: dark ? const Color(0xFFFF526F) : AppPalette.brandText,
+        secondary: dark ? const Color(0xFFA2A2AE) : const Color(0xFF585862),
+        onSecondary: dark ? const Color(0xFF16161C) : Colors.white,
+        tertiary: dark ? AppPalette.coral : AppPalette.brandText,
         onTertiary: dark ? ink : Colors.white,
         tertiaryContainer: dark
-            ? const Color(0xFF3C1E28)
-            : const Color(0xFFFFF0F3),
+            ? const Color(0xFF3E1926)
+            : const Color(0xFFFFEDF1),
         onTertiaryContainer: dark
-            ? const Color(0xFFFF9AAE)
+            ? const Color(0xFFFF9FB3)
             : AppPalette.brandText,
-        surface: dark ? const Color(0xFF1C1C1E) : Colors.white,
-        surfaceDim: dark ? const Color(0xFF141416) : const Color(0xFFE5E5EA),
-        surfaceBright: dark ? const Color(0xFF2C2C2E) : Colors.white,
-        surfaceContainerLowest: dark ? Colors.black : Colors.white,
+        surface: dark ? const Color(0xFF16161C) : Colors.white,
+        surfaceDim: dark ? const Color(0xFF101016) : const Color(0xFFE7E9F0),
+        surfaceBright: dark ? const Color(0xFF24242E) : Colors.white,
+        surfaceContainerLowest: dark ? const Color(0xFF09090D) : Colors.white,
         surfaceContainerLow: dark
-            ? const Color(0xFF1C1C1E)
-            : const Color(0xFFF9F9FB),
+            ? const Color(0xFF16161C)
+            : const Color(0xFFF8F9FC),
         surfaceContainer: dark
-            ? const Color(0xFF1C1C1E)
-            : const Color(0xFFF2F2F7),
+            ? const Color(0xFF1B1B23)
+            : const Color(0xFFF0F1F6),
         surfaceContainerHigh: dark
-            ? const Color(0xFF2C2C2E)
-            : const Color(0xFFECECEF),
+            ? const Color(0xFF23232D)
+            : const Color(0xFFE9EBF1),
         surfaceContainerHighest: dark
-            ? const Color(0xFF353537)
-            : const Color(0xFFE5E5EA),
+            ? const Color(0xFF2E2E3A)
+            : const Color(0xFFE1E3EB),
         surfaceTint: Colors.transparent,
-        onSurface: dark ? const Color(0xFFF5F5F7) : ink,
+        onSurface: dark ? AppPalette.inkDark : ink,
         onSurfaceVariant: dark
-            ? const Color(0xFFAEAEB2)
-            : const Color(0xFF636366),
+            ? const Color(0xFFB4B4C0)
+            : const Color(0xFF54545E),
         secondaryContainer: surfaces.group,
-        onSecondaryContainer: dark ? const Color(0xFFF5F5F7) : ink,
-        outline: dark ? const Color(0xFF5A5A60) : const Color(0xFF8E8E93),
+        onSecondaryContainer: dark ? AppPalette.inkDark : ink,
+        outline: dark ? const Color(0xFF565664) : const Color(0xFF8E8E98),
         outlineVariant: dark
-            ? const Color(0xFF353537)
-            : const Color(0xFFE5E5EA),
-        error: dark ? const Color(0xFFFF6961) : const Color(0xFFD70015),
+            ? const Color(0xFF2E2E3A)
+            : const Color(0xFFE2E4EC),
+        error: dark ? const Color(0xFFFF5C72) : const Color(0xFFD70015),
         onError: Colors.white,
-        inverseSurface: dark
-            ? const Color(0xFFF5F5F7)
-            : const Color(0xFF2C2C2E),
+        inverseSurface: dark ? AppPalette.inkDark : const Color(0xFF23232C),
         onInverseSurface: dark ? ink : Colors.white,
-        inversePrimary: dark ? AppPalette.brandText : const Color(0xFFFF526F),
+        inversePrimary: dark ? AppPalette.brandText : AppPalette.brandDark,
         shadow: Colors.black,
         scrim: Colors.black,
       );
@@ -217,11 +215,9 @@ ThemeData singVerseTheme(
             backgroundColor: scheme.primary,
             foregroundColor: scheme.onPrimary,
             minimumSize: Size(target, target),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 22),
             textStyle: textTheme.labelLarge,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.control),
-            ),
+            shape: const StadiumBorder(),
           ).copyWith(
             animationDuration: animated ? AppMotion.press : Duration.zero,
             foregroundBuilder: AppMotion.buttonLayer,
@@ -231,14 +227,12 @@ ThemeData singVerseTheme(
       style:
           OutlinedButton.styleFrom(
             minimumSize: Size(target, target),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 22),
             textStyle: textTheme.labelLarge,
             backgroundColor: scheme.secondaryContainer,
             foregroundColor: scheme.onSurface,
             side: BorderSide.none,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.control),
-            ),
+            shape: const StadiumBorder(),
           ).copyWith(
             animationDuration: animated ? AppMotion.press : Duration.zero,
             foregroundBuilder: AppMotion.buttonLayer,
@@ -423,9 +417,19 @@ class AppSegments<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final solid = AppMotionScope.solidOf(context);
     final index = values.indexWhere((value) => value.$1 == selected);
+    final pillRadius = BorderRadius.circular(999);
+    final thumbColor = accent
+        ? scheme.primary
+        : glass && !solid
+        ? Colors.white.withValues(alpha: dark ? .20 : .86)
+        : dark
+        ? const Color(0xFF2E2E3A)
+        : Colors.white;
     final content = Padding(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(4),
       child: Stack(
         children: [
           if (index >= 0)
@@ -435,7 +439,7 @@ class AppSegments<T> extends StatelessWidget {
                     ? AppMotion.navigation
                     : Duration.zero,
                 curve: AppMotionScope.levelOf(context) == AppMotionLevel.full
-                    ? AppMotion.spring
+                    ? AppMotion.bouncySpring
                     : Curves.linear,
                 alignment: Alignment(
                   values.length < 2 ? 0 : 2 * index / (values.length - 1) - 1,
@@ -446,14 +450,23 @@ class AppSegments<T> extends StatelessWidget {
                   heightFactor: 1,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: accent ? scheme.primary : scheme.surface,
-                      borderRadius: BorderRadius.circular(10),
+                      color: thumbColor,
+                      borderRadius: pillRadius,
+                      border: !solid
+                          ? Border.all(
+                              color: Colors.white.withValues(
+                                alpha: dark ? .22 : .85,
+                              ),
+                              width: .6,
+                            )
+                          : null,
                       boxShadow: [
-                        BoxShadow(
-                          color: AppSurfaces.of(context).shadow,
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
+                        if (!solid)
+                          BoxShadow(
+                            color: AppSurfaces.of(context).shadow,
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
                       ],
                     ),
                   ),
@@ -471,6 +484,7 @@ class AppSegments<T> extends StatelessWidget {
                         key: keyFor?.call(value.$1),
                         style: TextButton.styleFrom(
                           textStyle: textStyle,
+                          shape: const StadiumBorder(),
                           minimumSize: Size(
                             AppSizes.touch,
                             senior ? AppSizes.seniorTouch : AppSizes.touch,
@@ -505,21 +519,33 @@ class AppSegments<T> extends StatelessWidget {
     if (liquid) {
       return DecoratedBox(
         decoration: BoxDecoration(
-          color: AppMotionScope.solidOf(context)
+          color: solid
               ? scheme.secondaryContainer
-              : scheme.secondaryContainer.withValues(alpha: .74),
-          borderRadius: BorderRadius.circular(12),
+              : (dark
+                    ? const Color(0xFF202028).withValues(alpha: .66)
+                    : Colors.white.withValues(alpha: .54)),
+          borderRadius: pillRadius,
           border: Border.all(
-            color: scheme.outlineVariant.withValues(alpha: .30),
-            width: .5,
+            color: solid
+                ? scheme.outlineVariant
+                : Colors.white.withValues(alpha: dark ? .14 : .72),
+            width: .7,
           ),
+          boxShadow: [
+            if (!solid)
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? .24 : .05),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+          ],
         ),
         child: content,
       );
     }
     return glass
         ? GlassSurface(
-            radius: material == null ? 22 : AppRadii.control,
+            radius: 26,
             material: material,
             enabled: enabled,
             child: content,
@@ -527,7 +553,7 @@ class AppSegments<T> extends StatelessWidget {
         : DecoratedBox(
             decoration: BoxDecoration(
               color: scheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: pillRadius,
             ),
             child: content,
           );
@@ -629,12 +655,14 @@ class GlassField extends StatefulWidget {
     required this.state,
     required this.child,
     this.enabled = true,
+    this.radius = AppRadii.control,
     this.material,
     this.backdropContext = GlassBackdropContext.plain,
   });
   final AppState state;
   final Widget child;
   final bool enabled;
+  final double radius;
   final GlassMaterialSpec? material;
   final GlassBackdropContext backdropContext;
   @override
@@ -650,7 +678,7 @@ class _GlassFieldState extends State<GlassField> {
     onFocusChange: (value) => setState(() => focused = value),
     child: Glass(
       state: widget.state,
-      radius: AppRadii.control,
+      radius: widget.radius,
       variant: GlassVariant.field,
       material: widget.material,
       focused: focused && widget.enabled,
@@ -676,10 +704,13 @@ class GlassToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Glass(
     state: state,
-    radius: 22,
+    radius: 26,
     variant: GlassVariant.liquid,
     backdropContext: backdropContext,
-    child: Row(mainAxisSize: MainAxisSize.min, children: children),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Row(mainAxisSize: MainAxisSize.min, children: children),
+    ),
   );
 }
 
@@ -710,6 +741,7 @@ class GlassSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GlassField(
     state: state,
+    radius: 26,
     material: GlassMaterialSpec.search,
     backdropContext: backdropContext,
     child: TextField(
@@ -795,6 +827,7 @@ Future<T?> showAppSheet<T>({
     builder: (context) => _SheetMotionGate(
       controller: controller,
       child: GlassSurface(
+        radius: 32,
         variant: GlassVariant.sheet,
         solid: nativeSurface,
         child: Column(

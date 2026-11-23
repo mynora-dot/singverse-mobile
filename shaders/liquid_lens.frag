@@ -35,9 +35,9 @@ void main() {
   vec2 faceNormal = q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
   vec2 normal = (max(q.x, q.y) > 0.0 ? cornerNormal : faceNormal) * sign(centered);
   float inside = -roundedBox(centered, halfSize, r);
-  float edge = 1.0 - smoothstep(0.0, 6.0, max(inside, 0.0));
+  float edge = 1.0 - smoothstep(0.0, 8.0, max(inside, 0.0));
   // The rim compresses the scene inward; the readable center stays undistorted.
-  vec2 refracted = texturePoint - normal * (2.2 * edge * edge * u_scale);
+  vec2 refracted = texturePoint - normal * (3.0 * edge * edge * u_scale);
   // The inner Gaussian filter already scatters the scene. A single displaced
   // sample avoids text ghosting and redundant full-resolution texture reads.
   vec4 scene = sampleBackdrop(refracted);
@@ -45,13 +45,13 @@ void main() {
   // supply readability; the shader only compresses contrast and bends the rim.
   float luma = dot(scene.rgb, vec3(0.2126, 0.7152, 0.0722));
   vec3 chroma = scene.rgb - vec3(luma);
-  float lightLuma = mix(0.68, 0.95, luma);
-  float darkLuma = mix(0.06, 0.20, luma);
-  vec3 lightGlass = vec3(lightLuma) + chroma * 0.08;
-  vec3 darkGlass = vec3(darkLuma) + chroma * 0.10;
+  float lightLuma = mix(0.69, 0.95, luma);
+  float darkLuma = mix(0.06, 0.21, luma);
+  vec3 lightGlass = vec3(lightLuma) + chroma * 0.12;
+  vec3 darkGlass = vec3(darkLuma) + chroma * 0.14;
   vec3 glass = mix(lightGlass, darkGlass, u_dark);
-  vec3 transmitted = vec3(luma) + chroma * 0.18;
+  vec3 transmitted = vec3(luma) + chroma * 0.26;
   // A narrow, slightly clearer edge reveals the actual refracted backdrop.
-  glass = mix(glass, transmitted, 0.06 * edge * edge);
+  glass = mix(glass, transmitted, 0.12 * edge * edge);
   fragColor = vec4(glass, 1.0);
 }

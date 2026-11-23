@@ -7,7 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
-/// A stable neutral environment shared by content and floating controls.
+/// A luminous neutral environment shared by content and floating Liquid Glass.
 class AppEnvironment extends StatelessWidget {
   const AppEnvironment({
     super.key,
@@ -91,18 +91,50 @@ class _EnvironmentPainter extends CustomPainter {
       canvas.restore();
       return;
     }
-    final ambient = dark
+    // Whisper-soft multi-point ambient mesh gives Liquid Glass edges real
+    // luminous depth to refract without ever reducing content contrast.
+    final rose = dark
+        ? AppPalette.darkEnvironmentViolet
+        : AppPalette.lightEnvironmentViolet;
+    final sky = dark
         ? AppPalette.darkEnvironmentBlue
         : AppPalette.lightEnvironmentBlue;
+    final warm = dark
+        ? AppPalette.darkEnvironmentWarm
+        : AppPalette.lightEnvironmentWarm;
     canvas.drawRect(
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(.9, -.95),
-          radius: 1.6,
+          center: const Alignment(-.72, -1.05),
+          radius: 1.25,
           colors: [
-            ambient.withValues(alpha: .035),
-            ambient.withValues(alpha: 0),
+            rose.withValues(alpha: dark ? .26 : .075),
+            rose.withValues(alpha: 0),
+          ],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(.86, -.85),
+          radius: 1.15,
+          colors: [
+            sky.withValues(alpha: dark ? .28 : .28),
+            sky.withValues(alpha: 0),
+          ],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0, 1.08),
+          radius: 1.05,
+          colors: [
+            warm.withValues(alpha: dark ? .18 : .16),
+            warm.withValues(alpha: 0),
           ],
         ).createShader(rect),
     );
@@ -117,7 +149,7 @@ class _EnvironmentPainter extends CustomPainter {
       environmentSize != oldDelegate.environmentSize;
 }
 
-/// Real backdrop displacement on Impeller; bounded blur and the same optical
+/// Real backdrop displacement on Impeller; bounded blur and Fresnel specular
 /// rim on other renderers. Foreground text never enters the filter input.
 class OpticalGlassSurface extends StatefulWidget {
   const OpticalGlassSurface({
@@ -148,7 +180,7 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
   static final _darkTone = _lensTone(true);
   ui.FragmentShader? shader;
   bool loading = false, failed = false, pressed = false, hovered = false;
-  Alignment light = const Alignment(-.65, -.9);
+  Alignment light = const Alignment(-.55, -1.0);
 
   @override
   void didChangeDependencies() {
@@ -264,19 +296,28 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
               decoration: BoxDecoration(
                 borderRadius: radius,
                 boxShadow: [
-                  if (widget.material.shadow > 0 && !solid)
+                  if (widget.material.shadow > 0 && !solid) ...[
                     BoxShadow(
                       color: Colors.black.withValues(
-                        alpha: (dark ? .26 : .12) * widget.material.shadow,
+                        alpha: (dark ? .44 : .12) * widget.material.shadow,
                       ),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
+                      blurRadius: 28,
+                      spreadRadius: -4,
+                      offset: const Offset(0, 12),
                     ),
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: (dark ? .24 : .05) * widget.material.shadow,
+                      ),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                   if (focus > 0)
                     BoxShadow(
-                      color: primary.withValues(alpha: .12 * focus),
-                      blurRadius: 9,
-                      spreadRadius: .3,
+                      color: primary.withValues(alpha: .16 * focus),
+                      blurRadius: 12,
+                      spreadRadius: 1.0,
                     ),
                 ],
               ),
@@ -316,25 +357,28 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                           gradient: solid
                               ? null
                               : LinearGradient(
-                                  begin: light,
-                                  end: Alignment.bottomRight,
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
                                   colors: [
                                     Color.alphaBlend(
                                       widget.rim.withValues(
                                         alpha:
-                                            (dark ? .012 : .025) + touch * .02,
+                                            ((dark ? .08 : .22) + touch * .06) *
+                                            widget.material.highlight,
                                       ),
                                       tint,
                                     ),
                                     tint,
                                     Color.alphaBlend(
                                       widget.rim.withValues(
-                                        alpha: dark ? .005 : .012,
+                                        alpha:
+                                            (dark ? .02 : .06) *
+                                            widget.material.highlight,
                                       ),
                                       tint,
                                     ),
                                   ],
-                                  stops: const [0, .5, 1],
+                                  stops: const [0, .42, 1],
                                 ),
                         ),
                         child: child,
@@ -383,9 +427,9 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
 /// Color-filter offsets use 0–255; alpha and foreground content stay unchanged.
 ui.ColorFilter _lensTone(bool dark) {
   const luminance = [.2126, .7152, .0722];
-  final chroma = dark ? .10 : .08;
-  final range = dark ? .14 : .27;
-  final base = dark ? [.06, .06, .06] : [.68, .68, .68];
+  final chroma = dark ? .14 : .12;
+  final range = dark ? .15 : .26;
+  final base = dark ? [.06, .06, .06] : [.69, .69, .69];
   return ui.ColorFilter.matrix([
     for (var row = 0; row < 3; row++) ...[
       for (var column = 0; column < 3; column++)
@@ -522,10 +566,10 @@ class _LensRimPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    final rect = (Offset.zero & size).deflate(.6);
+    final rect = (Offset.zero & size).deflate(.55);
     final shape = RRect.fromRectAndRadius(
       rect,
-      Radius.circular(math.max(0, radius - .6)),
+      Radius.circular(math.max(0, radius - .55)),
     );
     final paint = Paint()..style = PaintingStyle.stroke;
     Color reflection(double alpha) =>
@@ -539,33 +583,45 @@ class _LensRimPainter extends CustomPainter {
       );
       return;
     }
-    // One local reflection replaces full bright rims and concentric outlines.
+    // Apple Liquid Glass Fresnel rim: bright top-edge specular catching light
+    // fading smoothly to a delicate bottom glass edge.
     paint
-      ..strokeWidth = field ? .6 : .65
-      ..shader = RadialGradient(
-        center: light,
-        radius: 1.1,
+      ..strokeWidth = field ? .8 : 1.0
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
         colors: [
-          reflection(
-            field
-                ? (dark ? .24 : .60)
-                : (dark ? .40 + touch * .08 : .76 + touch * .08),
-          ),
-          reflection(0),
+          reflection(dark ? .46 : .94),
+          reflection(dark ? .14 : .42),
+          reflection(dark ? .26 : .62),
         ],
-        stops: const [0, .75],
+        stops: const [0, .5, 1],
       ).createShader(rect);
     canvas.drawRRect(shape, paint);
+
+    // Subtle pointer-following specular bloom on touch/hover.
+    if (touch > 0) {
+      paint
+        ..strokeWidth = 1.15
+        ..shader = RadialGradient(
+          center: light,
+          radius: .9,
+          colors: [reflection((dark ? .55 : .95) * touch), reflection(0)],
+          stops: const [0, .72],
+        ).createShader(rect);
+      canvas.drawRRect(shape, paint);
+    }
+
     if (focus > 0) {
       paint
-        ..strokeWidth = 1.4
+        ..strokeWidth = 1.5
         ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            primary.withValues(alpha: .72 * focus),
-            primary.withValues(alpha: .20 * focus),
-            primary.withValues(alpha: .58 * focus),
+            primary.withValues(alpha: .82 * focus),
+            primary.withValues(alpha: .28 * focus),
+            primary.withValues(alpha: .66 * focus),
           ],
         ).createShader(rect);
       canvas.drawRRect(shape, paint);

@@ -587,15 +587,22 @@ class _ScanFrame extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final shade = Path()
       ..addRect(Offset.zero & size)
-      ..addRRect(RRect.fromRectAndRadius(window, const Radius.circular(16)));
+      ..addRRect(RRect.fromRectAndRadius(window, const Radius.circular(26)));
     shade.fillType = PathFillType.evenOdd;
     canvas.drawPath(
       shade,
-      Paint()..color = Colors.black.withValues(alpha: .32),
+      Paint()..color = Colors.black.withValues(alpha: .40),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(window, const Radius.circular(26)),
+      Paint()
+        ..color = Colors.white.withValues(alpha: .22)
+        ..strokeWidth = 1
+        ..style = PaintingStyle.stroke,
     );
     final border = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 2
+      ..color = AppPalette.brandDark
+      ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     for (final corner in [
@@ -607,15 +614,15 @@ class _ScanFrame extends CustomPainter {
       final dx = corner.dx == window.left ? 1.0 : -1.0;
       final dy = corner.dy == window.top ? 1.0 : -1.0;
       final path = Path()
-        ..moveTo(corner.dx, corner.dy + dy * 24)
-        ..lineTo(corner.dx, corner.dy + dy * 12)
+        ..moveTo(corner.dx, corner.dy + dy * 30)
+        ..lineTo(corner.dx, corner.dy + dy * 18)
         ..quadraticBezierTo(
           corner.dx,
           corner.dy,
-          corner.dx + dx * 12,
+          corner.dx + dx * 18,
           corner.dy,
         )
-        ..lineTo(corner.dx + dx * 24, corner.dy);
+        ..lineTo(corner.dx + dx * 30, corner.dy);
       canvas.drawPath(path, border);
     }
   }

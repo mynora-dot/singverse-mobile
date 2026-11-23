@@ -89,10 +89,11 @@ class _AppShellState extends State<AppShell> {
   );
 
   double navigationHeight(BuildContext context, AppState state) => math.max(
-    state.senior ? 72 : 56,
+    state.senior ? 74 : 62,
     (state.senior ? 26 : 21) +
-        MediaQuery.textScalerOf(context).scale(state.senior ? 17 : 12) * 1.4 +
-        10,
+        MediaQuery.textScalerOf(context).scale(state.senior ? 17 : 11.5) *
+            1.45 +
+        20,
   );
 
   Widget navigation(
@@ -102,99 +103,145 @@ class _AppShellState extends State<AppShell> {
     bool compact,
   ) {
     final scheme = Theme.of(context).colorScheme;
-    final height = navigationHeight(context, state);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final solid =
+        AppMotionScope.solidOf(context) ||
+        state.reduceTransparency ||
+        state.senior ||
+        state.performanceMode;
+    final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
+    final height = compact && !state.senior
+        ? 54.0
+        : navigationHeight(context, state);
     return Glass(
       state: state,
-      radius: AppRadii.floating,
-      variant: GlassVariant.regular,
+      radius: 31,
+      variant: GlassVariant.liquid,
       backdropContext: GlassBackdropContext.content,
-      child: SizedBox(
+      child: AnimatedContainer(
+        duration: full ? AppMotion.expand : Duration.zero,
+        curve: AppMotion.fluid,
         height: height,
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: AnimatedAlign(
-                  alignment: Alignment(tab - 1.0, 0),
-                  duration:
-                      AppMotionScope.levelOf(context) == AppMotionLevel.full
-                      ? AppMotion.navigation
-                      : Duration.zero,
-                  curve: AppMotion.softSpring,
-                  child: FractionallySizedBox(
-                    widthFactor: 1 / 3,
-                    heightFactor: 1,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: scheme.primary.withValues(
-                          alpha: Theme.of(context).brightness == Brightness.dark
-                              ? .16
-                              : .09,
-                        ),
-                        borderRadius: BorderRadius.circular(AppRadii.floating),
-                      ),
+        padding: const EdgeInsets.all(4),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedAlign(
+                alignment: Alignment(tab - 1.0, 0),
+                duration: full ? AppMotion.navigation : Duration.zero,
+                curve: AppMotion.bouncySpring,
+                child: FractionallySizedBox(
+                  widthFactor: 1 / 3,
+                  heightFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: solid
+                          ? scheme.primaryContainer
+                          : dark
+                          ? Colors.white.withValues(alpha: .16)
+                          : Colors.white.withValues(alpha: .92),
+                      borderRadius: BorderRadius.circular(999),
+                      border: !solid
+                          ? Border.all(
+                              color: Colors.white.withValues(
+                                alpha: dark ? .24 : .92,
+                              ),
+                              width: .6,
+                            )
+                          : null,
+                      boxShadow: [
+                        if (!solid)
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: dark ? .28 : .08,
+                            ),
+                            blurRadius: 12,
+                            offset: const Offset(0, 3),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  for (final entry in const [
-                    (0, Icons.library_music_outlined, '点歌', 'nav-songs'),
-                    (1, Icons.favorite_outline_rounded, '常唱', 'nav-frequent'),
-                    (2, Icons.graphic_eq_rounded, '作品', 'nav-works'),
-                  ])
-                    Expanded(
-                      child: Semantics(
-                        selected: tab == entry.$1,
-                        label: compact ? entry.$3 : null,
-                        child: TextButton(
-                          key: Key(entry.$4),
-                          style: TextButton.styleFrom(
-                            minimumSize: Size(44, height - 8),
-                            padding: EdgeInsets.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            foregroundColor: tab == entry.$1
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
-                          ),
-                          onPressed: () => selectTab(entry.$1),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Badge(
-                                isLabelVisible: entry.$1 == 2 && drafts > 0,
-                                backgroundColor: scheme.primaryContainer,
-                                textColor: scheme.onPrimaryContainer,
-                                label: Text('$drafts'),
-                                child: Icon(
-                                  entry.$2,
-                                  size: state.senior ? 26 : 21,
+            ),
+            Row(
+              children: [
+                for (final entry in const [
+                  (
+                    0,
+                    Icons.library_music_outlined,
+                    Icons.library_music_rounded,
+                    '点歌',
+                    'nav-songs',
+                  ),
+                  (
+                    1,
+                    Icons.favorite_outline_rounded,
+                    Icons.favorite_rounded,
+                    '常唱',
+                    'nav-frequent',
+                  ),
+                  (
+                    2,
+                    Icons.graphic_eq_rounded,
+                    Icons.graphic_eq_rounded,
+                    '作品',
+                    'nav-works',
+                  ),
+                ])
+                  Expanded(
+                    child: Semantics(
+                      selected: tab == entry.$1,
+                      label: compact ? entry.$4 : null,
+                      child: TextButton(
+                        key: Key(entry.$5),
+                        style: TextButton.styleFrom(
+                          shape: const StadiumBorder(),
+                          minimumSize: Size(44, height - 10),
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: tab == entry.$1
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
+                        ),
+                        onPressed: () => selectTab(entry.$1),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Badge(
+                              isLabelVisible: entry.$1 == 2 && drafts > 0,
+                              backgroundColor: AppPalette.brand,
+                              textColor: Colors.white,
+                              label: Text('$drafts'),
+                              child: Icon(
+                                tab == entry.$1 ? entry.$3 : entry.$2,
+                                size: state.senior ? 26 : 21,
+                              ),
+                            ),
+                            if (!compact) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                entry.$4,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: state.senior ? 17 : 11.5,
+                                  height: 1.2,
+                                  fontWeight: tab == entry.$1
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
                                 ),
                               ),
-                              if (!compact) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  entry.$3,
-                                  style: TextStyle(
-                                    fontSize: state.senior ? 17 : 12,
-                                    fontWeight: tab == entry.$1
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                  ),
-                                ),
-                              ],
                             ],
-                          ),
+                          ],
                         ),
                       ),
                     ),
-                ],
-              ),
-            ],
-          ),
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -215,15 +262,24 @@ class _AppShellState extends State<AppShell> {
         !state.taking &&
         MediaQuery.textScalerOf(context).scale(16) <= 21;
     final hasPlayer = state.current != null;
+    final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
     final background = Theme.of(context).scaffoldBackgroundColor;
     final safe = MediaQuery.viewPaddingOf(context).bottom;
-    final height = navigationHeight(context, state);
+    final navHeight = compact ? 54.0 : navigationHeight(context, state);
+    final dockHeight =
+        (compact
+            ? navHeight
+            : navHeight +
+                  (hasPlayer ? MiniPlayer.heightOf(context, state) + 9 : 0)) +
+        safe +
+        10;
     final controls = compact && hasPlayer
         ? Row(
+            key: const ValueKey('dock-compact-row'),
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               SizedBox(
-                width: 144,
+                width: 148,
                 child: navigation(context, state, drafts, true),
               ),
               const SizedBox(width: 8),
@@ -233,34 +289,31 @@ class _AppShellState extends State<AppShell> {
             ],
           )
         : Column(
+            key: ValueKey('dock-expanded:$compact:$hasPlayer'),
             mainAxisSize: MainAxisSize.min,
             children: [
               if (hasPlayer) ...[
                 MiniPlayer(state: state, inset: false),
-                const SizedBox(height: 8),
+                const SizedBox(height: 9),
               ],
-              SizedBox(
-                width: compact ? 144 : double.infinity,
+              AnimatedContainer(
+                duration: full ? AppMotion.expand : Duration.zero,
+                curve: AppMotion.fluid,
+                width: compact ? 148 : MediaQuery.sizeOf(context).width,
                 child: navigation(context, state, drafts, compact),
               ),
             ],
           );
     return ContentWidth(
-      child: SizedBox(
-        height:
-            (compact
-                ? height
-                : height +
-                      (hasPlayer
-                          ? MiniPlayer.heightOf(context, state) + 8
-                          : 0)) +
-            safe +
-            8,
+      child: AnimatedContainer(
+        duration: full ? AppMotion.expand : Duration.zero,
+        curve: AppMotion.fluid,
+        height: dockHeight,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
             Positioned(
-              top: -40,
+              top: -44,
               left: 0,
               right: 0,
               bottom: 0,
@@ -270,10 +323,10 @@ class _AppShellState extends State<AppShell> {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      stops: const [0, .36, .72, 1],
+                      stops: const [0, .38, .76, 1],
                       colors: [
                         background.withValues(alpha: 0),
-                        background.withValues(alpha: .82),
+                        background.withValues(alpha: .80),
                         background,
                         background,
                       ],
@@ -282,7 +335,25 @@ class _AppShellState extends State<AppShell> {
                 ),
               ),
             ),
-            Positioned(left: 12, right: 12, bottom: safe + 8, child: controls),
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: safe + 10,
+              child: AnimatedSwitcher(
+                duration: full ? AppMotion.expand : Duration.zero,
+                switchInCurve: AppMotion.fluid,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: .96, end: 1).animate(animation),
+                    alignment: Alignment.bottomCenter,
+                    child: child,
+                  ),
+                ),
+                child: controls,
+              ),
+            ),
           ],
         ),
       ),
@@ -310,13 +381,16 @@ class _AppShellState extends State<AppShell> {
               ? null
               : AppBar(
                   automaticallyImplyLeading: false,
+                  centerTitle: false,
                   titleSpacing: 20,
-                  toolbarHeight: state.senior ? 64 : 48,
+                  toolbarHeight: state.senior ? 68 : 58,
                   title: Text(
                     const ['点歌', '常唱', '作品'][tab],
-                    style: state.senior
-                        ? Theme.of(context).textTheme.headlineSmall
-                        : null,
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontSize: state.senior ? 32 : 30,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.8,
+                    ),
                   ),
                   backgroundColor: Colors.transparent,
                   systemOverlayStyle:
@@ -397,76 +471,126 @@ class _Disconnected extends StatelessWidget {
   Widget build(BuildContext context) {
     final material = AppSurfaces.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       children: [
         if (state.error != null) Notice(state.error!),
         Container(
-          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: material.spotlight,
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
+            borderRadius: BorderRadius.circular(30),
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color.alphaBlend(
-                  material.onSpotlight.withValues(alpha: .07),
-                  material.spotlight,
-                ),
-                material.spotlight,
-              ],
+              colors: [Color(0xFF1F1F2B), Color(0xFF331826), Color(0xFF15151D)],
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .28),
+                blurRadius: 34,
+                spreadRadius: -8,
+                offset: const Offset(0, 18),
+              ),
+            ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: material.onSpotlight.withValues(alpha: .1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Icon(
-                    Icons.library_music_outlined,
-                    size: 32,
-                    color: material.onSpotlight,
+              Positioned(
+                top: -60,
+                right: -50,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 210,
+                    height: 210,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppPalette.brand.withValues(alpha: .42),
+                          AppPalette.brand.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              Text(
-                state.origin.isEmpty ? '连接家庭曲库' : '重新连接家庭曲库',
-                style: Theme.of(context).textTheme.headlineSmall
-                    ?.copyWith(color: material.onSpotlight),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '从 NAS 选歌练唱，录音保存在手机。已保存的作品可以离线回听。',
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: material.spotlightMuted),
-              ),
-              const SizedBox(height: 28),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: material.onSpotlight,
-                  foregroundColor: material.spotlight,
-                  shape: const StadiumBorder(),
+              Padding(
+                padding: const EdgeInsets.all(26),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .24),
+                            width: .8,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.library_music_rounded,
+                          size: 30,
+                          color: material.onSpotlight,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      state.origin.isEmpty ? '连接家庭曲库' : '重新连接家庭曲库',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: material.onSpotlight,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.4,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '从 NAS 选歌练唱，录音保存在手机。已保存的作品可以离线回听。',
+                      style: Theme.of(context).textTheme.bodyLarge
+                          ?.copyWith(color: material.spotlightMuted),
+                    ),
+                    const SizedBox(height: 26),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: Size.fromHeight(state.senior ? 58 : 52),
+                        backgroundColor: AppPalette.brand,
+                        foregroundColor: Colors.white,
+                        shape: const StadiumBorder(),
+                      ),
+                      onPressed: () => openConnection(context, state),
+                      icon: const Icon(Icons.link_rounded),
+                      label: Text(state.origin.isEmpty ? '连接 NAS' : '重新登录'),
+                    ),
+                  ],
                 ),
-                onPressed: () => openConnection(context, state),
-                icon: const Icon(Icons.link_rounded),
-                label: Text(state.origin.isEmpty ? '连接 NAS' : '重新登录'),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: onOpenWorks,
-          icon: const Icon(Icons.headphones_rounded, size: 21),
-          label: const Text('查看本机作品'),
+        const SizedBox(height: 14),
+        Glass(
+          state: state,
+          radius: 999,
+          material: GlassMaterialSpec.standard,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: Size.fromHeight(state.senior ? 58 : 50),
+              backgroundColor: Colors.transparent,
+              shape: const StadiumBorder(),
+            ),
+            onPressed: onOpenWorks,
+            icon: Icon(
+              Icons.headphones_rounded,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            label: const Text('查看本机作品'),
+          ),
         ),
         Builder(
           builder: (context) =>
@@ -558,13 +682,14 @@ class _FrequentPageState extends State<FrequentPage> {
                 ),
                 const SizedBox(height: 12),
                 AppSegments<bool>(
+                  liquid: true,
                   values: const [(false, '收藏'), (true, '最近练唱')],
                   selected: history,
                   senior: state.senior,
                   onChanged: (value) => setState(() => history = value),
                 ),
                 if (search.text.isEmpty && !state.senior) ...[
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   _CollectionCover(
                     state: state,
                     history: history,
@@ -572,7 +697,7 @@ class _FrequentPageState extends State<FrequentPage> {
                   ),
                 ],
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
+                  padding: const EdgeInsets.fromLTRB(0, 18, 0, 8),
                   child: SectionTitle(
                     history ? '最近练唱' : 'NAS 共享收藏',
                     trailing: history && state.history.isNotEmpty
@@ -663,91 +788,109 @@ class _CollectionCover extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final large = MediaQuery.textScalerOf(context).scale(16) > 21;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: .45),
-          width: .5,
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  history ? Icons.history_rounded : Icons.favorite_rounded,
-                  size: 21,
-                  color: scheme.primary,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  history ? '唱过，还想再唱' : '喜欢的，都在这里',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${songs.length} 首${history ? '练唱记录' : '收藏歌曲'}',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          if (!large && songs.isNotEmpty) ...[
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 112,
-              height: 104,
-              child: ExcludeSemantics(
-                child: Stack(
-                  alignment: Alignment.centerRight,
-                  children: [
-                    for (
-                      var index = songs.take(3).length - 1;
-                      index >= 0;
-                      index--
-                    )
-                      Positioned(
-                        right: index * 8.0,
-                        top: index * 5.0,
-                        child: Transform.rotate(
-                          angle: -index * .10,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: scheme.surface,
-                                width: 3,
+    return Glass(
+      state: state,
+      radius: 26,
+      material: GlassMaterialSpec.standard,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        history
+                            ? Icons.history_rounded
+                            : Icons.favorite_rounded,
+                        size: 16,
+                        color: scheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          history ? '本机练唱足迹' : '手机 · 电视 · 后台同步',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: scheme.primary,
+                                fontWeight: FontWeight.w600,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppSurfaces.of(context).shadow,
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    history ? '唱过，还想再唱' : '喜欢的，都在这里',
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${songs.length} 首${history ? '练唱记录' : '收藏歌曲'}',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            if (!large && songs.isNotEmpty) ...[
+              const SizedBox(width: 14),
+              SizedBox(
+                width: 108,
+                height: 92,
+                child: ExcludeSemantics(
+                  child: Stack(
+                    alignment: Alignment.centerRight,
+                    children: [
+                      for (
+                        var index = songs.take(3).length - 1;
+                        index >= 0;
+                        index--
+                      )
+                        Positioned(
+                          right: index * 14.0,
+                          top: (2 - index) * 3.0,
+                          child: Transform.rotate(
+                            angle: -index * .10,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: .82),
+                                  width: 1.5,
                                 ),
-                              ],
-                            ),
-                            child: Artwork(
-                              state: state,
-                              path: songs[index].cover,
-                              revision: songs[index].data['revision']
-                                  ?.toString(),
-                              size: 88,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: .22),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Artwork(
+                                state: state,
+                                path: songs[index].cover,
+                                revision: songs[index].data['revision']
+                                    ?.toString(),
+                                size: 76 - index * 4.0,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -776,19 +919,24 @@ class SettingsPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: Text(
                 title,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-            Card(
+            Glass(
+              state: state,
+              radius: 24,
+              material: GlassMaterialSpec.standard,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   for (var i = 0; i < children.length; i++) ...[
-                    if (i > 0) const Divider(indent: 16, endIndent: 16),
+                    if (i > 0) const Divider(indent: 58, endIndent: 16),
                     children[i],
                   ],
                 ],
@@ -797,121 +945,147 @@ class SettingsPage extends StatelessWidget {
           ],
         ),
       );
-      Widget icon(IconData data) => SizedBox(
-        width: 28,
+      Widget badge(IconData data, List<Color> colors) => Container(
+        width: 32,
         height: 32,
-        child: Icon(data, size: 20, color: scheme.onSurfaceVariant),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: colors,
+          ),
+        ),
+        child: Icon(data, size: 18, color: Colors.white),
       );
-      return Scaffold(
-        appBar: AppToolbar(title: const Text('设置')),
-        body: ContentWidth(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-            children: [
-              group('家庭曲库', [
-                ListTile(
-                  leading: icon(Icons.dns_outlined),
-                  title: const Text('NAS 连接与账号'),
-                  subtitle: Text(
-                    state.authenticated
-                        ? '${state.accountName.isEmpty ? '已登录' : state.accountName}\n${state.origin}'
-                        : state.origin.isEmpty
-                        ? '尚未连接'
-                        : '需要登录\n${state.origin}',
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => openConnection(context, state),
-                ),
-                ListTile(
-                  key: const Key('open-admin'),
-                  leading: icon(Icons.tune_rounded),
-                  title: const Text('管理端'),
-                  subtitle: Text(
-                    state.origin.isEmpty
-                        ? '连接 NAS 后管理曲库和系统设置'
-                        : '管理当前 NAS 的曲库和系统设置',
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => openAdmin(context, state),
-                ),
-                ListenableBuilder(
-                  listenable: state.updates,
-                  builder: (context, _) => ListTile(
-                    leading: icon(Icons.system_update_outlined),
-                    title: const Text('应用更新'),
-                    subtitle: Text(state.updates.status),
+      return AppEnvironment(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppToolbar(title: const Text('设置')),
+          body: ContentWidth(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              children: [
+                group('家庭曲库', [
+                  ListTile(
+                    leading: badge(Icons.dns_rounded, const [
+                      AppPalette.brand,
+                      AppPalette.coral,
+                    ]),
+                    title: const Text('NAS 连接与账号'),
+                    subtitle: Text(
+                      state.authenticated
+                          ? '${state.accountName.isEmpty ? '已登录' : state.accountName}\n${state.origin}'
+                          : state.origin.isEmpty
+                          ? '尚未连接'
+                          : '需要登录\n${state.origin}',
+                    ),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        settings: const RouteSettings(name: 'updates'),
-                        builder: (_) => UpdatePage(updates: state.updates),
+                    onTap: () => openConnection(context, state),
+                  ),
+                  ListTile(
+                    key: const Key('open-admin'),
+                    leading: badge(Icons.tune_rounded, const [
+                      Color(0xFF3B82F6),
+                      Color(0xFF6366F1),
+                    ]),
+                    title: const Text('管理端'),
+                    subtitle: Text(
+                      state.origin.isEmpty
+                          ? '连接 NAS 后管理曲库和系统设置'
+                          : '管理当前 NAS 的曲库和系统设置',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => openAdmin(context, state),
+                  ),
+                  ListenableBuilder(
+                    listenable: state.updates,
+                    builder: (context, _) => ListTile(
+                      leading: badge(Icons.system_update_rounded, const [
+                        Color(0xFF10B981),
+                        Color(0xFF059669),
+                      ]),
+                      title: const Text('应用更新'),
+                      subtitle: Text(state.updates.status),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          settings: const RouteSettings(name: 'updates'),
+                          builder: (_) => UpdatePage(updates: state.updates),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ]),
-              group('外观', [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: AppSegments<ThemeMode>(
-                    values: const [
-                      (ThemeMode.light, '浅色'),
-                      (ThemeMode.dark, '深色'),
-                      (ThemeMode.system, '跟随系统'),
-                    ],
-                    selected: state.themeMode,
-                    senior: state.senior,
-                    onChanged: (value) =>
-                        uiTask(context, () => state.setTheme(value)),
-                  ),
-                ),
-                SwitchListTile(
-                  key: const Key('reduce-transparency'),
-                  value: state.reduceTransparency,
-                  onChanged: (value) =>
-                      uiTask(context, () => state.setTransparency(value)),
-                  title: const Text('减少透明效果'),
-                  subtitle: Text(
-                    state.reduceTransparency
-                        ? '已开启，使用清晰的不透明背景'
-                        : state.senior
-                        ? '已关闭，长辈模式仍使用实底'
-                        : state.performanceMode
-                        ? '已关闭，性能模式仍使用实底'
-                        : '已关闭，使用常规透明效果',
-                  ),
-                ),
-              ]),
-              group('使用体验', [
-                SwitchListTile(
-                  value: state.senior,
-                  onChanged: (value) => uiTask(
-                    context,
-                    () => state.setUiMode(
-                      value ? UiMode.senior : UiMode.standard,
+                ]),
+                group('外观', [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: AppSegments<ThemeMode>(
+                      liquid: true,
+                      values: const [
+                        (ThemeMode.light, '浅色'),
+                        (ThemeMode.dark, '深色'),
+                        (ThemeMode.system, '跟随系统'),
+                      ],
+                      selected: state.themeMode,
+                      senior: state.senior,
+                      onChanged: (value) =>
+                          uiTask(context, () => state.setTheme(value)),
                     ),
                   ),
-                  title: Text(state.senior ? '长辈模式已开启' : '长辈模式'),
-                  subtitle: const Text('放大文字和按钮'),
-                ),
-                SwitchListTile(
-                  key: const Key('performance-mode'),
-                  value: state.performanceMode,
-                  onChanged: (value) =>
-                      uiTask(context, () => state.setPerformanceMode(value)),
-                  title: const Text('性能模式'),
-                  subtitle: Text(
-                    state.performanceMode ? '已开启，停用动效与实时模糊' : '已关闭，界面效果遵循外观设置',
+                  SwitchListTile(
+                    key: const Key('reduce-transparency'),
+                    value: state.reduceTransparency,
+                    onChanged: (value) =>
+                        uiTask(context, () => state.setTransparency(value)),
+                    title: const Text('减少透明效果'),
+                    subtitle: Text(
+                      state.reduceTransparency
+                          ? '已开启，使用清晰的不透明背景'
+                          : state.senior
+                          ? '已关闭，长辈模式仍使用实底'
+                          : state.performanceMode
+                          ? '已关闭，性能模式仍使用实底'
+                          : '已关闭，使用常规透明效果',
+                    ),
+                  ),
+                ]),
+                group('使用体验', [
+                  SwitchListTile(
+                    value: state.senior,
+                    onChanged: (value) => uiTask(
+                      context,
+                      () => state.setUiMode(
+                        value ? UiMode.senior : UiMode.standard,
+                      ),
+                    ),
+                    title: Text(state.senior ? '长辈模式已开启' : '长辈模式'),
+                    subtitle: const Text('放大文字和按钮'),
+                  ),
+                  SwitchListTile(
+                    key: const Key('performance-mode'),
+                    value: state.performanceMode,
+                    onChanged: (value) =>
+                        uiTask(context, () => state.setPerformanceMode(value)),
+                    title: const Text('性能模式'),
+                    subtitle: Text(
+                      state.performanceMode
+                          ? '已开启，停用动效与实时模糊'
+                          : '已关闭，界面效果遵循外观设置',
+                    ),
+                  ),
+                ]),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    '歌曲与收藏来自 NAS，后台、手机和电视共用收藏。练唱记录与录音作品保存在此手机。',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
-              ]),
-              Text(
-                '歌曲与收藏来自 NAS，后台、手机和电视共用收藏。练唱记录与录音作品保存在此手机。',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-              if (state.defaultPassword) const Notice('NAS 仍使用初始密码，请在管理端修改。'),
-            ],
+                if (state.defaultPassword) const Notice('NAS 仍使用初始密码，请在管理端修改。'),
+              ],
+            ),
           ),
         ),
       );

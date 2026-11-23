@@ -203,7 +203,7 @@ class _SongsPageState extends State<SongsPage> {
               },
             ),
           ),
-          if (widget.headerActions != null) ...[
+          if (!pinnedSearch && widget.headerActions != null) ...[
             const SizedBox(width: 8),
             widget.headerActions!,
           ],
@@ -336,7 +336,26 @@ class _SongsPageState extends State<SongsPage> {
           ? Column(
               children: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(pageInset, 4, pageInset, 0),
+                  padding: EdgeInsets.fromLTRB(pageInset, 6, pageInset, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '点歌',
+                          style: Theme.of(context).textTheme.headlineLarge
+                              ?.copyWith(
+                                fontSize: 30,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -.8,
+                              ),
+                        ),
+                      ),
+                      widget.headerActions!,
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(pageInset, 0, pageInset, 4),
                   child: searchHeader,
                 ),
                 Expanded(child: body),
@@ -614,52 +633,82 @@ class _BrowseLinks extends StatelessWidget {
       final links = [
         for (final item in [
           (Icons.person_outline_rounded, '歌手', '歌手'),
-          (Icons.grid_view_outlined, '分类', '分类'),
+          (Icons.grid_view_rounded, '分类', '分类'),
           (Icons.queue_music_rounded, '家庭歌单', '共享歌单'),
         ])
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: scheme.onSurfaceVariant,
-              padding: EdgeInsets.symmetric(horizontal: stacked ? 12 : 0),
-              minimumSize: Size(44, state.senior ? 56 : 44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => BrowsePage(state: state, kind: item.$3),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: stacked
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                Icon(item.$1, size: state.senior ? 22 : 18),
-                SizedBox(width: stacked ? 12 : 6),
-                Flexible(
-                  fit: stacked ? FlexFit.tight : FlexFit.loose,
-                  child: Text(
-                    item.$2,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: state.senior ? 18 : 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+          MotionPress(
+            child: Glass(
+              state: state,
+              radius: 18,
+              material: GlassMaterialSpec.shortcut,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.onSurface,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: stacked ? 14 : 6,
+                    vertical: 10,
+                  ),
+                  minimumSize: Size(44, state.senior ? 56 : 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-                if (stacked) const Icon(Icons.chevron_right_rounded, size: 20),
-              ],
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => BrowsePage(state: state, kind: item.$3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: stacked
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      item.$1,
+                      size: state.senior ? 22 : 17,
+                      color: scheme.primary,
+                    ),
+                    SizedBox(width: stacked ? 12 : 6),
+                    Flexible(
+                      fit: stacked ? FlexFit.tight : FlexFit.loose,
+                      child: Text(
+                        item.$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: state.senior ? 18 : 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    if (stacked)
+                      const Icon(Icons.chevron_right_rounded, size: 20),
+                  ],
+                ),
+              ),
             ),
           ),
       ];
       return stacked
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: links,
+              children: [
+                for (var i = 0; i < links.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  links[i],
+                ],
+              ],
             )
-          : Row(children: [for (final link in links) Expanded(child: link)]);
+          : Row(
+              children: [
+                for (var i = 0; i < links.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(child: links[i]),
+                ],
+              ],
+            );
     },
   );
 }
@@ -791,47 +840,52 @@ class _BrowsePageState extends State<BrowsePage> {
   );
   Widget gridTile(Json item) {
     if (tags) {
-      return Material(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => open(item),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 76),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['name'] as String,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${item['count'] ?? 0} 首歌曲',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                        ),
-                      ],
+      return MotionPress(
+        child: Glass(
+          state: widget.state,
+          radius: 18,
+          material: GlassMaterialSpec.standard,
+          child: InkWell(
+            onTap: () => open(item),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 76),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['name'] as String,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${item['count'] ?? 0} 首歌曲',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 14,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
