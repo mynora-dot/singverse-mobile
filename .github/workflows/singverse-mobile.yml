@@ -1,4 +1,5 @@
-name: singverse-mobile
+name: SingVerse 手机端 APK 发布
+run-name: 发布手机端 APK ${{ github.event.release.tag_name }}
 on:
   release:
     types: [published]
@@ -11,32 +12,37 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
+    name: 构建并上传签名手机安装包
     if: github.event_name == 'release' && !github.event.release.prerelease && !github.event.release.draft
     permissions:
       contents: write
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - name: Verify release version
+      - name: 检出 Release 对应的源码
+        uses: actions/checkout@v4
+      - name: 校验正式发布版本和升级条件
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: python3 scripts/validate-release.py --platform mobile
-      - name: Set version from Release tag
+      - name: 从发布标签读取版本号
         run: python3 scripts/build_version.py --github-env
-      - uses: actions/setup-java@v4
+      - name: 配置 Java 环境
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
           log-accepted-android-sdk-licenses: false
-      - uses: gradle/actions/setup-gradle@v4
+      - name: 配置 Gradle 与缓存
+        uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: false
-      - name: Limit Gradle memory and cache build outputs on the runner
+      - name: 设置 Gradle 内存、并发和构建缓存
         run: |
           mkdir -p "$HOME/.gradle"
           printf '%s\n' \
@@ -44,12 +50,13 @@ jobs:
             'org.gradle.workers.max=2' \
             'kotlin.daemon.jvmargs=-Xmx1g' \
             'org.gradle.caching=true' >> "$HOME/.gradle/gradle.properties"
-      - uses: subosito/flutter-action@v2
+      - name: 配置 Flutter 与依赖缓存
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.5'
           channel: stable
           cache: true
-      - name: Build signed ARMv7, ARM64 and x86_64 APKs
+      - name: 构建并签署 ARMv7、ARM64 和 x86_64 安装包
         env:
           RELEASE_NOTES: ${{ github.event.release.body }}
           KEYSTORE_BASE64: ${{ secrets.MOBILE_KEYSTORE_BASE64 }}
@@ -64,7 +71,7 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$SINGVERSE_MOBILE_KEYSTORE"
           chmod 600 "$SINGVERSE_MOBILE_KEYSTORE"
           make release
-      - name: Upload per-ABI APKs and immutable release index
+      - name: 上传各架构 APK、版本清单和校验文件
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}

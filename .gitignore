@@ -85,3 +85,8 @@ credentials.*.json
 /.private-release/
 /private-reports/
 *.har
+
+# Local registry and GitHub CLI credentials
+/.docker/
+/.config/gh/
+/.gh/

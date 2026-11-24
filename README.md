@@ -72,6 +72,8 @@ SINGVERSE_VERSION=0.0.2 make release
 
 GitHub Actions 仅在正式 GitHub Release（如 `v0.0.2`）发布后构建和上传资产；排除 draft/prerelease，普通 push/PR 不触发。工作流不运行测试、格式检查或静态分析，只保留发布版本、APK 签名和已有资产保护。仓库 Secrets：`MOBILE_KEYSTORE_BASE64`、`MOBILE_STORE_PASSWORD`、`MOBILE_KEY_ALIAS`、`MOBILE_KEY_PASSWORD`。签名文件仅暂存在 runner 临时目录并清理。发布前排除当前 tag、比较上一正式版本的元数据，拒绝版本不递增、缺失/损坏元数据或签名证书变化。无历史正式版本才允许首次发布。重试逐字节比对已上传资产，相同文件复用，仅上传缺失文件；不同内容失败，标签不可重用。管理平台镜像构建会下载并锁定正式 Release 中的 APK，用户从 NAS 下载，无需运行时访问 GitHub。
 
+发版时使用同一份中文变更说明创建注释标签和 Release 草稿。发布正文也会进入客户端的更新说明。[中文标签与发布说明](https://github.com/mynora-dot/singverse-go-backend/blob/main/docs/multi-repository.md#中文标签与发布说明)
+
 ## 工程与验证
 
 CI 固定使用 Ubuntu 24.04，保留 Android SDK/JDK，复用 Flutter 与 Gradle 依赖缓存。runner 中限制 Gradle 堆为 3 GiB、Kotlin daemon 堆为 1 GiB、并行 worker 为 2，不改变本地 Gradle 配置。GitHub Actions 缓存受 tag 访问范围限制，主要帮助同一 Release 的重跑，不保证不同版本之间命中。
