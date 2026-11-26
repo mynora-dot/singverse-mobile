@@ -44,6 +44,21 @@ void main() {
     );
   });
 
+  test('native expiry does not restart when disk bytes enter memory', () async {
+    var now = DateTime.utc(2026);
+    final cache = ArtworkCache(now: () => now);
+    final diskExpiry = now.add(const Duration(seconds: 1));
+    var reads = 0;
+    Future<ArtworkBytes> read() async =>
+        (bytes: Uint8List.fromList([++reads]), expiresAt: diskExpiry);
+
+    expect(await cache.loadPayload('same', read), [1]);
+    expect(await cache.loadPayload('same', read), [1]);
+    now = diskExpiry;
+    expect(await cache.loadPayload('same', read), [2]);
+    expect(await cache.loadPayload('same', read), [3]);
+  });
+
   test(
     'failures may be retried and different revisions do not share work',
     () async {

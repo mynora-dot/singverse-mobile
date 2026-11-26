@@ -116,7 +116,7 @@ python3 scripts/check-player-console.py \
 
 最终静态分析为 No issues found，64 个 Dart 文件格式检查无变化，`git diff --check` 通过；`sh scripts/build-apk.sh debug` 成功且 `pubspec.lock` 未变。开发产物为 `build/app/outputs/flutter-apk/app-debug.apk`，正式包名 `com.mynora.singverse.mobile`、开发版本 0.0.0 / code 1、minSdk 24 / targetSdk 36，Android Debug 签名验证通过；该开发 APK 只构建，没有覆盖手机上的日常应用。手机运行验收使用上文的 profile `.e2e` 包。
 
-最终 ADB 结构化证据保存在 `/tmp/singverse-mobile-apple-20261118-final-v2/`：已查看 `screenshots/current.png`，前台 Activity 为 `.e2e/com.mynora.singverse.mobile.MainActivity`，PID 31158，`/crash` 返回空记录。该当前画面是曲库 fixture 最后打开的 NAS 表单；真实原生场景的证据在 `bundle-06/player/`。镜像采集地址为 `http://127.0.0.1:56857/`（采集后已关闭）；Codex 内嵌浏览器此前控制超时，未成功打开面板，本轮不据此宣称浏览器验收。所有性能采样完成后才启动这次镜像采集。测试后系统字号已核对恢复 1.0，临时 `stay_on_while_plugged_in` 已恢复原值 0；ADB 正反向端口映射均已清理，本轮独立 NAS、compute 和镜像进程均已停止，相应端口已核对无监听。
+最终 ADB 结构化证据位于本地私有报告目录。已查看 `screenshots/current.png`，前台 Activity 为 `.e2e/com.mynora.singverse.mobile.MainActivity`，`/crash` 返回空记录。当前画面是曲库 fixture 最后打开的 NAS 表单，真实原生场景的证据在 `bundle-06/player/`。性能采样结束后才启动镜像采集。Codex 内嵌浏览器控制超时，浏览器验收未完成。测试后已核对系统字号恢复为 1.0，`stay_on_while_plugged_in` 已恢复原值 0。ADB 正反向端口映射均已清理，独立 NAS、compute 和镜像进程均已停止，相应端口已核对无监听。新增含设备序列号、日志或截图的原始报告可保存到仓库内的 `private-reports/`。
 
 实际测试启动入口（runner 先订阅 VM 日志，再由 driver 恢复暂停的 isolate）：
 

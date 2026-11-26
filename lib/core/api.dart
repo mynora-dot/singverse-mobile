@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+import 'artwork_cache.dart';
+
 class ApiFailure implements Exception {
   ApiFailure(this.status, this.message, {this.retryAfter});
   final int status;
@@ -66,6 +68,28 @@ class NativeNasApi implements NasApi {
   @override
   Future<Uint8List> bytes(String path) async =>
       await _call<Uint8List>('bytes', {'path': path}) ?? Uint8List(0);
+
+  Future<ArtworkBytes> artwork(
+    String path, {
+    required String origin,
+    required String instanceId,
+    required String? account,
+    required String? revision,
+  }) async {
+    final response = await _call<Map<dynamic, dynamic>>('artwork', {
+      'path': path,
+      'origin': origin,
+      'instanceId': instanceId,
+      'account': account,
+      'revision': revision,
+    });
+    return (
+      bytes: response?['bytes'] as Uint8List? ?? Uint8List(0),
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(
+        response?['expiresAt'] as int? ?? 0,
+      ),
+    );
+  }
 }
 
 String normalizeOrigin(String input) {

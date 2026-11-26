@@ -327,6 +327,9 @@ class _WorkRow extends StatelessWidget {
                         Artwork(
                           state: state,
                           path: cover,
+                          revision: songData is Map
+                              ? artworkVersion(songData)
+                              : null,
                           size: senior ? 56 : 50,
                         )
                       else
@@ -1091,7 +1094,7 @@ class _ReviewPageState extends State<ReviewPage> {
                             Artwork(
                               state: state,
                               path: song.cover,
-                              revision: song.data['revision']?.toString(),
+                              revision: song.coverVersion,
                               size: state.senior ? 60 : 48,
                             ),
                             const SizedBox(width: 12),

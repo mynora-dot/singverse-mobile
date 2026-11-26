@@ -1154,6 +1154,7 @@ class _PlayerPageState extends State<PlayerPage> {
               Artwork(
                 state: state,
                 path: song.cover,
+                revision: song.coverVersion,
                 label: song.title,
                 size: 64,
               ),
@@ -1177,6 +1178,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   Artwork(
                     state: state,
                     path: song.cover,
+                    revision: song.coverVersion,
                     label: song.title,
                     size: (size.maxHeight - 112).clamp(
                       80.0,
@@ -2004,7 +2006,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                 state: widget.state,
                                 path: song.cover,
                                 label: song.title,
-                                revision: song.data['revision']?.toString(),
+                                revision: song.coverVersion,
                                 size: 36,
                               ),
                             ),
@@ -2183,6 +2185,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   child: Artwork(
                     state: widget.state,
                     path: song.cover,
+                    revision: song.coverVersion,
                     label: song.title,
                     size: mediaHeight,
                   ),
@@ -2661,6 +2664,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           Artwork(
                             state: state,
                             path: song.cover,
+                            revision: song.coverVersion,
                             label: song.title,
                             size: size.maxHeight.clamp(64.0, 200.0),
                           ),

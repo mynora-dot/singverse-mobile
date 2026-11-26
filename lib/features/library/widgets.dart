@@ -28,8 +28,10 @@ class Artwork extends StatefulWidget {
 }
 
 class _ArtworkState extends State<Artwork> {
+  static const thumbnailSize = 128;
   Future<Uint8List>? _image;
   String identity = '';
+  bool get thumbnail => widget.size <= thumbnailSize;
   @override
   void initState() {
     super.initState();
@@ -41,17 +43,20 @@ class _ArtworkState extends State<Artwork> {
     super.didUpdateWidget(old);
     if (old.path != widget.path ||
         old.revision != widget.revision ||
-        identity !=
-            '${widget.state.origin}:${widget.state.instanceId}:${widget.state.authenticated}') {
+        (old.size <= thumbnailSize) != thumbnail ||
+        identity != widget.state.artworkIdentity) {
       _load();
     }
   }
 
   void _load() {
-    identity =
-        '${widget.state.origin}:${widget.state.instanceId}:${widget.state.authenticated}';
+    identity = widget.state.artworkIdentity;
     _image = widget.path?.trim().isNotEmpty == true
-        ? widget.state.artwork(widget.path!, revision: widget.revision)
+        ? widget.state.artwork(
+            widget.path!,
+            revision: widget.revision,
+            thumbnail: thumbnail,
+          )
         : null;
   }
 
@@ -64,7 +69,7 @@ class _ArtworkState extends State<Artwork> {
       width: widget.size,
       height: widget.size,
       child: FutureBuilder<Uint8List>(
-        key: ValueKey('$identity:${widget.path}:${widget.revision}'),
+        key: ValueKey((identity, widget.path, widget.revision, thumbnail)),
         future: _image,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
@@ -191,7 +196,7 @@ class SongRow extends StatelessWidget {
                     state: state,
                     path: song.cover,
                     label: song.title,
-                    revision: song.data['revision']?.toString(),
+                    revision: song.coverVersion,
                     size: 64,
                   ),
                   const SizedBox(width: 16),
@@ -329,7 +334,7 @@ class SongRow extends StatelessWidget {
                           state: state,
                           path: song.cover,
                           label: song.title,
-                          revision: song.data['revision']?.toString(),
+                          revision: song.coverVersion,
                           size: MediaQuery.sizeOf(context).width < 375
                               ? 46
                               : 50,
@@ -526,7 +531,7 @@ class SongSpotlight extends StatelessWidget {
                             child: Artwork(
                               state: state,
                               path: song.cover,
-                              revision: song.data['revision']?.toString(),
+                              revision: song.coverVersion,
                               size: 320,
                             ),
                           ),
@@ -777,7 +782,7 @@ class SongSpotlight extends StatelessWidget {
                                   child: Artwork(
                                     state: state,
                                     path: song.cover,
-                                    revision: song.data['revision']?.toString(),
+                                    revision: song.coverVersion,
                                     size: 108,
                                   ),
                                 ),
@@ -810,9 +815,12 @@ class AmbientArtwork extends StatefulWidget {
 
 class _AmbientArtworkState extends State<AmbientArtwork> {
   Future<Uint8List>? image;
-  String identity = '';
-  String get nextIdentity =>
-      '${widget.state.origin}:${widget.state.instanceId}:${widget.state.authenticated}:${widget.song.cover}:${widget.song.data['revision']}';
+  (String, String?, String?)? identity;
+  (String, String?, String?) get nextIdentity => (
+    widget.state.artworkIdentity,
+    widget.song.cover,
+    widget.song.coverVersion,
+  );
   @override
   void initState() {
     super.initState();
@@ -831,7 +839,8 @@ class _AmbientArtworkState extends State<AmbientArtwork> {
     image = path?.isNotEmpty == true
         ? widget.state.artwork(
             path!,
-            revision: widget.song.data['revision']?.toString(),
+            revision: widget.song.coverVersion,
+            thumbnail: true,
           )
         : null;
   }

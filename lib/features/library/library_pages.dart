@@ -1065,8 +1065,9 @@ class _BrowsePageState extends State<BrowsePage> {
                 label: item['name'] as String,
                 round: artist,
                 size: widget.state.senior ? 64 : 48,
-                revision: item[artist ? 'portraitVersion' : 'revision']
-                    ?.toString(),
+                revision: artist
+                    ? item['portraitVersion']?.toString()
+                    : artworkVersion(item),
               ),
         title: Text(
           item['name'] as String,
@@ -1223,8 +1224,9 @@ class _BrowsePageState extends State<BrowsePage> {
                         item[artist ? 'portraitPath' : 'coverPath'] as String?,
                     round: artist,
                     size: artist ? math.min(124, size.maxWidth) : size.maxWidth,
-                    revision: item[artist ? 'portraitVersion' : 'revision']
-                        ?.toString(),
+                    revision: artist
+                        ? item['portraitVersion']?.toString()
+                        : artworkVersion(item),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1586,7 +1588,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                               'id': widget.id,
                               'title': item['name'],
                               'coverPath': coverPath,
-                              'revision': item['revision'],
+                              'coverVersion': artworkVersion(item),
                             }),
                           ),
                         ),
@@ -1664,8 +1666,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                                             state: widget.state,
                                             path: coverPath,
                                             label: item['name'] as String,
-                                            revision: item['revision']
-                                                ?.toString(),
+                                            revision: artworkVersion(item),
                                             size: coverSize,
                                           ),
                                         ),
@@ -1902,7 +1903,7 @@ class _SongDetailState extends State<SongDetail> {
                     state: widget.state,
                     path: song.cover,
                     label: song.title,
-                    revision: song.data['revision']?.toString(),
+                    revision: song.coverVersion,
                     size: 64,
                   ),
                   const SizedBox(width: 16),

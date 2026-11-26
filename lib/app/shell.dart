@@ -994,8 +994,7 @@ class _CollectionCover extends StatelessWidget {
                               child: Artwork(
                                 state: state,
                                 path: songs[index].cover,
-                                revision: songs[index].data['revision']
-                                    ?.toString(),
+                                revision: songs[index].coverVersion,
                                 size: 76 - index * 4.0,
                               ),
                             ),

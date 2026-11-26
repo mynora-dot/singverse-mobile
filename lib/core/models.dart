@@ -1,5 +1,8 @@
 typedef Json = Map<String, dynamic>;
 
+String? artworkVersion(Map<dynamic, dynamic> data) =>
+    (data['coverVersion'] ?? data['revision'])?.toString();
+
 class Song {
   Song(this.data);
   final Json data;
@@ -8,6 +11,7 @@ class Song {
   String get title => data['title'] as String? ?? '未命名歌曲';
   String get artist => (data['artists'] as List? ?? []).join(' / ');
   String? get cover => data['coverPath'] as String?;
+  String? get coverVersion => artworkVersion(data);
   String get mediaType => data['mediaType'] as String? ?? 'UNKNOWN';
   String get format => data['format'] as String? ?? '';
   String get source => data['sourceName'] as String? ?? '';

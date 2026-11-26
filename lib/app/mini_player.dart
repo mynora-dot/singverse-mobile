@@ -175,6 +175,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                     Artwork(
                                       state: state,
                                       path: state.current!.cover,
+                                      revision: state.current!.coverVersion,
                                       label: state.current!.title,
                                       round: !state.senior,
                                       size: state.senior

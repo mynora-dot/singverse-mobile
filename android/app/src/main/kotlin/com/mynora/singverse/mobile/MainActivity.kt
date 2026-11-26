@@ -167,8 +167,9 @@ class MainActivity : FlutterActivity() {
         }
         MethodChannel(engine.dartExecutor.binaryMessenger, "singverse/nas").setMethodCallHandler { call, result ->
             if (call.method in listOf("configure", "forget") || call.method == "request" && call.argument<String>("path") == "/api/v1/auth/logout") pairing.cancel()
+            val artworkSession = if (call.method == "artwork") transport.artworkSession() else null
             val executor = when {
-                call.method == "bytes" -> artworkWorker
+                call.method == "bytes" || call.method == "artwork" -> artworkWorker
                 call.method == "request" && call.argument<String>("path") == "/api/v1/client-releases/mobile" -> updateWorker
                 else -> worker
             }
@@ -185,6 +186,11 @@ class MainActivity : FlutterActivity() {
                         "forget" -> { transport.forget(); null }
                         "request" -> transport.request(call.argument<String>("path")!!, call.argument<String>("method") ?: "GET", call.argument<String>("body"))
                         "bytes" -> transport.bytes(call.argument<String>("path")!!)
+                        "artwork" -> transport.artwork(requireNotNull(artworkSession), call.argument<String>("path")!!,
+                            call.argument<String>("origin"), call.argument<String>("instanceId"),
+                            call.argument<String>("account"), call.argument<String>("revision")).let {
+                            mapOf("bytes" to it.bytes, "expiresAt" to it.expiresAt)
+                        }
                         "inspect" -> transport.inspect(call.argument<String>("origin")!!, call.argument<String>("invitation"))
                         else -> throw IllegalArgumentException("Unknown NAS method")
                     }

@@ -660,7 +660,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     enableSuggestions: false,
                     textInputAction: TextInputAction.next,
                     decoration: groupedDecoration(
-                      hint: '192.168.1.10:18080',
+                      hint: 'nas.local:18080',
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(right: 2),
                         child: Text(

@@ -220,6 +220,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         throw const FormatException('此地址的曲库身份已变化，请重新登录');
       }
       serverName = info['name'] is String ? info['name'] as String : '';
+      if (instanceId != info['instanceId']) _invalidateArtwork();
       instanceId = info['instanceId'] as String;
       await preferences.setString('server-instance:$origin', instanceId);
       await refreshPersonal();
@@ -237,8 +238,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         if (automatic != null &&
             automaticLoginFor(automatic) &&
             (!authenticated || accountName != automatic.username)) {
-          authenticated = false;
-          _clearFavorites();
+          _loseSession();
           accountName = '';
           await api.forget();
           final secret = await loginStore.password(automatic);
@@ -275,9 +275,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final info = await api.inspect(next) as Json;
       _checkServer(info);
       if (origin != next) await command('stop');
-      _artworkCache.clear();
-      authenticated = false;
-      _clearFavorites();
+      _loseSession();
       notifyListeners();
       updates.disconnect();
       await api.configure(next);
@@ -303,6 +301,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     String password, {
     required String username,
   }) async {
+    _invalidateArtwork();
     final result = await api.request(
       '/api/v1/auth/login',
       method: 'POST',
@@ -321,6 +320,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     required String resetToken,
     required String newPassword,
   }) => _run(() async {
+    _invalidateArtwork();
     await api.request(
       '/api/v1/auth/password/reset',
       method: 'POST',
@@ -330,13 +330,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         'newPassword': newPassword,
       },
     );
-    authenticated = false;
-    _clearFavorites();
+    _loseSession();
     mfaRequired = false;
     accountName = '';
     await setAutomaticLogin(null);
   });
   Future<void> verify(String code) => _run(() async {
+    _invalidateArtwork();
     await api.request(
       '/api/v1/auth/mfa/verify',
       method: 'POST',
@@ -348,36 +348,95 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await refreshPersonal();
   });
   Future<void> readSession() async {
+    final identity = artworkIdentity;
     try {
       final session = await api.request('/api/v1/auth/session') as Json;
+      if (_disposed || identity != artworkIdentity) {
+        throw ApiFailure(409, 'NAS 连接已切换');
+      }
       authenticated = true;
       defaultPassword = session['defaultPassword'] == true;
       accountName = session['username'] as String? ?? '';
+      final scope = accountName.isEmpty || instanceId.isEmpty
+          ? null
+          : (origin: origin, instance: instanceId, account: accountName);
+      if (scope != _artworkScope) {
+        _invalidateArtwork();
+        _artworkScope = scope;
+      }
       updates.connect(origin, connection: false);
       await refreshFavorites();
     } on ApiFailure {
-      authenticated = false;
-      _clearFavorites();
+      if (!_disposed && identity == artworkIdentity) _loseSession();
       rethrow;
     }
   }
 
   final _artworkCache = ArtworkCache();
+  ({String origin, String instance, String account})? _artworkScope;
+  int _artworkGeneration = 0;
+  String get artworkIdentity => jsonEncode([
+    origin,
+    instanceId,
+    authenticated,
+    _artworkScope?.account,
+    _artworkGeneration,
+  ]);
 
-  Future<Uint8List> artwork(String path, {String? revision}) async {
+  void _invalidateArtwork() {
+    _artworkGeneration++;
+    _artworkScope = null;
+    _artworkCache.clear();
+  }
+
+  void _loseSession() {
+    authenticated = false;
+    _invalidateArtwork();
+    _clearFavorites();
+  }
+
+  static final _songCoverPath = RegExp(
+    r'^/api/v1/metadata/songs/[^/?#]+/cover$',
+  );
+
+  Future<Uint8List> artwork(
+    String path, {
+    String? revision,
+    bool thumbnail = false,
+  }) async {
+    final identity = artworkIdentity;
+    final transport = api;
+    final scope = _artworkScope;
+    final resource =
+        transport is NativeNasApi && thumbnail && _songCoverPath.hasMatch(path)
+        ? '$path?variant=thumbnail'
+        : path;
+    final key = jsonEncode([identity, resource, revision]);
     try {
-      final identity = '$origin:$instanceId:$authenticated';
-      return await _artworkCache.load('$identity:$path:$revision', () async {
-        final bytes = await api.bytes(path);
-        if (identity != '$origin:$instanceId:$authenticated') {
-          throw ApiFailure(409, 'NAS 连接已切换');
-        }
-        return bytes;
-      });
+      final bytes = transport is NativeNasApi
+          ? await _artworkCache.loadPayload(
+              key,
+              () => transport.artwork(
+                resource,
+                origin: origin,
+                instanceId: instanceId,
+                account:
+                    authenticated &&
+                        scope?.origin == origin &&
+                        scope?.instance == instanceId
+                    ? scope?.account
+                    : null,
+                revision: revision,
+              ),
+            )
+          : await _artworkCache.load(key, () => transport.bytes(resource));
+      if (_disposed || identity != artworkIdentity) {
+        throw ApiFailure(409, 'NAS 连接已切换');
+      }
+      return bytes;
     } on ApiFailure catch (e) {
-      if (e.status == 401 && authenticated) {
-        authenticated = false;
-        _clearFavorites();
+      if (e.status == 401 && authenticated && identity == artworkIdentity) {
+        _loseSession();
         error = '登录已失效，请重新登录';
         notifyListeners();
       }
@@ -386,6 +445,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> logout() async {
+    _invalidateArtwork();
     await setAutomaticLogin(null);
     await command('stop');
     try {
@@ -393,11 +453,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         await api.request('/api/v1/auth/logout', method: 'POST');
       }
     } finally {
-      _artworkCache.clear();
       updates.disconnect();
       await api.forget();
-      authenticated = false;
-      _clearFavorites();
+      _loseSession();
       accountName = '';
       mfaRequired = false;
       error = null;
@@ -423,12 +481,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<dynamic> get(String path) async {
+    final identity = artworkIdentity;
     try {
       return await api.request(path);
     } on ApiFailure catch (e) {
-      if (e.status == 401) {
-        authenticated = false;
-        _clearFavorites();
+      if (e.status == 401 && identity == artworkIdentity) {
+        _loseSession();
         error = '登录已失效，请重新登录';
         notifyListeners();
       }
@@ -581,8 +639,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       if (currentRequest()) {
         favoritesError = e is FormatException ? e.message : e.toString();
         if (e is ApiFailure && e.status == 401) {
-          authenticated = false;
-          _clearFavorites();
+          _loseSession();
           favoritesError = '登录已失效，请重新登录';
         }
       }
@@ -649,8 +706,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           identity == _favoriteConnection &&
           ticket == _favoriteWriteGeneration) {
         if (e.status == 401) {
-          authenticated = false;
-          _clearFavorites();
+          _loseSession();
           notifyListeners();
         }
         rethrow;
@@ -798,8 +854,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         .map((t) => Map<String, dynamic>.from(t as Map))
         .toList();
     if (playbackState == 'AUTH_REQUIRED') {
-      authenticated = false;
-      _clearFavorites();
+      _loseSession();
       error = playbackError;
     }
     singing = Map<String, dynamic>.from(value['karaoke'] as Map? ?? {});
@@ -886,7 +941,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _favoritesTimer?.cancel();
     updates.dispose();
-    _artworkCache.clear();
+    _invalidateArtwork();
     unawaited(_events?.cancel());
     playback.dispose();
     super.dispose();

@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.CookieManager
 import java.net.CookiePolicy
 import java.net.URI
@@ -23,6 +24,7 @@ import javax.crypto.spec.GCMParameterSpec
 class NasFailure(val status: Int, message: String, val retryAfter: String = "") : Exception(message)
 internal data class NasConnection(val origin: String, val generation: Long)
 internal data class NasAdminSession(val connection: NasConnection, val cookie: String?)
+internal data class NasArtworkSession(val connection: NasConnection, val generation: Long, val cookie: String?)
 
 /** Native cookie store; only an explicitly opened admin page receives its current session. */
 class NasTransport internal constructor(context: Context) {
@@ -30,8 +32,11 @@ class NasTransport internal constructor(context: Context) {
     private val jar = CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER)
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build()
+    private val artworkCache = ArtworkDiskCache(File(context.cacheDir, "artwork-v1"))
     @Volatile var origin = ""; private set
     private var generation = 0L
+    private var artworkGeneration = 0L
+    private var artworkAccount: String? = null
     private fun session() = synchronized(this) { NasConnection(origin, generation) }
     internal fun connectionIdentity(): NasConnection = session()
     private fun checkSession(session: NasConnection) {
@@ -56,11 +61,12 @@ class NasTransport internal constructor(context: Context) {
 
     @Synchronized fun configure(value: String): String {
         val next = normalize(value)
+        invalidateArtwork()
         if (next != origin) { generation++; jar.cookieStore.removeAll(); origin = next; persist() }
         return origin
     }
 
-    @Synchronized fun forget() { generation++; jar.cookieStore.removeAll(); persist() }
+    @Synchronized fun forget() { generation++; invalidateArtwork(); jar.cookieStore.removeAll(); persist() }
 
     internal fun adminSession(expectedOrigin: String, username: String?): NasAdminSession {
         val connection = session()
@@ -85,6 +91,20 @@ class NasTransport internal constructor(context: Context) {
         .get(URI("${connection.origin}/api/v1/auth/session"))
         .firstOrNull { it.name == "singverse_session" && !it.hasExpired() && (!it.secure || connection.origin.startsWith("https://")) }
         ?.value
+
+    private fun invalidateArtwork() {
+        artworkGeneration++
+        artworkAccount = null
+    }
+
+    @Synchronized internal fun artworkSession(): NasArtworkSession {
+        val connection = session()
+        return NasArtworkSession(connection, artworkGeneration, if (origin.isBlank()) null else adminCookie(connection))
+    }
+
+    private fun checkArtworkSession(expected: NasArtworkSession) {
+        if (expected != artworkSession()) throw NasFailure(409, "NAS 连接已切换")
+    }
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -120,8 +140,10 @@ class NasTransport internal constructor(context: Context) {
         checkSession(session)
         val headers = response.headers.values("Set-Cookie")
         if (headers.isEmpty()) return
+        val previousAdmin = adminCookie(session)
         val before = jar.cookieStore.cookies.map { listOf(it.name, it.value, it.domain, it.path, it.secure) }
         jar.put(URI(url), mapOf("Set-Cookie" to headers))
+        if (previousAdmin != adminCookie(session)) invalidateArtwork()
         val after = jar.cookieStore.cookies.map { listOf(it.name, it.value, it.domain, it.path, it.secure) }
         if (before != after) persist()
     }
@@ -129,7 +151,11 @@ class NasTransport internal constructor(context: Context) {
     fun request(path: String, method: String = "GET", body: String? = null): String = request(session(), path, method, body, null)
 
     private fun request(session: NasConnection, path: String, method: String, body: String?, scope: NasRequestScope?): String {
-        synchronized(this) { checkSession(session) }
+        val accountVerification = synchronized(this) {
+            checkSession(session)
+            if (path in artworkAuthChanges && method !in listOf("GET", "HEAD")) invalidateArtwork()
+            if (path == "/api/v1/auth/session" && method == "GET") artworkSession() else null
+        }
         val csrf = if (method !in listOf("GET", "HEAD"))
             JSONObject(request(session, "/api/v1/auth/csrf", "GET", null, scope)).getString("token") else null
         val url = session.origin + path
@@ -150,7 +176,16 @@ class NasTransport internal constructor(context: Context) {
             accept(session, url, response)
             val bytes = try { read(response, 4 * 1024 * 1024) }
                 finally { synchronized(this) { checkSession(session) } }
-            bytes.toString(Charsets.UTF_8).ifBlank { "null" }
+            val json = bytes.toString(Charsets.UTF_8).ifBlank { "null" }
+            if (accountVerification != null) synchronized(this) {
+                checkArtworkSession(accountVerification)
+                val username = JSONObject(json).optString("username").ifBlank { null }
+                if (artworkAccount != username) {
+                    artworkGeneration++
+                    artworkAccount = username
+                }
+            }
+            json
         } } finally { scope?.detach(call) }
     }
 
@@ -171,6 +206,71 @@ class NasTransport internal constructor(context: Context) {
             try { read(it, 8 * 1024 * 1024) }
             finally { synchronized(this) { checkSession(session) } }
         }
+    }
+
+    internal fun artwork(
+        expected: NasArtworkSession, path: String, expectedOrigin: String?, instanceId: String?,
+        account: String?, revision: String?,
+    ): ArtworkPayload {
+        val connection = expected.connection
+        val url = connection.origin + path
+        val (builder, key) = synchronized(this) {
+            checkArtworkSession(expected)
+            if (!expectedOrigin.isNullOrBlank() && normalize(expectedOrigin) != connection.origin) {
+                throw NasFailure(409, "NAS 连接已切换")
+            }
+            checkResource(connection.origin, url)
+            val key = if (expected.cookie != null && account != null && account == artworkAccount && instanceId != null) {
+                artworkCacheKey(connection.origin, instanceId, account, path, revision)
+            } else null
+            Request.Builder().url(url).header("Cookie", cookieHeader(url)) to key
+        }
+        val commit: (() -> Unit) -> Unit = { publish -> synchronized(this) {
+            checkArtworkSession(expected)
+            publish()
+        } }
+        try {
+            val cached = key?.let { artworkCache.read(it, System.currentTimeMillis()) }
+            if (cached?.freshAt(System.currentTimeMillis()) == true) return cached.payload
+            val request = builder.build()
+            if (cached != null) {
+                val conditional = builder.header("If-None-Match", cached.etag).build()
+                val validated = downloadArtwork(conditional, key, cached, commit)
+                if (validated != null) return validated
+            }
+            return requireNotNull(downloadArtwork(request, key, null, commit))
+        } finally {
+            synchronized(this) { checkArtworkSession(expected) }
+        }
+    }
+
+    private fun downloadArtwork(
+        request: Request, key: String?, cached: StoredArtwork?, commit: (() -> Unit) -> Unit,
+    ): ArtworkPayload? = client.newCall(request).execute().use { response ->
+        val now = System.currentTimeMillis()
+        val grant = artworkGrant(response, now)
+        if (response.code == 304 && cached != null && key != null) {
+            if (grant == null || grant.first != cached.etag) {
+                artworkCache.remove(key, commit)
+                return@use null
+            }
+            val payload = cached.payload.copy(expiresAt = grant.second)
+            artworkCache.write(key, StoredArtwork(grant.first, payload), now, commit)
+            return@use payload
+        }
+        if (key != null && response.code in listOf(401, 403, 404)) artworkCache.remove(key, commit)
+        val bytes = read(response, ARTWORK_MAX_BYTES)
+        val payload = ArtworkPayload(bytes, grant?.second ?: (now + ARTWORK_MAX_AGE_MS))
+        if (key != null) {
+            val mime = response.body?.contentType()?.toString()
+            if (response.code == 200 && grant != null && bytes.isNotEmpty() && mime in artworkContentTypes &&
+                artworkMatchesEtag(bytes, grant.first)) {
+                artworkCache.write(key, StoredArtwork(grant.first, payload), now, commit)
+            } else {
+                artworkCache.remove(key, commit)
+            }
+        }
+        payload
     }
 
     fun resolve(path: String): String {
@@ -216,6 +316,9 @@ class NasTransport internal constructor(context: Context) {
     }
 
     companion object {
+        private val artworkContentTypes = setOf("image/jpeg", "image/png", "image/webp")
+        private val artworkAuthChanges = setOf("/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/mfa/verify",
+            "/api/v1/auth/password/reset", "/api/v1/auth/password", "/api/v1/auth/username")
         @Volatile private var instance: NasTransport? = null
         fun get(context: Context): NasTransport = instance ?: synchronized(this) {
             instance ?: NasTransport(context.applicationContext).also { instance = it }

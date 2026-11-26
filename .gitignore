@@ -1,13 +1,16 @@
 # Credentials and local environment
 .env
 .env.*
+*.env
 !.env.example
 *.jks
 *.keystore
+*.jceks
 *.pem
 *.key
 *.p12
 *.pfx
+*.pkcs8
 *.token
 *-token
 key.properties
@@ -15,6 +18,8 @@ credentials.json
 secrets/
 .run/
 local.properties
+*.local.properties
+*.local.json
 # Editor/OS
 .DS_Store
 .idea/
@@ -84,6 +89,7 @@ credentials.*.json
 /private-release/
 /.private-release/
 /private-reports/
+/.private-reports/
 *.har
 
 # Local registry and GitHub CLI credentials
