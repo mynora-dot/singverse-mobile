@@ -58,7 +58,10 @@ class GlassMaterialSpec {
     this.highlight = .72,
     this.shadow = .32,
     this.refraction = false,
+    this.sampleContent = true,
     this.grouped = false,
+    this.lensHeight,
+    this.lensAmount,
   }) : assert(lightTint >= 0 && lightTint <= 1),
        assert(darkTint >= 0 && darkTint <= 1),
        assert(blur >= 0),
@@ -66,49 +69,61 @@ class GlassMaterialSpec {
        assert(shadow >= 0 && shadow <= 1);
 
   static const standard = GlassMaterialSpec(
-    lightTint: .84,
-    darkTint: .74,
-    blur: 18,
-    highlight: .45,
-    shadow: .16,
+    lightTint: .58,
+    darkTint: .46,
+    blur: 12,
+    highlight: .88,
+    shadow: .24,
+    refraction: true,
+    sampleContent: false,
     grouped: true,
+    lensHeight: 12,
+    lensAmount: 18,
   );
   static const search = GlassMaterialSpec(
-    lightTint: .68,
-    darkTint: .42,
-    blur: 12,
-    highlight: .82,
-    shadow: .24,
+    lightTint: .46,
+    darkTint: .38,
+    blur: 10,
+    highlight: .90,
+    shadow: .30,
     refraction: true,
   );
   static const shortcut = GlassMaterialSpec(
-    lightTint: .88,
-    darkTint: .76,
-    blur: 0,
-    highlight: .45,
-    shadow: .10,
+    lightTint: .52,
+    darkTint: .40,
+    blur: 10,
+    highlight: .90,
+    shadow: .24,
+    refraction: true,
+    sampleContent: false,
+    lensHeight: 12,
+    lensAmount: 22,
   );
   static const field = GlassMaterialSpec(
-    lightTint: .88,
-    darkTint: .78,
-    blur: 14,
-    highlight: .40,
-    shadow: .08,
+    lightTint: .60,
+    darkTint: .50,
+    blur: 12,
+    highlight: .80,
+    shadow: .14,
+    refraction: true,
+    sampleContent: false,
+    lensHeight: 10,
+    lensAmount: 16,
   );
   static const onColor = GlassMaterialSpec(
     lightTint: .16,
-    darkTint: .22,
+    darkTint: .20,
     blur: 10,
-    highlight: .84,
-    shadow: .18,
+    highlight: .88,
+    shadow: .22,
     refraction: true,
   );
   static const stageControl = GlassMaterialSpec(
     lightTint: .18,
-    darkTint: .28,
+    darkTint: .24,
     blur: 12,
-    highlight: .80,
-    shadow: .28,
+    highlight: .92,
+    shadow: .34,
     refraction: true,
   );
   // Native video cannot be sampled. Its small overlay uses the same optical
@@ -120,33 +135,35 @@ class GlassMaterialSpec {
     highlight: .55,
   );
   static const floating = GlassMaterialSpec(
-    lightTint: .56,
-    darkTint: .38,
-    blur: 12,
-    highlight: .90,
-    shadow: .50,
+    lightTint: .38,
+    darkTint: .34,
+    blur: 10,
+    highlight: .94,
+    shadow: .56,
     refraction: true,
   );
   // Floating player capsule with luminous specular edge and soft color wash.
   static const player = GlassMaterialSpec(
-    lightTint: .58,
-    darkTint: .42,
-    blur: 14,
-    highlight: .92,
-    shadow: .54,
+    lightTint: .40,
+    darkTint: .36,
+    blur: 12,
+    highlight: .96,
+    shadow: .60,
     refraction: true,
   );
   static const sheet = GlassMaterialSpec(
-    lightTint: .86,
-    darkTint: .80,
-    blur: 26,
-    highlight: .65,
-    shadow: .72,
+    lightTint: .60,
+    darkTint: .46,
+    blur: 20,
+    highlight: .92,
+    shadow: .74,
+    refraction: true,
+    lensHeight: 18,
+    lensAmount: 30,
   );
   // Unified zero-blur smoked Liquid Glass for sheets over native routes
-  // (player audio & video, TV, scan, admin): high opacity eliminates sharp
-  // background ghosting while floating inset geometry and crisp Fresnel rim
-  // preserve the iOS 26 dark glass look.
+  // (TV, scan, admin): high opacity eliminates sharp background ghosting
+  // while floating inset geometry and crisp Fresnel rim preserve the look.
   static const sheetNative = GlassMaterialSpec(
     lightTint: .94,
     darkTint: .94,
@@ -156,15 +173,16 @@ class GlassMaterialSpec {
   );
 
   final double lightTint, darkTint, blur, highlight, shadow;
-  final bool refraction, grouped;
+  final bool refraction, sampleContent, grouped;
+  final double? lensHeight, lensAmount;
 
   GlassMaterialSpec forBackdrop(GlassBackdropContext context) {
     // Zero-blur materials include native video overlays and stable form fields.
     if (context == GlassBackdropContext.plain || blur == 0) return this;
     final content = context == GlassBackdropContext.content;
-    final minLight = content ? .56 : .50;
-    final minDark = content ? .38 : .32;
-    final minBlur = content ? 12.0 : 10.0;
+    final minLight = content ? .42 : .38;
+    final minDark = content ? .36 : .30;
+    final minBlur = content ? 10.0 : 9.0;
     return GlassMaterialSpec(
       lightTint: lightTint < minLight ? minLight : lightTint,
       darkTint: darkTint < minDark ? minDark : darkTint,
@@ -172,7 +190,10 @@ class GlassMaterialSpec {
       highlight: highlight,
       shadow: shadow,
       refraction: refraction,
+      sampleContent: sampleContent,
       grouped: grouped,
+      lensHeight: lensHeight,
+      lensAmount: lensAmount,
     );
   }
 }

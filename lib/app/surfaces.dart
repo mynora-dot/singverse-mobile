@@ -7,9 +7,11 @@ import 'tokens.dart';
 export 'glass_optics.dart'
     show
         AppBackdropCapture,
+        AppBackdropRouteBinding,
         AppBackdropScope,
         AppBackdropSource,
         AppEnvironment,
+        LiquidDropletBox,
         NasEnvironment;
 export 'tokens.dart';
 

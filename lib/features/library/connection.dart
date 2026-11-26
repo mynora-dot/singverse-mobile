@@ -1127,127 +1127,163 @@ class _ConnectionPageState extends State<ConnectionPage> {
           state.performanceMode;
       return AppBackdropCapture(
         solid: solid,
-        builder: (context, layerBackdrop) => Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            toolbarHeight: state.senior ? 64 : 52,
-            centerTitle: true,
-            systemOverlayStyle:
-                (Theme.of(context).brightness == Brightness.dark
-                        ? SystemUiOverlayStyle.light
-                        : SystemUiOverlayStyle.dark)
-                    .copyWith(statusBarColor: Colors.transparent),
-            leadingWidth: state.senior ? 76 : 60,
-            leading: Navigator.canPop(context)
-                ? AppBackdropScope(
-                    backdrop: layerBackdrop,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 16,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      child: Glass(
-                        state: state,
-                        radius: 26,
-                        variant: GlassVariant.liquid,
-                        child: BackButton(
-                          style: IconButton.styleFrom(
-                            minimumSize: Size.square(state.senior ? 56 : 44),
-                            padding: EdgeInsets.zero,
+        builder: (context, envBackdrop) => AppBackdropCapture(
+          solid: solid,
+          builder: (context, contentBackdrop) => AppBackdropRouteBinding(
+            environment: envBackdrop,
+            content: contentBackdrop,
+            child: Scaffold(
+              backgroundColor: Colors.transparent,
+              appBar: AppBar(
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                toolbarHeight: state.senior ? 64 : 52,
+                centerTitle: true,
+                systemOverlayStyle:
+                    (Theme.of(context).brightness == Brightness.dark
+                            ? SystemUiOverlayStyle.light
+                            : SystemUiOverlayStyle.dark)
+                        .copyWith(statusBarColor: Colors.transparent),
+                leadingWidth: state.senior ? 76 : 60,
+                leading: Navigator.canPop(context)
+                    ? AppBackdropScope(
+                        environment: envBackdrop,
+                        content: contentBackdrop,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            left: 16,
+                            top: 4,
+                            bottom: 4,
                           ),
-                        ),
-                      ),
-                    ),
-                  )
-                : null,
-            title: state.authenticated && !editing
-                ? const Text('NAS 连接与账号')
-                : null,
-            actions: [
-              if (!state.mfaRequired && !(state.authenticated && !editing))
-                AppBackdropScope(
-                  backdrop: layerBackdrop,
-                  child: Padding(
-                    padding: const EdgeInsets.only(
-                      right: 16,
-                      top: 4,
-                      bottom: 4,
-                    ),
-                    child: Glass(
-                      state: state,
-                      radius: 26,
-                      variant: GlassVariant.liquid,
-                      child: IconButton(
-                        key: const ValueKey('nas-history'),
-                        tooltip: '历史登录',
-                        style: IconButton.styleFrom(
-                          minimumSize: Size.square(state.senior ? 56 : 44),
-                          padding: EdgeInsets.zero,
-                        ),
-                        onPressed: working ? null : showHistory,
-                        icon: const Icon(Icons.history_rounded, size: 20),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          body: AppBackdropSource(
-            backdrop: layerBackdrop,
-            child: AppEnvironment(
-              solid: solid,
-              child: BackdropGroup(
-                backdropKey: backdrop,
-                child: SafeArea(
-                  child: ContentWidth(
-                    child: ListView(
-                      key: const ValueKey('nas-page-scroll'),
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: EdgeInsets.fromLTRB(
-                        MediaQuery.sizeOf(context).width < 375 ? 16 : 20,
-                        state.authenticated && !editing ? 16 : 8,
-                        MediaQuery.sizeOf(context).width < 375 ? 16 : 20,
-                        32,
-                      ),
-                      children: [
-                        if (state.mfaRequired)
-                          mfaForm(state)
-                        else if (state.authenticated && !editing)
-                          ...accountManagement(state)
-                        else
-                          Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 520),
-                              child: loginForm(state),
-                            ),
-                          ),
-                        if (message != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: Semantics(
-                              liveRegion: true,
-                              child: Text(
-                                '$message${notice == null && state.retryAfter?.isNotEmpty == true ? '，请在 ${state.retryAfter} 秒后重试' : ''}',
-                                key: const ValueKey('connection-message'),
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
+                          child: Glass(
+                            state: state,
+                            radius: 26,
+                            variant: GlassVariant.liquid,
+                            child: BackButton(
+                              style: IconButton.styleFrom(
+                                minimumSize: Size.square(
+                                  state.senior ? 56 : 44,
+                                ),
+                                padding: EdgeInsets.zero,
                               ),
                             ),
                           ),
-                      ],
+                        ),
+                      )
+                    : null,
+                title: state.authenticated && !editing
+                    ? const Text('NAS 连接与账号')
+                    : null,
+                actions: [
+                  if (!state.mfaRequired && !(state.authenticated && !editing))
+                    AppBackdropScope(
+                      environment: envBackdrop,
+                      content: contentBackdrop,
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          right: 16,
+                          top: 4,
+                          bottom: 4,
+                        ),
+                        child: Glass(
+                          state: state,
+                          radius: 26,
+                          variant: GlassVariant.liquid,
+                          child: IconButton(
+                            key: const ValueKey('nas-history'),
+                            tooltip: '历史登录',
+                            style: IconButton.styleFrom(
+                              minimumSize: Size.square(state.senior ? 56 : 44),
+                              padding: EdgeInsets.zero,
+                            ),
+                            onPressed: working ? null : showHistory,
+                            icon: const Icon(Icons.history_rounded, size: 20),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                ],
+              ),
+              body: AppBackdropSource(
+                backdrop: contentBackdrop,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: AppBackdropSource(
+                        backdrop: envBackdrop,
+                        child: AppEnvironment(
+                          solid: solid,
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                    ),
+                    AppBackdropScope(
+                      environment: envBackdrop,
+                      content: contentBackdrop,
+                      child: BackdropGroup(
+                        backdropKey: backdrop,
+                        child: SafeArea(
+                          child: ContentWidth(
+                            child: ListView(
+                              key: const ValueKey('nas-page-scroll'),
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding: EdgeInsets.fromLTRB(
+                                MediaQuery.sizeOf(context).width < 375
+                                    ? 16
+                                    : 20,
+                                state.authenticated && !editing ? 16 : 8,
+                                MediaQuery.sizeOf(context).width < 375
+                                    ? 16
+                                    : 20,
+                                32,
+                              ),
+                              children: [
+                                if (state.mfaRequired)
+                                  mfaForm(state)
+                                else if (state.authenticated && !editing)
+                                  ...accountManagement(state)
+                                else
+                                  Align(
+                                    alignment: Alignment.topCenter,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 520,
+                                      ),
+                                      child: loginForm(state),
+                                    ),
+                                  ),
+                                if (message != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 16),
+                                    child: Semantics(
+                                      liveRegion: true,
+                                      child: Text(
+                                        '$message${notice == null && state.retryAfter?.isNotEmpty == true ? '，请在 ${state.retryAfter} 秒后重试' : ''}',
+                                        key: const ValueKey(
+                                          'connection-message',
+                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

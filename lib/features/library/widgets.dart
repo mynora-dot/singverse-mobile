@@ -831,9 +831,15 @@ class SongSpotlight extends StatelessWidget {
 /// A single, small decoded cover supplies a static ambient color wash.
 /// It filters its own image, never a native video or camera underneath it.
 class AmbientArtwork extends StatefulWidget {
-  const AmbientArtwork({super.key, required this.state, required this.song});
+  const AmbientArtwork({
+    super.key,
+    required this.state,
+    required this.song,
+    this.opacity = .62,
+  });
   final AppState state;
   final Song song;
+  final double opacity;
   @override
   State<AmbientArtwork> createState() => _AmbientArtworkState();
 }
@@ -886,7 +892,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> {
             future: image,
             builder: (context, snapshot) => snapshot.hasData
                 ? Opacity(
-                    opacity: .62,
+                    opacity: widget.opacity,
                     child: ImageFiltered(
                       imageFilter: ui.ImageFilter.blur(sigmaX: 52, sigmaY: 52),
                       child: Image.memory(
@@ -899,6 +905,97 @@ class _AmbientArtworkState extends State<AmbientArtwork> {
                     ),
                   )
                 : const SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Soft ambient glow from the active track artwork behind floating Liquid Glass,
+/// weighted toward the bottom dock and top chrome so empty pages still refract
+/// rich colour without muddying the middle reading area.
+class ShellAmbientGlow extends StatelessWidget {
+  const ShellAmbientGlow({super.key, required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final song = state.current;
+    if (song == null ||
+        AppMotionScope.solidOf(context) ||
+        state.performanceMode ||
+        state.reduceTransparency ||
+        state.senior) {
+      return const SizedBox.shrink();
+    }
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final hasCover = song.cover?.isNotEmpty == true;
+    final level = AppMotionScope.levelOf(context);
+    final duration = level == AppMotionLevel.full
+        ? AppMotion.page
+        : level == AppMotionLevel.reduced
+        ? const Duration(milliseconds: 100)
+        : Duration.zero;
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: RepaintBoundary(
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.22, 0.52, 0.76, 1.0],
+              colors: [
+                Color(0x8C000000),
+                Color(0x29000000),
+                Color(0x1A000000),
+                Color(0x94000000),
+                Color(0xF2000000),
+              ],
+            ).createShader(bounds),
+            child: AnimatedSwitcher(
+              duration: duration,
+              child: hasCover
+                  ? SizedBox.expand(
+                      key: ValueKey('glow:${song.cover}:${song.coverVersion}'),
+                      child: AmbientArtwork(
+                        state: state,
+                        song: song,
+                        opacity: dark ? .36 : .28,
+                      ),
+                    )
+                  : SizedBox.expand(
+                      key: const ValueKey('glow:fallback'),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: const Alignment(-.5, .85),
+                            radius: 1.15,
+                            colors: [
+                              AppPalette.coral.withValues(
+                                alpha: dark ? .20 : .16,
+                              ),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: RadialGradient(
+                              center: const Alignment(.6, .9),
+                              radius: 1.1,
+                              colors: [
+                                const Color(0xFF4B7BFF)
+                                    .withValues(alpha: dark ? .20 : .16),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
           ),
         ),
       ),

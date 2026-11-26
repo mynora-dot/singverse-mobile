@@ -268,9 +268,10 @@ class _WorksPageState extends State<WorksPage> {
       );
       return widget.embedded
           ? body
-          : Scaffold(
+          : AppBackdropPage(
+              glow: ShellAmbientGlow(state: state),
               appBar: AppToolbar(title: const Text('作品')),
-              body: body,
+              body: SafeArea(bottom: false, child: body),
             );
     },
   );
@@ -1006,7 +1007,8 @@ class _ReviewPageState extends State<ReviewPage> {
           : (work?['interruption'] as String? ?? '').isNotEmpty
           ? '录音已中断，已有内容已保留'
           : '草稿已自动保留';
-      return Scaffold(
+      return AppBackdropPage(
+        glow: ShellAmbientGlow(state: state),
         appBar: AppToolbar(
           title: Text(
             missing
@@ -1051,7 +1053,7 @@ class _ReviewPageState extends State<ReviewPage> {
           ],
         ),
         body: SafeArea(
-          top: false,
+          bottom: false,
           child: ContentWidth(
             child: work == null
                 ? error != null
@@ -1059,7 +1061,12 @@ class _ReviewPageState extends State<ReviewPage> {
                       : const Center(child: CircularProgressIndicator())
                 : ListView(
                     key: ValueKey('review-scroll:${widget.id}'),
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      12,
+                      20,
+                      32 + MediaQuery.paddingOf(context).bottom,
+                    ),
                     children: [
                       Row(
                         children: [

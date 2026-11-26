@@ -172,9 +172,6 @@ Future<void> singingSettings(
       final cardBg = theme.colorScheme.onSurface.withValues(
         alpha: dark ? .06 : .04,
       );
-      final cardBorder = theme.colorScheme.onSurface.withValues(
-        alpha: dark ? .09 : .07,
-      );
       final dividerColor = theme.colorScheme.onSurface.withValues(
         alpha: dark ? .08 : .06,
       );
@@ -236,7 +233,18 @@ Future<void> singingSettings(
               decoration: BoxDecoration(
                 color: cardBg,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: cardBorder, width: .7),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: dark ? .06 : .45),
+                    cardBg,
+                  ],
+                ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: dark ? .16 : .68),
+                  width: .8,
+                ),
               ),
               child: SliderTheme(
                 data: sliderTheme,
@@ -322,7 +330,18 @@ Future<void> singingSettings(
               decoration: BoxDecoration(
                 color: cardBg,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: cardBorder, width: .7),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: dark ? .06 : .45),
+                    cardBg,
+                  ],
+                ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: dark ? .16 : .68),
+                  width: .8,
+                ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -475,7 +494,18 @@ Future<void> audioSettings(
                 decoration: BoxDecoration(
                   color: cardBg,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: cardBorder, width: .7),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: dark ? .06 : .45),
+                      cardBg,
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: dark ? .16 : .68),
+                    width: .8,
+                  ),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

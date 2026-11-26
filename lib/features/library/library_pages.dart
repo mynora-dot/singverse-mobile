@@ -377,149 +377,136 @@ class _SongsPageState extends State<SongsPage> {
           ],
         ),
       );
-      final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
       final content = pinnedSearch
           ? AppBackdropCapture(
-              builder: (context, layerBackdrop) => Stack(
-                children: [
-                  Positioned.fill(
-                    child: AppBackdropSource(
-                      backdrop: layerBackdrop,
-                      child: AppEnvironment(
-                        child: ShaderMask(
-                          blendMode: BlendMode.dstIn,
-                          shaderCallback: (bounds) {
-                            final h = bounds.height <= 0 ? 1.0 : bounds.height;
-                            final fadeStart = (10 / h).clamp(0.0, 0.12);
-                            final fadeEnd = (52 / h).clamp(
-                              fadeStart + 0.01,
-                              0.20,
-                            );
-                            return LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              stops: [0, fadeStart, fadeEnd, 1],
-                              colors: const [
-                                Colors.transparent,
-                                Colors.transparent,
-                                Colors.black,
-                                Colors.black,
-                              ],
-                            ).createShader(bounds);
-                          },
-                          child: body,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: AppBackdropScope(
-                      backdrop: layerBackdrop,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              pageInset,
-                              6,
-                              pageInset,
-                              10,
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '点歌',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineLarge
-                                        ?.copyWith(
-                                          fontSize: 30,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -.8,
-                                        ),
+              builder: (context, envBackdrop) => AppBackdropCapture(
+                builder: (context, contentBackdrop) => AppBackdropRouteBinding(
+                  environment: envBackdrop,
+                  content: contentBackdrop,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: AppBackdropSource(
+                          backdrop: contentBackdrop,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Positioned.fill(
+                                child: AppBackdropSource(
+                                  backdrop: envBackdrop,
+                                  child: AppEnvironment(
+                                    child: ShellAmbientGlow(state: state),
                                   ),
                                 ),
-                                widget.headerActions!,
-                              ],
-                            ),
+                              ),
+                              AppBackdropScope(
+                                environment: envBackdrop,
+                                content: contentBackdrop,
+                                child: ShaderMask(
+                                  blendMode: BlendMode.dstIn,
+                                  shaderCallback: (bounds) {
+                                    final h = bounds.height <= 0
+                                        ? 1.0
+                                        : bounds.height;
+                                    final fadeStart = (10 / h).clamp(0.0, 0.12);
+                                    final fadeEnd = (52 / h).clamp(
+                                      fadeStart + 0.01,
+                                      0.20,
+                                    );
+                                    return LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      stops: [0, fadeStart, fadeEnd, 1],
+                                      colors: const [
+                                        Colors.transparent,
+                                        Colors.transparent,
+                                        Colors.black,
+                                        Colors.black,
+                                      ],
+                                    ).createShader(bounds);
+                                  },
+                                  child: body,
+                                ),
+                              ),
+                            ],
                           ),
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              pageInset,
-                              0,
-                              pageInset,
-                              8,
-                            ),
-                            child: searchHeader,
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: AppBackdropScope(
+                          environment: envBackdrop,
+                          content: contentBackdrop,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  pageInset,
+                                  6,
+                                  pageInset,
+                                  10,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '点歌',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineLarge
+                                            ?.copyWith(
+                                              fontSize: 30,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: -.8,
+                                            ),
+                                      ),
+                                    ),
+                                    widget.headerActions!,
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  pageInset,
+                                  0,
+                                  pageInset,
+                                  8,
+                                ),
+                                child: searchHeader,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             )
           : body;
       return widget.embedded
           ? content
-          : AppBackdropCapture(
-              builder: (context, layerBackdrop) => Scaffold(
-                backgroundColor: Colors.transparent,
-                appBar: AppToolbar(
-                  leading: Navigator.canPop(context)
-                      ? AppBackdropScope(
-                          backdrop: layerBackdrop,
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                              left: 12,
-                              top: 2,
-                              bottom: 2,
-                            ),
-                            child: Glass(
-                              state: state,
-                              radius: 24,
-                              variant: GlassVariant.liquid,
-                              child: const BackButton(),
-                            ),
-                          ),
-                        )
-                      : null,
-                  title: Text(widget.title),
-                ),
-                body: AppBackdropSource(
-                  backdrop: layerBackdrop,
-                  child: AppEnvironment(
-                    child: Stack(
-                      children: [
-                        ContentWidth(child: content),
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: 36,
-                          child: IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    scaffoldBg.withValues(alpha: 0),
-                                    scaffoldBg.withValues(alpha: .30),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
+          : AppBackdropPage(
+              glow: ShellAmbientGlow(state: state),
+              appBar: AppToolbar(
+                leading: Navigator.canPop(context)
+                    ? const Padding(
+                        padding: EdgeInsets.only(left: 12, top: 2, bottom: 2),
+                        child: GlassSurface(
+                          radius: 24,
+                          variant: GlassVariant.liquid,
+                          child: BackButton(),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
+                      )
+                    : null,
+                title: Text(widget.title),
+              ),
+              body: SafeArea(
+                bottom: false,
+                child: ContentWidth(child: content),
               ),
             );
     },
@@ -710,42 +697,15 @@ class _SongFiltersState extends State<_SongFilters> {
                           ))
                             () {
                               final isSelected = selected.contains(tag['id']);
-                              return FilterChip(
+                              return _GlassFilterChip(
                                 key: ValueKey('song-filter:${tag['id']}'),
-                                showCheckmark: false,
-                                shape: const StadiumBorder(),
-                                backgroundColor: scheme.onSurface.withValues(
-                                  alpha: dark ? .07 : .05,
-                                ),
-                                selectedColor: AppPalette.brand.withValues(
-                                  alpha: dark ? .24 : .14,
-                                ),
-                                side: BorderSide(
-                                  color: isSelected
-                                      ? AppPalette.brand.withValues(alpha: .72)
-                                      : scheme.onSurface.withValues(
-                                          alpha: dark ? .10 : .08,
-                                        ),
-                                  width: .9,
-                                ),
-                                labelStyle: theme.textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontSize: widget.senior ? 17 : 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: isSelected
-                                          ? (dark
-                                                ? Colors.white
-                                                : AppPalette.brandDeep)
-                                          : scheme.onSurface.withValues(
-                                              alpha: .86,
-                                            ),
-                                    ),
-                                label: Text('${tag['name']} · ${tag['count']}'),
+                                label: '${tag['name']} · ${tag['count']}',
                                 selected: isSelected,
-                                onSelected: (yes) => setState(() {
-                                  yes
-                                      ? selected.add(tag['id'] as String)
-                                      : selected.remove(tag['id']);
+                                senior: widget.senior,
+                                onTap: () => setState(() {
+                                  isSelected
+                                      ? selected.remove(tag['id'])
+                                      : selected.add(tag['id'] as String);
                                 }),
                               );
                             }(),
@@ -758,6 +718,8 @@ class _SongFiltersState extends State<_SongFilters> {
           ),
           Divider(
             height: 1,
+            indent: inset,
+            endIndent: inset,
             color: scheme.onSurface.withValues(alpha: dark ? .08 : .06),
           ),
           SafeArea(
@@ -815,6 +777,95 @@ class _SongFiltersState extends State<_SongFilters> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GlassFilterChip extends StatelessWidget {
+  const _GlassFilterChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.senior,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected, senior;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: AppMotionScope.durationOf(context, AppMotion.press),
+            curve: AppMotion.fluid,
+            constraints: BoxConstraints(minHeight: senior ? 48 : 38),
+            padding: EdgeInsets.symmetric(
+              horizontal: senior ? 18 : 14,
+              vertical: senior ? 10 : 8,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              gradient: selected
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppPalette.brand.withValues(alpha: dark ? .30 : .18),
+                        AppPalette.brand.withValues(alpha: dark ? .16 : .10),
+                      ],
+                    )
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withValues(alpha: dark ? .11 : .72),
+                        Colors.white.withValues(alpha: dark ? .05 : .42),
+                      ],
+                    ),
+              border: Border.all(
+                color: selected
+                    ? AppPalette.brand.withValues(alpha: dark ? .76 : .62)
+                    : Colors.white.withValues(alpha: dark ? .18 : .76),
+                width: selected ? 1.0 : .75,
+              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: AppPalette.brand.withValues(
+                          alpha: dark ? .24 : .12,
+                        ),
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: senior ? 17 : 14,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                height: 1.25,
+                color: selected
+                    ? (dark ? Colors.white : AppPalette.brandDeep)
+                    : scheme.onSurface.withValues(alpha: .90),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1287,226 +1338,198 @@ class _BrowsePageState extends State<BrowsePage> {
     }
     final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
-    return AppEnvironment(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        extendBodyBehindAppBar: true,
-        appBar: AppToolbar(
-          leading: Navigator.canPop(context)
-              ? Padding(
-                  padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
-                  child: Glass(
-                    state: widget.state,
-                    radius: 24,
-                    variant: GlassVariant.liquid,
-                    child: const BackButton(),
-                  ),
-                )
-              : null,
-          title: Text(widget.kind == '共享歌单' ? '家庭歌单' : widget.kind),
-        ),
-        body: Stack(
-          children: [
-            ContentWidth(
-              child: RefreshIndicator(
-                edgeOffset: topInset,
-                onRefresh: load,
-                child: CustomScrollView(
-                  key: PageStorageKey(
-                    'browse:${widget.state.instanceId}:${widget.kind}',
-                  ),
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  slivers: [
-                    SliverToBoxAdapter(child: SizedBox(height: topInset + 6)),
-                    if (!tags)
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          pageInset,
-                          4,
-                          pageInset,
-                          20,
-                        ),
-                        sliver: SliverToBoxAdapter(
-                          child: _SongSearchField(
-                            state: widget.state,
-                            fieldKey: const ValueKey('browse-search'),
-                            controller: search,
-                            focusNode: searchFocus,
-                            hint:
-                                '搜索${widget.kind == '共享歌单' ? '家庭歌单' : widget.kind}',
-                            suffix: search.text.isEmpty
-                                ? const SizedBox.shrink()
-                                : IconButton(
-                                    tooltip: '搜索',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size.square(44),
-                                      fixedSize: const Size.square(44),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                    onPressed: load,
-                                    icon: const Icon(
-                                      Icons.arrow_forward_rounded,
-                                      size: 19,
-                                    ),
-                                  ),
-                            onChanged: (_) => setState(() {}),
-                            onSubmitted: (_) {
-                              load();
-                              searchFocus.unfocus();
-                            },
-                          ),
-                        ),
-                      ),
+    return AppBackdropPage(
+      glow: ShellAmbientGlow(state: widget.state),
+      appBar: AppToolbar(
+        leading: Navigator.canPop(context)
+            ? Padding(
+                padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+                child: Glass(
+                  state: widget.state,
+                  radius: 24,
+                  variant: GlassVariant.liquid,
+                  child: const BackButton(),
+                ),
+              )
+            : null,
+        title: Text(widget.kind == '共享歌单' ? '家庭歌单' : widget.kind),
+      ),
+      body: Stack(
+        children: [
+          ContentWidth(
+            child: RefreshIndicator(
+              edgeOffset: topInset,
+              onRefresh: load,
+              child: CustomScrollView(
+                key: PageStorageKey(
+                  'browse:${widget.state.instanceId}:${widget.kind}',
+                ),
+                physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverToBoxAdapter(child: SizedBox(height: topInset + 6)),
+                  if (!tags)
                     SliverPadding(
-                      padding: EdgeInsets.symmetric(horizontal: pageInset),
-                      sliver: SliverLayoutBuilder(
-                        builder: (context, constraints) {
-                          final columns =
-                              widget.state.senior ||
-                                  constraints.crossAxisExtent < 300 ||
-                                  MediaQuery.textScalerOf(context).scale(15) >
-                                      21
-                              ? 1
-                              : 2;
-                          final display =
-                              <({String? heading, List<Json> items})>[];
-                          for (var index = 0; index < rows.length;) {
-                            final row = rows[index++];
-                            if (row.heading != null) {
-                              display.add((heading: row.heading, items: []));
-                            } else {
-                              final group = [row.item!];
-                              if (columns == 2 &&
-                                  index < rows.length &&
-                                  rows[index].heading == null) {
-                                group.add(rows[index++].item!);
-                              }
-                              display.add((heading: null, items: group));
-                            }
-                          }
-                          return SliverList.builder(
-                            itemCount: display.length,
-                            itemBuilder: (context, index) {
-                              final row = display[index];
-                              if (row.heading != null) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 20,
-                                    bottom: 12,
-                                  ),
-                                  child: SectionTitle(row.heading!),
-                                );
-                              }
-                              if (columns == 1) return tile(row.items.single);
-                              return Padding(
-                                padding: EdgeInsets.only(bottom: tags ? 8 : 20),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(child: gridTile(row.items.first)),
-                                    SizedBox(width: tags ? 8 : 20),
-                                    Expanded(
-                                      child: row.items.length == 2
-                                          ? gridTile(row.items.last)
-                                          : const SizedBox.shrink(),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(pageInset, 0, pageInset, 32),
+                      padding: EdgeInsets.fromLTRB(pageInset, 4, pageInset, 20),
                       sliver: SliverToBoxAdapter(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (error != null)
-                              Notice(
-                                error!,
-                                action: () => load(more: failedMore),
-                              ),
-                            if (loading)
-                              const Padding(
-                                padding: EdgeInsets.all(24),
-                                child: Center(
-                                  child: CircularProgressIndicator(),
+                        child: _SongSearchField(
+                          state: widget.state,
+                          fieldKey: const ValueKey('browse-search'),
+                          controller: search,
+                          focusNode: searchFocus,
+                          hint:
+                              '搜索${widget.kind == '共享歌单' ? '家庭歌单' : widget.kind}',
+                          suffix: search.text.isEmpty
+                              ? const SizedBox.shrink()
+                              : IconButton(
+                                  tooltip: '搜索',
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size.square(44),
+                                    fixedSize: const Size.square(44),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: load,
+                                  icon: const Icon(
+                                    Icons.arrow_forward_rounded,
+                                    size: 19,
+                                  ),
                                 ),
-                              ),
-                            if (!loading && error == null && items.isEmpty)
-                              Notice(
-                                search.text.isNotEmpty
-                                    ? '没有找到匹配内容，试试其他关键词。'
-                                    : tags
-                                    ? '还没有歌曲分类，请在 NAS 管理端整理曲库。'
-                                    : artist
-                                    ? '曲库还没有歌手。'
-                                    : '还没有家庭歌单，请在 NAS 管理端创建。',
-                              ),
-                            if (items.length < total &&
-                                !loading &&
-                                error == null)
-                              TextButton(
-                                onPressed: () => load(more: true),
-                                child: const Text('加载更多'),
-                              ),
-                          ],
+                          onChanged: (_) => setState(() {}),
+                          onSubmitted: (_) {
+                            load();
+                            searchFocus.unfocus();
+                          },
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: pageInset),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns =
+                            widget.state.senior ||
+                                constraints.crossAxisExtent < 300 ||
+                                MediaQuery.textScalerOf(context).scale(15) > 21
+                            ? 1
+                            : 2;
+                        final display =
+                            <({String? heading, List<Json> items})>[];
+                        for (var index = 0; index < rows.length;) {
+                          final row = rows[index++];
+                          if (row.heading != null) {
+                            display.add((heading: row.heading, items: []));
+                          } else {
+                            final group = [row.item!];
+                            if (columns == 2 &&
+                                index < rows.length &&
+                                rows[index].heading == null) {
+                              group.add(rows[index++].item!);
+                            }
+                            display.add((heading: null, items: group));
+                          }
+                        }
+                        return SliverList.builder(
+                          itemCount: display.length,
+                          itemBuilder: (context, index) {
+                            final row = display[index];
+                            if (row.heading != null) {
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 20,
+                                  bottom: 12,
+                                ),
+                                child: SectionTitle(row.heading!),
+                              );
+                            }
+                            if (columns == 1) return tile(row.items.single);
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: tags ? 8 : 20),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: gridTile(row.items.first)),
+                                  SizedBox(width: tags ? 8 : 20),
+                                  Expanded(
+                                    child: row.items.length == 2
+                                        ? gridTile(row.items.last)
+                                        : const SizedBox.shrink(),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      pageInset,
+                      0,
+                      pageInset,
+                      32 + MediaQuery.paddingOf(context).bottom,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (error != null)
+                            Notice(
+                              error!,
+                              action: () => load(more: failedMore),
+                            ),
+                          if (loading)
+                            const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                          if (!loading && error == null && items.isEmpty)
+                            Notice(
+                              search.text.isNotEmpty
+                                  ? '没有找到匹配内容，试试其他关键词。'
+                                  : tags
+                                  ? '还没有歌曲分类，请在 NAS 管理端整理曲库。'
+                                  : artist
+                                  ? '曲库还没有歌手。'
+                                  : '还没有家庭歌单，请在 NAS 管理端创建。',
+                            ),
+                          if (items.length < total && !loading && error == null)
+                            TextButton(
+                              onPressed: () => load(more: true),
+                              child: const Text('加载更多'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: topInset + 16,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0, .60, 1],
-                      colors: [
-                        scaffoldBg.withValues(alpha: .86),
-                        scaffoldBg.withValues(alpha: .42),
-                        scaffoldBg.withValues(alpha: 0),
-                      ],
-                    ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: topInset + 14,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0, .55, 1],
+                    colors: [
+                      scaffoldBg.withValues(alpha: .30),
+                      scaffoldBg.withValues(alpha: .12),
+                      scaffoldBg.withValues(alpha: 0),
+                    ],
                   ),
                 ),
               ),
             ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 36,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        scaffoldBg.withValues(alpha: 0),
-                        scaffoldBg.withValues(alpha: .86),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1529,291 +1552,134 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final scaffoldBg = theme.scaffoldBackgroundColor;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
-    return AppEnvironment(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        extendBodyBehindAppBar: true,
-        appBar: AppToolbar(
-          leading: Navigator.canPop(context)
-              ? Padding(
-                  padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
-                  child: Glass(
-                    state: widget.state,
-                    radius: 24,
-                    variant: GlassVariant.liquid,
-                    child: const BackButton(),
-                  ),
-                )
-              : null,
-          title: const Text('家庭歌单'),
-        ),
-        body: FutureBuilder<dynamic>(
-          future: data,
-          builder: (context, result) {
-            if (result.hasError) {
-              return Padding(
-                padding: EdgeInsets.fromLTRB(20, topInset + 20, 20, 20),
-                child: Notice(
-                  result.error.toString(),
-                  action: () => setState(
-                    () => data = widget.state.get(
-                      '/api/v1/playlists/${widget.id}',
-                    ),
-                  ),
+    return FutureBuilder<dynamic>(
+      future: data,
+      builder: (context, result) {
+        final item = result.hasData ? result.data as Json : null;
+        final coverPath = item?['coverPath'] as String?;
+        final Widget body;
+        if (result.hasError) {
+          body = Padding(
+            padding: EdgeInsets.fromLTRB(20, topInset + 20, 20, 20),
+            child: Notice(
+              result.error.toString(),
+              action: () => setState(
+                () => data = widget.state.get('/api/v1/playlists/${widget.id}'),
+              ),
+            ),
+          );
+        } else if (item == null) {
+          body = const Center(child: CircularProgressIndicator());
+        } else {
+          final songs = (item['songs'] as List).cast<Json>();
+          final coverSize = widget.state.senior ? 148.0 : 180.0;
+          body = ContentWidth(
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (bounds) {
+                final h = bounds.height <= 0 ? 1.0 : bounds.height;
+                final fadeStart = ((topInset - 14) / h).clamp(0.0, 0.25);
+                final fadeEnd = ((topInset + 12) / h).clamp(
+                  fadeStart + 0.01,
+                  0.30,
+                );
+                return LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0, fadeStart, fadeEnd, 1],
+                  colors: const [
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black,
+                    Colors.black,
+                  ],
+                ).createShader(bounds);
+              },
+              child: CustomScrollView(
+                key: PageStorageKey(
+                  'playlist:${widget.state.instanceId}:${widget.id}',
                 ),
-              );
-            }
-            if (!result.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final item = result.data as Json;
-            final songs = (item['songs'] as List).cast<Json>();
-            final coverPath = item['coverPath'] as String?;
-            final coverSize = widget.state.senior ? 148.0 : 180.0;
-            return Stack(
-              children: [
-                if (coverPath != null && coverPath.isNotEmpty)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 500,
-                    child: IgnorePointer(
-                      child: ShaderMask(
-                        blendMode: BlendMode.dstIn,
-                        shaderCallback: (bounds) => const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          stops: [0, .28, .62, .88, 1],
-                          colors: [
-                            Color(0xDD000000),
-                            Color(0xAA000000),
-                            Color(0x38000000),
-                            Colors.transparent,
-                            Colors.transparent,
-                          ],
-                        ).createShader(bounds),
-                        child: Opacity(
-                          opacity: dark ? .46 : .22,
-                          child: AmbientArtwork(
-                            state: widget.state,
-                            song: Song({
-                              'id': widget.id,
-                              'title': item['name'],
-                              'coverPath': coverPath,
-                              'coverVersion': artworkVersion(item),
-                            }),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ContentWidth(
-                  child: ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (bounds) {
-                      final h = bounds.height <= 0 ? 1.0 : bounds.height;
-                      final fadeStart = ((topInset - 14) / h).clamp(0.0, 0.25);
-                      final fadeEnd = ((topInset + 12) / h).clamp(
-                        fadeStart + 0.01,
-                        0.30,
-                      );
-                      return LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: [0, fadeStart, fadeEnd, 1],
-                        colors: const [
-                          Colors.transparent,
-                          Colors.transparent,
-                          Colors.black,
-                          Colors.black,
-                        ],
-                      ).createShader(bounds);
-                    },
-                    child: CustomScrollView(
-                      key: PageStorageKey(
-                        'playlist:${widget.state.instanceId}:${widget.id}',
-                      ),
-                      slivers: [
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(
-                            20,
-                            topInset + 12,
-                            20,
-                            16,
-                          ),
-                          sliver: SliverToBoxAdapter(
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(20, topInset + 12, 20, 16),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Center(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Center(
-                                  child: Column(
-                                    children: [
-                                      DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            22,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white.withValues(
-                                              alpha: dark ? .18 : .70,
-                                            ),
-                                            width: .8,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(
-                                                alpha: dark ? .46 : .16,
-                                              ),
-                                              blurRadius: 28,
-                                              spreadRadius: -4,
-                                              offset: const Offset(0, 14),
-                                            ),
-                                          ],
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            22,
-                                          ),
-                                          child: Artwork(
-                                            state: widget.state,
-                                            path: coverPath,
-                                            label: item['name'] as String,
-                                            revision: artworkVersion(item),
-                                            size: coverSize,
-                                          ),
-                                        ),
+                                DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(22),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: dark ? .18 : .70,
                                       ),
-                                      const SizedBox(height: 18),
-                                      Text(
-                                        item['name'] as String,
-                                        textAlign: TextAlign.center,
-                                        style: theme.textTheme.headlineSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: -.4,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${item['count'] ?? songs.length} 首 · 家庭共享',
-                                        textAlign: TextAlign.center,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: scheme.onSurfaceVariant,
-                                              fontSize: widget.state.senior
-                                                  ? 16
-                                                  : 13,
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                            ),
-                                      ),
-                                      if ((item['description'] as String? ?? '')
-                                          .isNotEmpty) ...[
-                                        const SizedBox(height: 10),
-                                        ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 320,
-                                          ),
-                                          child: Text(
-                                            item['description'] as String,
-                                            textAlign: TextAlign.center,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  color: scheme.onSurfaceVariant
-                                                      .withValues(alpha: .85),
-                                                  height: 1.45,
-                                                ),
-                                          ),
+                                      width: .8,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: dark ? .46 : .16,
                                         ),
-                                      ],
+                                        blurRadius: 28,
+                                        spreadRadius: -4,
+                                        offset: const Offset(0, 14),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(22),
+                                    child: Artwork(
+                                      state: widget.state,
+                                      path: coverPath,
+                                      label: item['name'] as String,
+                                      revision: artworkVersion(item),
+                                      size: coverSize,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                Text(
+                                  item['name'] as String,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -.4,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${item['count'] ?? songs.length} 首 · 家庭共享',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontSize: widget.state.senior ? 16 : 13,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
                                     ],
                                   ),
                                 ),
-                                if (songs.isNotEmpty) ...[
-                                  const SizedBox(height: 18),
-                                  Center(
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                        gradient: const LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            AppPalette.brand,
-                                            AppPalette.brandDeep,
-                                          ],
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppPalette.brand.withValues(
-                                              alpha: .34,
-                                            ),
-                                            blurRadius: 20,
-                                            spreadRadius: -4,
-                                            offset: const Offset(0, 8),
-                                          ),
-                                        ],
-                                      ),
-                                      child: FilledButton.icon(
-                                        style: FilledButton.styleFrom(
-                                          minimumSize: const Size(168, 46),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 26,
-                                          ),
-                                          backgroundColor: Colors.transparent,
-                                          foregroundColor: Colors.white,
-                                          shape: const StadiumBorder(),
-                                          textStyle: theme.textTheme.labelLarge
-                                              ?.copyWith(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                        onPressed: () => openSinging(
-                                          context,
-                                          widget.state,
-                                          Song(songs.first),
-                                        ),
-                                        icon: const Icon(
-                                          Icons.play_arrow_rounded,
-                                          size: 20,
-                                        ),
-                                        label: const Text('开始练唱'),
-                                      ),
+                                if ((item['description'] as String? ?? '')
+                                    .isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 320,
                                     ),
-                                  ),
-                                ],
-                                if ((item['missingCount'] as num? ?? 0) >
-                                    0) ...[
-                                  const SizedBox(height: 14),
-                                  Notice(
-                                    '${item['missingCount']} 首歌曲暂不可用，请在 NAS 管理端整理。',
-                                  ),
-                                ],
-                                if (songs.isEmpty) ...[
-                                  const SizedBox(height: 14),
-                                  const Notice('歌单还没有可播放的歌曲。'),
-                                ],
-                                if (songs.isNotEmpty) ...[
-                                  const SizedBox(height: 22),
-                                  SectionTitle(
-                                    '全部曲目',
-                                    trailing: Text(
-                                      '${songs.length} 首',
+                                    child: Text(
+                                      item['description'] as String,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
-                                            color: scheme.onSurfaceVariant,
-                                            fontFeatures: const [
-                                              FontFeature.tabularFigures(),
-                                            ],
+                                            color: scheme.onSurfaceVariant
+                                                .withValues(alpha: .85),
+                                            height: 1.45,
                                           ),
                                     ),
                                   ),
@@ -1821,46 +1687,165 @@ class _PlaylistPageState extends State<PlaylistPage> {
                               ],
                             ),
                           ),
-                        ),
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 44),
-                          sliver: SliverList.builder(
-                            itemCount: songs.length,
-                            itemBuilder: (context, index) => SongRow(
-                              state: widget.state,
-                              song: Song(songs[index]),
+                          if (songs.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Center(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(999),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      AppPalette.brand,
+                                      AppPalette.brandDeep,
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppPalette.brand.withValues(
+                                        alpha: .34,
+                                      ),
+                                      blurRadius: 20,
+                                      spreadRadius: -4,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: FilledButton.icon(
+                                  style: FilledButton.styleFrom(
+                                    minimumSize: const Size(168, 46),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 26,
+                                    ),
+                                    backgroundColor: Colors.transparent,
+                                    foregroundColor: Colors.white,
+                                    shape: const StadiumBorder(),
+                                    textStyle: theme.textTheme.labelLarge
+                                        ?.copyWith(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                  onPressed: () => openSinging(
+                                    context,
+                                    widget.state,
+                                    Song(songs.first),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    size: 20,
+                                  ),
+                                  label: const Text('开始练唱'),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
+                          ],
+                          if ((item['missingCount'] as num? ?? 0) > 0) ...[
+                            const SizedBox(height: 14),
+                            Notice(
+                              '${item['missingCount']} 首歌曲暂不可用，请在 NAS 管理端整理。',
+                            ),
+                          ],
+                          if (songs.isEmpty) ...[
+                            const SizedBox(height: 14),
+                            const Notice('歌单还没有可播放的歌曲。'),
+                          ],
+                          if (songs.isNotEmpty) ...[
+                            const SizedBox(height: 22),
+                            SectionTitle(
+                              '全部曲目',
+                              trailing: Text(
+                                '${songs.length} 首',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                Positioned(
-                  bottom: 0,
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      0,
+                      20,
+                      36 + MediaQuery.paddingOf(context).bottom,
+                    ),
+                    sliver: SliverList.builder(
+                      itemCount: songs.length,
+                      itemBuilder: (context, index) => SongRow(
+                        state: widget.state,
+                        song: Song(songs[index]),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return AppBackdropPage(
+          glow: ShellAmbientGlow(state: widget.state),
+          ambient: coverPath != null && coverPath.isNotEmpty && item != null
+              ? Positioned(
+                  top: 0,
                   left: 0,
                   right: 0,
-                  height: 36,
+                  height: 500,
                   child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            scaffoldBg.withValues(alpha: 0),
-                            scaffoldBg.withValues(alpha: .86),
-                          ],
+                    child: ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (bounds) => const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [0, .28, .62, .88, 1],
+                        colors: [
+                          Color(0xDD000000),
+                          Color(0xAA000000),
+                          Color(0x38000000),
+                          Colors.transparent,
+                          Colors.transparent,
+                        ],
+                      ).createShader(bounds),
+                      child: Opacity(
+                        opacity: dark ? .46 : .22,
+                        child: AmbientArtwork(
+                          state: widget.state,
+                          song: Song({
+                            'id': widget.id,
+                            'title': item['name'],
+                            'coverPath': coverPath,
+                            'coverVersion': artworkVersion(item),
+                          }),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                )
+              : null,
+          appBar: AppToolbar(
+            leading: Navigator.canPop(context)
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+                    child: Glass(
+                      state: widget.state,
+                      radius: 24,
+                      variant: GlassVariant.liquid,
+                      child: const BackButton(),
+                    ),
+                  )
+                : null,
+            title: const Text('家庭歌单'),
+          ),
+          body: body,
+        );
+      },
     );
   }
 }

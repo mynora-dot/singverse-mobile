@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../app/design.dart';
 import '../../core/app_state.dart';
 import '../../core/login_store.dart';
+import 'widgets.dart';
 
 class PasswordResetPage extends StatefulWidget {
   const PasswordResetPage({
@@ -99,12 +100,19 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !busy,
-    child: Scaffold(
+    child: AppBackdropPage(
+      glow: ShellAmbientGlow(state: widget.state),
       appBar: AppToolbar(title: const Text('忘记密码')),
       body: SafeArea(
+        bottom: false,
         child: ContentWidth(
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              32 + MediaQuery.paddingOf(context).bottom,
+            ),
             children: [
               Text(
                 '重新设置 NAS 密码',

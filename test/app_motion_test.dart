@@ -764,8 +764,15 @@ void main() {
       expect(GlassMaterialSpec.floating.refraction, isTrue);
       expect(GlassMaterialSpec.player.refraction, isTrue);
       expect(GlassMaterialSpec.search.refraction, isTrue);
-      expect(GlassMaterialSpec.shortcut.refraction, isFalse);
-      expect(GlassMaterialSpec.standard.refraction, isFalse);
+      expect(GlassMaterialSpec.shortcut.refraction, isTrue);
+      expect(GlassMaterialSpec.standard.refraction, isTrue);
+      expect(GlassMaterialSpec.field.refraction, isTrue);
+      expect(GlassMaterialSpec.sheet.refraction, isTrue);
+      expect(GlassMaterialSpec.mediaOverlay.refraction, isFalse);
+      expect(GlassMaterialSpec.sheetNative.refraction, isFalse);
+      expect(GlassMaterialSpec.standard.sampleContent, isFalse);
+      expect(GlassMaterialSpec.floating.sampleContent, isTrue);
+      expect(GlassMaterialSpec.sheet.sampleContent, isTrue);
       expect(
         AppSurfaces.forBrightness(Brightness.dark).glass,
         const Color(0xFF1B1B22),
@@ -870,6 +877,53 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(DrawBackdrop), findsNothing);
       expect(find.byType(BackdropFilter), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'dual-layer AppBackdropPage mounts DrawBackdrop on cards and showAppSheet',
+    (tester) async {
+      await tester.runAsync(FluidGlass.ensureInitialized);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: singVerseTheme(Brightness.dark),
+          home: AppBackdropPage(
+            appBar: const AppToolbar(title: Text('测试页')),
+            body: Builder(
+              builder: (context) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const GlassSurface(
+                      material: GlassMaterialSpec.standard,
+                      child: SizedBox(width: 120, height: 60),
+                    ),
+                    TextButton(
+                      onPressed: () => showAppSheet<void>(
+                        context: context,
+                        builder: (context) => const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text('液态玻璃弹层'),
+                        ),
+                      ),
+                      child: const Text('打开弹层'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The in-scroll standard card samples environment without recursion.
+      expect(find.byType(DrawBackdrop), findsOneWidget);
+      await tester.tap(find.text('打开弹层'));
+      await tester.pumpAndSettle();
+      expect(find.text('液态玻璃弹层'), findsOneWidget);
+      // Both the underlying standard card and the modal sheet mount DrawBackdrop.
+      expect(find.byType(DrawBackdrop), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     },
   );

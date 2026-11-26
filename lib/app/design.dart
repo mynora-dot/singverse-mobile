@@ -337,36 +337,73 @@ class SliverBottomSpace extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SliverToBoxAdapter(
     child: SizedBox(
-      height:
-          AppSpace.large +
-          (embedded ? MediaQuery.paddingOf(context).bottom : 0),
+      height: AppSpace.large + MediaQuery.paddingOf(context).bottom,
     ),
   );
 }
 
 /// Stable toolbar material, including camera and WebView containers.
-class AppToolbar extends AppBar {
-  AppToolbar({
+class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
+  const AppToolbar({
     super.key,
-    super.title,
-    super.leading,
-    super.actions,
-    super.bottom,
-    super.automaticallyImplyLeading,
-    super.foregroundColor,
-    Color? backgroundColor,
-  }) : super(
-         backgroundColor: backgroundColor ?? Colors.transparent,
-         systemOverlayStyle: backgroundColor == null
-             ? null
-             : ThemeData.estimateBrightnessForColor(backgroundColor) ==
-                   Brightness.dark
-             ? SystemUiOverlayStyle.light
-             : SystemUiOverlayStyle.dark,
-         flexibleSpace: backgroundColor == null
-             ? const _ToolbarBackground()
-             : ColoredBox(color: backgroundColor),
-       );
+    this.title,
+    this.leading,
+    this.actions,
+    this.bottom,
+    this.automaticallyImplyLeading = true,
+    this.foregroundColor,
+    this.backgroundColor,
+  });
+
+  final Widget? title, leading;
+  final List<Widget>? actions;
+  final PreferredSizeWidget? bottom;
+  final bool automaticallyImplyLeading;
+  final Color? foregroundColor, backgroundColor;
+
+  @override
+  Size get preferredSize =>
+      Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
+
+  @override
+  Widget build(BuildContext context) {
+    final routeName = ModalRoute.of(context)?.settings.name;
+    final nativeRoute = const {'tv', 'scan', 'admin'}.contains(routeName);
+    final canPop = ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
+    final effectiveLeading =
+        leading ??
+        (automaticallyImplyLeading &&
+                canPop &&
+                backgroundColor == null &&
+                !nativeRoute
+            ? const Padding(
+                padding: EdgeInsets.only(left: 12, top: 2, bottom: 2),
+                child: GlassSurface(
+                  radius: 24,
+                  variant: GlassVariant.liquid,
+                  child: BackButton(),
+                ),
+              )
+            : null);
+    return AppBar(
+      title: title,
+      leading: effectiveLeading,
+      actions: actions,
+      bottom: bottom,
+      automaticallyImplyLeading: automaticallyImplyLeading,
+      foregroundColor: foregroundColor,
+      backgroundColor: backgroundColor ?? Colors.transparent,
+      systemOverlayStyle: backgroundColor == null
+          ? null
+          : ThemeData.estimateBrightnessForColor(backgroundColor!) ==
+                Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+      flexibleSpace: backgroundColor == null
+          ? const _ToolbarBackground()
+          : ColoredBox(color: backgroundColor!),
+    );
+  }
 }
 
 class _ToolbarBackground extends StatelessWidget {
@@ -375,18 +412,102 @@ class _ToolbarBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).scaffoldBackgroundColor;
+    final solid = AppMotionScope.solidOf(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [color, color.withValues(alpha: 0)],
-          stops: const [.82, 1],
+          colors: solid
+              ? [color, color.withValues(alpha: 0)]
+              : [color.withValues(alpha: .28), color.withValues(alpha: 0)],
+          stops: solid ? const [.82, 1] : const [.35, 1],
         ),
       ),
       child: const SizedBox.expand(),
     );
   }
+}
+
+/// Shared two-layer Liquid Glass scaffold wrapper (`envBackdrop` for in-scroll
+/// cards/inputs and `contentBackdrop` for floating toolbars, MiniPlayer, and
+/// modal sheets) so pages never suffer from BackdropLayer self-recursion.
+class AppBackdropPage extends StatelessWidget {
+  const AppBackdropPage({
+    super.key,
+    required this.body,
+    this.appBar,
+    this.glow,
+    this.ambient,
+    this.bottomNavigationBar,
+    this.extendBody = false,
+    this.extendBodyBehindAppBar = true,
+    this.solid = false,
+  });
+
+  final PreferredSizeWidget? appBar;
+  final Widget body;
+  final Widget? glow, ambient, bottomNavigationBar;
+  final bool extendBody, extendBodyBehindAppBar, solid;
+
+  @override
+  Widget build(BuildContext context) => AppBackdropCapture(
+    solid: solid,
+    builder: (context, envBackdrop) => AppBackdropCapture(
+      solid: solid,
+      builder: (context, contentBackdrop) => AppBackdropRouteBinding(
+        environment: envBackdrop,
+        content: contentBackdrop,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBody: extendBody,
+          extendBodyBehindAppBar: extendBodyBehindAppBar,
+          appBar: appBar == null
+              ? null
+              : PreferredSize(
+                  preferredSize: appBar!.preferredSize,
+                  child: AppBackdropScope(
+                    environment: envBackdrop,
+                    content: contentBackdrop,
+                    child: appBar!,
+                  ),
+                ),
+          body: AppBackdropSource(
+            backdrop: contentBackdrop,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: AppBackdropSource(
+                    backdrop: envBackdrop,
+                    child: AppEnvironment(
+                      solid: solid,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [?glow, ?ambient],
+                      ),
+                    ),
+                  ),
+                ),
+                AppBackdropScope(
+                  environment: envBackdrop,
+                  content: contentBackdrop,
+                  child: body,
+                ),
+              ],
+            ),
+          ),
+          bottomNavigationBar: bottomNavigationBar == null
+              ? null
+              : AppBackdropScope(
+                  environment: envBackdrop,
+                  content: contentBackdrop,
+                  child: bottomNavigationBar!,
+                ),
+        ),
+      ),
+    ),
+  );
 }
 
 class AppSegments<T> extends StatelessWidget {
@@ -506,49 +627,28 @@ class AppSegments<T> extends StatelessWidget {
                 child: FractionallySizedBox(
                   widthFactor: 1 / values.length,
                   heightFactor: 1,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: accent || solid || !(glass || liquid)
-                          ? thumbColor
-                          : null,
-                      gradient: !accent && (glass || liquid) && !solid
-                          ? (dark
-                                ? LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.white.withValues(alpha: .16),
-                                      Colors.white.withValues(alpha: .12),
-                                    ],
-                                  )
-                                : LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Colors.white.withValues(alpha: .88),
-                                      Colors.white.withValues(alpha: .74),
-                                    ],
-                                  ))
-                          : null,
-                      borderRadius: pillRadius,
-                      border: !solid && !dark && (glass || liquid) && !accent
-                          ? Border.all(
-                              color: Colors.white.withValues(alpha: .92),
-                              width: .75,
-                            )
-                          : null,
-                      boxShadow: [
-                        if (!solid)
-                          BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: dark ? .18 : .08,
-                            ),
-                            blurRadius: compact ? 5 : 8,
-                            offset: Offset(0, compact ? 1.5 : 2),
+                  child: accent || !(glass || liquid)
+                      ? DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: thumbColor,
+                            borderRadius: pillRadius,
+                            boxShadow: [
+                              if (!solid)
+                                BoxShadow(
+                                  color: Colors.black.withValues(
+                                    alpha: dark ? .18 : .10,
+                                  ),
+                                  blurRadius: compact ? 5 : 10,
+                                  offset: Offset(0, compact ? 1.5 : 2.5),
+                                ),
+                            ],
                           ),
-                      ],
-                    ),
-                  ),
+                        )
+                      : LiquidDropletBox(
+                          radius: 999,
+                          solid: solid,
+                          compact: compact,
+                        ),
                 ),
               ),
             ),
@@ -678,14 +778,27 @@ class SheetHeader extends StatelessWidget {
               height: 34,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: theme.colorScheme.onSurface.withValues(
-                  alpha: dark ? .11 : .07,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.onSurface.withValues(
+                      alpha: dark ? .18 : .09,
+                    ),
+                    theme.colorScheme.onSurface.withValues(
+                      alpha: dark ? .08 : .04,
+                    ),
+                  ],
+                ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: dark ? .20 : .65),
+                  width: .7,
                 ),
               ),
               child: Icon(
                 Icons.close_rounded,
                 size: 19,
-                color: theme.colorScheme.onSurface.withValues(alpha: .82),
+                color: theme.colorScheme.onSurface.withValues(alpha: .88),
               ),
             ),
           ),
@@ -891,13 +1004,19 @@ Future<T?> showAppSheet<T>({
   bool isScrollControlled = false,
   bool useSafeArea = false,
 }) {
-  // Native video, camera and WebView layers cannot be sampled reliably.
-  final avoidBackdrop = const {
-    'player',
-    'tv',
-    'scan',
-    'admin',
-  }.contains(ModalRoute.of(context)?.settings.name);
+  // Native camera and WebView layers cannot be sampled reliably. On the
+  // singing stage ('player'), only sample its environment backdrop (never any
+  // AndroidView video layer).
+  final routeName = ModalRoute.of(context)?.settings.name;
+  final nativeRoute = const {'tv', 'scan', 'admin'}.contains(routeName);
+  final playerRoute = routeName == 'player';
+  final resolved = nativeRoute
+      ? (environment: null, content: null)
+      : AppBackdropScope.resolveForSheet(context);
+  final sheetBackdrop = playerRoute
+      ? resolved.environment
+      : (resolved.content ?? resolved.environment);
+  final avoidBackdrop = nativeRoute || (playerRoute && sheetBackdrop == null);
   final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
   final controller = AnimationController(
     vsync: Navigator.of(context),
@@ -918,16 +1037,15 @@ Future<T?> showAppSheet<T>({
     ),
     modalBarrierColor: avoidBackdrop
         ? Colors.black.withValues(alpha: dark ? .64 : .36)
-        : Theme.of(context).bottomSheetTheme.modalBarrierColor,
+        : Colors.black.withValues(alpha: dark ? .34 : .18),
     isScrollControlled: isScrollControlled,
     useSafeArea: useSafeArea,
     showDragHandle: false,
     backgroundColor: Colors.transparent,
     transitionAnimationController: controller,
     sheetAnimationStyle: AppMotion.modalStyle(context),
-    builder: (context) => _SheetMotionGate(
-      controller: controller,
-      child: SafeArea(
+    builder: (context) {
+      final sheet = SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
@@ -968,8 +1086,22 @@ Future<T?> showAppSheet<T>({
             ),
           ),
         ),
-      ),
-    ),
+      );
+      return _SheetMotionGate(
+        controller: controller,
+        child: avoidBackdrop
+            ? sheet
+            : AppBackdropRouteBinding(
+                environment: resolved.environment,
+                content: sheetBackdrop,
+                child: AppBackdropScope(
+                  environment: resolved.environment,
+                  content: sheetBackdrop,
+                  child: sheet,
+                ),
+              ),
+      );
+    },
   );
   // A pop result arrives before the reverse animation has left the overlay.
   // Keep its controller alive until the route itself has finished disposal.

@@ -61,23 +61,95 @@ class NasEnvironment extends AppEnvironment {
   });
 }
 
-/// Provides the captured [fg.LayerBackdrop] to floating glass overlays above
-/// a [AppBackdropSource] without ever placing the consumer inside the source.
+typedef BackdropPair = ({
+  fg.LayerBackdrop? environment,
+  fg.LayerBackdrop? content,
+});
+
+/// Provides the captured [fg.LayerBackdrop] layers (`environment` for in-scroll
+/// cards/fields and `content` for floating chrome/sheets) to descendants without
+/// ever placing a consumer inside the layer it samples.
 class AppBackdropScope extends InheritedWidget {
   const AppBackdropScope({
     super.key,
-    required this.backdrop,
+    fg.LayerBackdrop? backdrop,
+    fg.LayerBackdrop? environment,
+    fg.LayerBackdrop? content,
     required super.child,
-  });
+  }) : environment = environment ?? backdrop,
+       content = content ?? backdrop;
 
-  final fg.LayerBackdrop? backdrop;
+  final fg.LayerBackdrop? environment;
+  final fg.LayerBackdrop? content;
 
-  static fg.LayerBackdrop? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AppBackdropScope>()?.backdrop;
+  static final Expando<BackdropPair> _routeBackdrops = Expando<BackdropPair>(
+    'AppBackdropScope.routeBackdrops',
+  );
+
+  static fg.LayerBackdrop? maybeOf(
+    BuildContext context, {
+    bool sampleContent = true,
+  }) {
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<AppBackdropScope>();
+    if (scope == null) return null;
+    return sampleContent
+        ? (scope.content ?? scope.environment)
+        : scope.environment;
+  }
+
+  static void bindRoute(
+    BuildContext context, {
+    fg.LayerBackdrop? environment,
+    fg.LayerBackdrop? content,
+  }) {
+    final route = ModalRoute.of(context);
+    if (route == null) return;
+    _routeBackdrops[route] = (environment: environment, content: content);
+  }
+
+  static BackdropPair resolveForSheet(BuildContext context) {
+    final scope = context.getInheritedWidgetOfExactType<AppBackdropScope>();
+    if (scope != null && (scope.environment != null || scope.content != null)) {
+      return (environment: scope.environment, content: scope.content);
+    }
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      final bound = _routeBackdrops[route];
+      if (bound != null) return bound;
+    }
+    return (environment: null, content: null);
+  }
 
   @override
   bool updateShouldNotify(AppBackdropScope oldWidget) =>
-      backdrop != oldWidget.backdrop;
+      environment != oldWidget.environment || content != oldWidget.content;
+}
+
+/// Binds the nearest [ModalRoute] to [environment] and [content] backdrops so
+/// `showAppSheet(context: ...)` called from `State.context` can still sample
+/// the underlying route cleanly without self-recursion.
+class AppBackdropRouteBinding extends StatelessWidget {
+  const AppBackdropRouteBinding({
+    super.key,
+    this.environment,
+    this.content,
+    required this.child,
+  });
+
+  final fg.LayerBackdrop? environment;
+  final fg.LayerBackdrop? content;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    AppBackdropScope.bindRoute(
+      context,
+      environment: environment,
+      content: content,
+    );
+    return child;
+  }
 }
 
 /// Owns a [fg.LayerBackdrop] lifecycle and exposes it to [builder].
@@ -125,9 +197,20 @@ class AppBackdropSource extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => backdrop == null
-      ? child
-      : fg.BackdropLayer(backdrop: backdrop!, child: child);
+  Widget build(BuildContext context) {
+    final source = backdrop;
+    if (source == null) return child;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollUpdateNotification ||
+            notification is OverscrollNotification) {
+          source.invalidateSource();
+        }
+        return false;
+      },
+      child: fg.BackdropLayer(backdrop: source, child: child),
+    );
+  }
 }
 
 class _AppEnvironmentScope extends InheritedWidget {
@@ -160,18 +243,20 @@ class _EnvironmentPainter extends CustomPainter {
       canvas.restore();
       return;
     }
-    final rose = dark ? const Color(0xFFD94862) : const Color(0xFFFA2D55);
-    final sky = dark ? const Color(0xFF4A6FA5) : const Color(0xFF5CA4FF);
-    final warm = dark ? const Color(0xFFB87D56) : const Color(0xFFFFA880);
+    final topWarm = dark ? const Color(0xFFE05268) : const Color(0xFFFF5E7E);
+    final topCool = dark ? const Color(0xFF4378DB) : const Color(0xFF569BFF);
+    final bottomWarm = dark ? const Color(0xFFE06D44) : const Color(0xFFFF8E66);
+    final bottomCool = dark ? const Color(0xFF3E6EC9) : const Color(0xFF6AA6FF);
+    final midAccent = dark ? const Color(0xFF7B4AC9) : const Color(0xFFB5CCFF);
     canvas.drawRect(
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(-.72, -.98),
-          radius: 1.30,
+          center: const Alignment(-.74, -.94),
+          radius: 1.25,
           colors: [
-            rose.withValues(alpha: dark ? .06 : .12),
-            rose.withValues(alpha: 0),
+            topWarm.withValues(alpha: dark ? .15 : .18),
+            topWarm.withValues(alpha: 0),
           ],
         ).createShader(rect),
     );
@@ -179,11 +264,11 @@ class _EnvironmentPainter extends CustomPainter {
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(.86, -.80),
-          radius: 1.22,
+          center: const Alignment(.82, -.82),
+          radius: 1.20,
           colors: [
-            sky.withValues(alpha: dark ? .05 : .14),
-            sky.withValues(alpha: 0),
+            topCool.withValues(alpha: dark ? .13 : .17),
+            topCool.withValues(alpha: 0),
           ],
         ).createShader(rect),
     );
@@ -191,11 +276,35 @@ class _EnvironmentPainter extends CustomPainter {
       rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(0, 1.05),
-          radius: 1.15,
+          center: const Alignment(0.12, -0.05),
+          radius: 1.05,
           colors: [
-            warm.withValues(alpha: dark ? .045 : .11),
-            warm.withValues(alpha: 0),
+            midAccent.withValues(alpha: dark ? .07 : .08),
+            midAccent.withValues(alpha: 0),
+          ],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-.62, .96),
+          radius: 1.05,
+          colors: [
+            bottomWarm.withValues(alpha: dark ? .16 : .19),
+            bottomWarm.withValues(alpha: 0),
+          ],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(.68, .98),
+          radius: 1.05,
+          colors: [
+            bottomCool.withValues(alpha: dark ? .14 : .18),
+            bottomCool.withValues(alpha: 0),
           ],
         ).createShader(rect),
     );
@@ -260,7 +369,10 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
         widget.enabled &&
         AppMotionScope.levelOf(context) == AppMotionLevel.full;
     final solid = widget.solid || AppMotionScope.solidOf(context);
-    final scopeBackdrop = AppBackdropScope.maybeOf(context);
+    final scopeBackdrop = AppBackdropScope.maybeOf(
+      context,
+      sampleContent: widget.material.sampleContent,
+    );
     final useFluidLens =
         !solid && widget.material.refraction && scopeBackdrop != null;
     final radius = BorderRadius.circular(widget.radius);
@@ -322,41 +434,83 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                     );
                 return fg.DrawBackdrop(
                   backdrop: scopeBackdrop,
+                  isolateSurface: false,
                   shape: () => shape,
                   effects: (scope) {
                     scope.vibrancy();
                     if (widget.material.blur > 0) {
                       scope.blur(widget.material.blur);
                     }
-                    final height = math.min(
-                      14.0,
-                      math.max(8.0, scope.size.shortestSide * .24),
-                    );
+                    final maxSide = scope.size.shortestSide;
+                    final rawHeight =
+                        widget.material.lensHeight ??
+                        math.min(20.0, math.max(10.0, maxSide * .34));
+                    final height = math.min(rawHeight, maxSide * .42);
+                    final amount =
+                        widget.material.lensAmount ?? (height * 1.85);
                     scope.lens(
                       height,
-                      height * 1.85,
+                      amount,
+                      depthEffect: true,
                       chromaticAberration: true,
                     );
                   },
                   highlight: () => highlightAlpha <= 0
                       ? null
                       : fg.Highlight(
-                          width: .65,
+                          width: 1.0,
+                          blurRadius: .45,
                           alpha: highlightAlpha,
-                          style: fg.HighlightStyle.standard,
+                          style: dark
+                              ? const fg.DefaultHighlightStyle(
+                                  color: Color(0xCCFFFFFF),
+                                  angle: 45,
+                                  falloff: 1.0,
+                                )
+                              : const fg.AmbientHighlightStyle(intensity: .28),
                         ),
                   shadow: () => widget.material.shadow <= 0
                       ? null
                       : fg.GlassShadow(
-                          radius: 24,
-                          alpha: (dark ? .55 : .28) * widget.material.shadow,
+                          radius: 22,
+                          offset: const Offset(0, 6),
+                          color: dark
+                              ? const Color(0x66000000)
+                              : const Color(0x22000000),
+                          alpha: widget.material.shadow,
                         ),
-                  innerShadow: null,
+                  innerShadow: () => widget.material.highlight <= 0
+                      ? null
+                      : fg.GlassInnerShadow(
+                          radius: 5,
+                          offset: Offset(0, dark ? 2.0 : -2.0),
+                          color: dark
+                              ? const Color(0x22FFFFFF)
+                              : const Color(0x14000000),
+                          alpha: widget.material.highlight,
+                        ),
                   onDrawSurface: (canvas, size) {
                     final rect = Offset.zero & size;
                     canvas.drawRect(
                       rect,
                       Paint()..color = widget.base.withValues(alpha: tintAlpha),
+                    );
+                    canvas.drawRect(
+                      rect,
+                      Paint()
+                        ..shader = LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0, .42],
+                          colors: [
+                            Colors.white.withValues(
+                              alpha:
+                                  (dark ? .07 : .34) *
+                                  widget.material.highlight,
+                            ),
+                            Colors.white.withValues(alpha: 0),
+                          ],
+                        ).createShader(rect),
                     );
                     if (focus > 0) {
                       shape
@@ -595,4 +749,98 @@ class _CleanRimPainter extends CustomPainter {
       touch != old.touch ||
       highlight != old.highlight ||
       light != old.light;
+}
+
+/// Luminous convex droplet surface for active tabs, segment thumbs, and toggle
+/// selections, giving dark and light glass selectors a crisp 45-degree specular
+/// Fresnel edge and subtle drop shadow.
+class LiquidDropletBox extends StatelessWidget {
+  const LiquidDropletBox({
+    super.key,
+    this.radius = 999,
+    this.solid = false,
+    this.accent = false,
+    this.compact = false,
+    this.child,
+  });
+
+  final double radius;
+  final bool solid, accent, compact;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final borderRadius = BorderRadius.circular(radius);
+    if (solid) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: accent
+              ? AppPalette.brand.withValues(alpha: dark ? .24 : .14)
+              : scheme.primaryContainer,
+          borderRadius: borderRadius,
+          border: accent
+              ? Border.all(
+                  color: AppPalette.brand.withValues(alpha: .62),
+                  width: 1,
+                )
+              : null,
+        ),
+        child: child,
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        gradient: accent
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppPalette.brand.withValues(alpha: dark ? .26 : .15),
+                  AppPalette.brand.withValues(alpha: dark ? .14 : .08),
+                ],
+              )
+            : dark
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0x3DFFFFFF),
+                  Color(0x26FFFFFF),
+                  Color(0x1CFFFFFF),
+                ],
+              )
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFAFFFFFF),
+                  Color(0xEBFFFFFF),
+                  Color(0xE0F4F6FC),
+                ],
+              ),
+        border: Border.all(
+          color: accent
+              ? AppPalette.brand.withValues(alpha: dark ? .68 : .52)
+              : dark
+              ? Colors.white.withValues(alpha: .26)
+              : Colors.black.withValues(alpha: .05),
+          width: accent ? 1.0 : .75,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accent
+                ? AppPalette.brand.withValues(alpha: dark ? .24 : .14)
+                : Colors.black.withValues(alpha: dark ? .26 : .10),
+            blurRadius: compact ? 6 : 12,
+            offset: Offset(0, compact ? 1.5 : 3),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
 }
