@@ -1935,6 +1935,8 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  static const _stageGlassTint = Color(0xFF171821);
+
   Widget stageIcon({
     required String tooltip,
     required IconData icon,
@@ -1943,11 +1945,14 @@ class _PlayerPageState extends State<PlayerPage> {
     Color? tint,
   }) => Glass(
     state: widget.state,
-    radius: 24,
+    radius: 999,
     material: GlassMaterialSpec.stageControl,
-    tint: tint ?? Colors.white,
+    tint: tint ?? _stageGlassTint,
     child: IconButton(
       tooltip: tooltip,
+      style: IconButton.styleFrom(
+        minimumSize: Size.square(widget.state.senior ? 56 : 48),
+      ),
       onPressed: onPressed,
       color: color ?? _theme.colorScheme.onSurface,
       icon: AnimatedSwitcher(
@@ -2008,11 +2013,11 @@ class _PlayerPageState extends State<PlayerPage> {
                   message: '歌曲信息',
                   child: Glass(
                     state: widget.state,
-                    radius: 26,
+                    radius: 999,
                     material: GlassMaterialSpec.stageControl,
-                    tint: Colors.white,
+                    tint: _stageGlassTint,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(26),
+                      borderRadius: BorderRadius.circular(999),
                       onTap: () => panel(
                         () => showSong(
                           context,
@@ -2031,7 +2036,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                 path: song.cover,
                                 label: song.title,
                                 revision: song.coverVersion,
-                                size: 36,
+                                size: 34,
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -2059,7 +2064,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                     overflow: TextOverflow.ellipsis,
                                     style: _theme.textTheme.bodySmall?.copyWith(
                                       color: Colors.white.withValues(
-                                        alpha: .68,
+                                        alpha: .60,
                                       ),
                                       fontSize: 11.5,
                                       height: 1.2,
@@ -2072,7 +2077,7 @@ class _PlayerPageState extends State<PlayerPage> {
                             Icon(
                               Icons.chevron_right_rounded,
                               size: 18,
-                              color: Colors.white.withValues(alpha: .42),
+                              color: Colors.white.withValues(alpha: .36),
                             ),
                           ],
                         ),
@@ -2090,8 +2095,9 @@ class _PlayerPageState extends State<PlayerPage> {
               icon: favorite
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
-              color: favorite ? AppPalette.stageAccent : Colors.white,
-              tint: favorite ? AppPalette.brand : Colors.white,
+              color: favorite
+                  ? AppPalette.stageAccent
+                  : Colors.white.withValues(alpha: .88),
             ),
           ],
         ),
@@ -2101,66 +2107,60 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Widget stageVideo() => DecoratedBox(
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.white.withValues(alpha: .16), width: .8),
+      border: Border.symmetric(
+        horizontal: BorderSide(
+          color: Colors.white.withValues(alpha: .08),
+          width: .6,
+        ),
+      ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: .48),
-          blurRadius: 32,
-          offset: const Offset(0, 14),
+          color: Colors.black.withValues(alpha: .54),
+          blurRadius: 36,
+          offset: const Offset(0, 16),
         ),
       ],
     ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          video(),
-          Positioned(
-            right: 8,
-            bottom: 8,
-            child: Semantics(
-              button: true,
-              label: '全屏视频',
-              child: Tooltip(
-                message: '全屏视频',
-                child: InkWell(
-                  onTap: orientation,
-                  borderRadius: BorderRadius.circular(22),
-                  child: Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: SizedBox(
-                      width: 34,
-                      height: 34,
-                      child: Glass(
-                        state: widget.state,
-                        radius: 17,
-                        material: GlassMaterialSpec.mediaOverlay,
-                        tint: const Color(0xFF1A1A22),
-                        child: const Center(
-                          child: Icon(
-                            Icons.fullscreen_rounded,
-                            size: 18,
-                            color: AppPalette.stageText,
-                          ),
-                        ),
-                      ),
-                    ),
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        video(),
+        Positioned(
+          right: 4,
+          bottom: 4,
+          child: IconButton(
+            tooltip: '全屏视频',
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              padding: const EdgeInsets.all(7),
+            ),
+            onPressed: orientation,
+            icon: SizedBox(
+              width: 34,
+              height: 34,
+              child: Glass(
+                state: widget.state,
+                radius: 999,
+                material: GlassMaterialSpec.mediaOverlay,
+                tint: const Color(0xFF14151C),
+                child: const Center(
+                  child: Icon(
+                    Icons.fullscreen_rounded,
+                    size: 18,
+                    color: AppPalette.stageText,
                   ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 
   Widget stageMedia(Song song) => LayoutBuilder(
     builder: (context, size) {
       final videoSong = song.mediaType == 'VIDEO';
-      final contentWidth = math.max(1.0, size.maxWidth - 28);
       final hasFeedback =
           recordingError != null ||
           widget.state.playbackError.isNotEmpty ||
@@ -2180,21 +2180,26 @@ class _PlayerPageState extends State<PlayerPage> {
           ? 0.0
           : 44.0;
       final available = math.max(112.0, size.maxHeight - readingHeight - 16);
-      final mediaHeight = videoSong
-          ? math.min(contentWidth / widget.state.videoAspect, available)
-          : math.min(220.0, available);
       final artwork = videoSong
-          ? Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: SizedBox(height: mediaHeight, child: stageVideo()),
+          ? Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: size.maxWidth,
+                  maxHeight: available,
+                ),
+                child: AspectRatio(
+                  aspectRatio: widget.state.videoAspect,
+                  child: stageVideo(),
+                ),
+              ),
             )
           : Center(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: .18),
-                    width: 1,
+                    color: Colors.white.withValues(alpha: .16),
+                    width: .8,
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -2211,7 +2216,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     path: song.cover,
                     revision: song.coverVersion,
                     label: song.title,
-                    size: mediaHeight,
+                    size: math.min(220.0, available),
                   ),
                 ),
               ),
@@ -2247,15 +2252,23 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
               ),
             );
+      if (readingHeight <= 0) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Spacer(flex: 3),
+            artwork,
+            const Spacer(flex: 4),
+          ],
+        );
+      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          if (videoSong) const SizedBox(height: 6),
           artwork,
-          if (readingHeight > 0) ...[
-            const SizedBox(height: 12),
-            Expanded(child: reading),
-          ],
+          const SizedBox(height: 10),
+          Expanded(child: reading),
         ],
       );
     },
@@ -2269,13 +2282,6 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget stageStatusContent() {
     final state = widget.state;
     final recording = state.recording;
-    final practice = preparingPlayback
-        ? '正在准备'
-        : state.isPlaying
-        ? '练唱中'
-        : state.playbackState == 'ENDED'
-        ? '播放结束'
-        : '已暂停';
     final capture = recording
         ? '正在录音 · ${durationLabel((state.singing['recordedMs'] as num? ?? 0).toInt())}'
         : state.countdown > 0
@@ -2284,41 +2290,43 @@ class _PlayerPageState extends State<PlayerPage> {
         ? '正在保留录音…'
         : state.rangeB > state.rangeA
         ? '选段 ${durationLabel(state.rangeA)} — ${durationLabel(state.rangeB)}'
+        : preparingPlayback
+        ? '正在准备'
         : '尚未录音';
-    final dotColor = recording || state.taking
-        ? recordingControl
-        : state.isPlaying
-        ? const Color(0xFF34D399)
-        : Colors.white.withValues(alpha: .38);
+    final highlight = state.taking || state.rangeB > state.rangeA;
+    final textColor = state.taking
+        ? recordingColor
+        : state.rangeB > state.rangeA
+        ? _theme.colorScheme.primary
+        : Colors.white.withValues(alpha: .36);
     return Semantics(
       key: const ValueKey('player-status'),
       liveRegion: state.taking,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.circle, size: 6, color: dotColor),
-          const SizedBox(width: 7),
-          Text(
-            practice,
-            style: _theme.textTheme.bodySmall?.copyWith(
-              color: _theme.colorScheme.onSurfaceVariant,
-              fontSize: state.senior ? 14 : 12,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+          if (recording || state.countdown > 0) ...[
+            Icon(Icons.circle, size: 6, color: recordingColor),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
             child: AnimatedDefaultTextStyle(
               duration: AppMotionScope.durationOf(
                 context,
                 const Duration(milliseconds: 160),
               ),
               style: _theme.textTheme.bodySmall!.copyWith(
-                fontSize: state.senior ? 14 : 12,
-                color: state.taking
-                    ? recordingColor
-                    : _theme.colorScheme.onSurfaceVariant,
+                fontSize: state.senior ? 13.5 : 11.5,
+                color: textColor,
+                fontWeight: highlight ? FontWeight.w600 : FontWeight.w400,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
-              child: Text(capture, textAlign: TextAlign.end),
+              child: Text(
+                capture,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ],
@@ -2326,57 +2334,68 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Widget seekButton(int seconds) => IconButton(
-    key: ValueKey('player-seek-$seconds'),
-    tooltip: seconds < 0 ? '后退15秒' : '前进15秒',
-    onPressed: ready && !widget.state.taking
-        ? () => uiTask(
-            context,
-            () => widget.state.command(
-              'seek',
-              (widget.state.positionMs + seconds * 1000).clamp(
-                0,
-                widget.state.durationMs,
-              ),
-            ),
-          )
-        : null,
-    icon: _SeekSecondsIcon(seconds: seconds),
-  );
-
   Widget stageControls() {
     final state = widget.state;
     return Padding(
       key: const ValueKey('player-primary-controls'),
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
       child: Column(
         key: const ValueKey('player-action-group'),
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           progress(stacked: true),
-          const SizedBox(height: 2),
-          stageStatus(),
+          const SizedBox(height: 14),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .045),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: .08),
+                width: .7,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
+                  child: roles(stage: true),
+                ),
+                if (audioRoleHint != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
+                    child: roleHint(),
+                  ),
+                Container(
+                  height: .6,
+                  margin: const EdgeInsets.symmetric(horizontal: 14),
+                  color: Colors.white.withValues(alpha: .06),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: tools(stage: true),
+                ),
+              ],
+            ),
+          ),
+          if (state.singing['clipped'] == true) ...[
+            const SizedBox(height: 8),
+            Text(
+              '声音偏大，请稍微远离麦克风',
+              style: _theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              seekButton(-15),
-              const SizedBox(width: 36),
               playButton(stage: true),
-              const SizedBox(width: 36),
-              seekButton(15),
+              const SizedBox(width: 12),
+              Expanded(child: recordButton(stage: true)),
             ],
           ),
-          const SizedBox(height: 14),
-          roles(stage: true),
-          if (audioRoleHint != null) ...[const SizedBox(height: 8), roleHint()],
-          const SizedBox(height: 8),
-          tools(stage: true),
-          if (state.singing['clipped'] == true)
-            Text('声音偏大，请稍微远离麦克风', style: _theme.textTheme.bodySmall),
-          const SizedBox(height: 10),
-          recordButton(),
         ],
       ),
     );
