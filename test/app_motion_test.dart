@@ -1,6 +1,7 @@
 import 'dart:ui' show Tristate;
 import 'dart:ui' as ui;
 
+import 'package:fluid_glass/fluid_glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -754,4 +755,122 @@ void main() {
     restored.dispose();
     await store.close();
   });
+
+  testWidgets(
+    'fluid_glass initializes, mounts DrawBackdrop in scope, and skips on solid',
+    (tester) async {
+      await tester.runAsync(FluidGlass.ensureInitialized);
+
+      expect(GlassMaterialSpec.floating.refraction, isTrue);
+      expect(GlassMaterialSpec.player.refraction, isTrue);
+      expect(GlassMaterialSpec.search.refraction, isTrue);
+      expect(GlassMaterialSpec.shortcut.refraction, isFalse);
+      expect(GlassMaterialSpec.standard.refraction, isFalse);
+      expect(
+        AppSurfaces.forBrightness(Brightness.dark).glass,
+        const Color(0xFF1B1B22),
+      );
+
+      final boundary = GlobalKey();
+      for (final brightness in [Brightness.light, Brightness.dark]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: singVerseTheme(brightness),
+            home: Center(
+              child: RepaintBoundary(
+                key: boundary,
+                child: SizedBox(
+                  width: 200,
+                  height: 100,
+                  child: AppBackdropCapture(
+                    builder: (context, layerBackdrop) => Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        AppBackdropSource(
+                          backdrop: layerBackdrop,
+                          child: Row(
+                            children: const [
+                              Expanded(
+                                child: ColoredBox(color: Color(0xFFE85D24)),
+                              ),
+                              Expanded(
+                                child: ColoredBox(color: Color(0xFF183E9E)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        AppBackdropScope(
+                          backdrop: layerBackdrop,
+                          child: const GlassSurface(
+                            variant: GlassVariant.liquid,
+                            child: Center(
+                              child: SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: ColoredBox(color: AppPalette.brand),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(DrawBackdrop), findsOneWidget);
+        final bytes = await tester.runAsync(() async {
+          final image =
+              await (boundary.currentContext!.findRenderObject()!
+                      as RenderRepaintBoundary)
+                  .toImage();
+          try {
+            return await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+          } finally {
+            image.dispose();
+          }
+        });
+        final offset = (50 * 200 + 100) * 4;
+        final center = Color.fromARGB(
+          bytes!.getUint8(offset + 3),
+          bytes.getUint8(offset),
+          bytes.getUint8(offset + 1),
+          bytes.getUint8(offset + 2),
+        );
+        expect(center, AppPalette.brand);
+        expect(tester.takeException(), isNull);
+      }
+
+      // When solid is true, DrawBackdrop and BackdropFilter are both omitted.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: singVerseTheme(Brightness.dark),
+          home: Center(
+            child: SizedBox(
+              width: 200,
+              height: 100,
+              child: AppBackdropCapture(
+                solid: true,
+                builder: (context, layerBackdrop) => AppBackdropScope(
+                  backdrop: layerBackdrop,
+                  child: const GlassSurface(
+                    solid: true,
+                    variant: GlassVariant.liquid,
+                    child: SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(DrawBackdrop), findsNothing);
+      expect(find.byType(BackdropFilter), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

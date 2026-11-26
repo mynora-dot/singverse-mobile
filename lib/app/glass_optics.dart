@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:fluid_glass/fluid_glass.dart' as fg;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 
 import 'motion.dart';
 import 'tokens.dart';
@@ -61,6 +61,75 @@ class NasEnvironment extends AppEnvironment {
   });
 }
 
+/// Provides the captured [fg.LayerBackdrop] to floating glass overlays above
+/// a [AppBackdropSource] without ever placing the consumer inside the source.
+class AppBackdropScope extends InheritedWidget {
+  const AppBackdropScope({
+    super.key,
+    required this.backdrop,
+    required super.child,
+  });
+
+  final fg.LayerBackdrop? backdrop;
+
+  static fg.LayerBackdrop? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppBackdropScope>()?.backdrop;
+
+  @override
+  bool updateShouldNotify(AppBackdropScope oldWidget) =>
+      backdrop != oldWidget.backdrop;
+}
+
+/// Owns a [fg.LayerBackdrop] lifecycle and exposes it to [builder].
+class AppBackdropCapture extends StatefulWidget {
+  const AppBackdropCapture({
+    super.key,
+    required this.builder,
+    this.solid = false,
+  });
+
+  final Widget Function(BuildContext context, fg.LayerBackdrop? backdrop)
+  builder;
+  final bool solid;
+
+  @override
+  State<AppBackdropCapture> createState() => _AppBackdropCaptureState();
+}
+
+class _AppBackdropCaptureState extends State<AppBackdropCapture> {
+  final fg.LayerBackdrop _backdrop = fg.LayerBackdrop();
+
+  @override
+  void dispose() {
+    _backdrop.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = !(widget.solid || AppMotionScope.solidOf(context));
+    return widget.builder(context, active ? _backdrop : null);
+  }
+}
+
+/// Wraps background content so floating [OpticalGlassSurface] overlays above
+/// it can sample and refract it via [fg.BackdropLayer].
+class AppBackdropSource extends StatelessWidget {
+  const AppBackdropSource({
+    super.key,
+    required this.backdrop,
+    required this.child,
+  });
+
+  final fg.LayerBackdrop? backdrop;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => backdrop == null
+      ? child
+      : fg.BackdropLayer(backdrop: backdrop!, child: child);
+}
+
 class _AppEnvironmentScope extends InheritedWidget {
   const _AppEnvironmentScope({required this.size, required super.child});
   final Size size;
@@ -91,11 +160,9 @@ class _EnvironmentPainter extends CustomPainter {
       canvas.restore();
       return;
     }
-    // Luminous multi-point atmospheric mesh gives Liquid Glass capsules real
-    // color depth to refract (matching Apple iOS 26 prototype environment).
-    final rose = dark ? const Color(0xFFFF375F) : const Color(0xFFFA2D55);
-    final sky = dark ? const Color(0xFF4882FF) : const Color(0xFF5CA4FF);
-    final warm = dark ? const Color(0xFFA855F7) : const Color(0xFFFFA880);
+    final rose = dark ? const Color(0xFFD94862) : const Color(0xFFFA2D55);
+    final sky = dark ? const Color(0xFF4A6FA5) : const Color(0xFF5CA4FF);
+    final warm = dark ? const Color(0xFFB87D56) : const Color(0xFFFFA880);
     canvas.drawRect(
       rect,
       Paint()
@@ -103,7 +170,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(-.72, -.98),
           radius: 1.30,
           colors: [
-            rose.withValues(alpha: dark ? .24 : .15),
+            rose.withValues(alpha: dark ? .06 : .12),
             rose.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -115,7 +182,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(.86, -.80),
           radius: 1.22,
           colors: [
-            sky.withValues(alpha: dark ? .20 : .17),
+            sky.withValues(alpha: dark ? .05 : .14),
             sky.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -127,7 +194,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(0, 1.05),
           radius: 1.15,
           colors: [
-            warm.withValues(alpha: dark ? .16 : .13),
+            warm.withValues(alpha: dark ? .045 : .11),
             warm.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -143,8 +210,8 @@ class _EnvironmentPainter extends CustomPainter {
       environmentSize != oldDelegate.environmentSize;
 }
 
-/// Real backdrop displacement on Impeller; bounded blur and Fresnel specular
-/// rim on other renderers. Foreground text never enters the filter input.
+/// Real spherical-lens Liquid Glass via `fluid_glass` for floating overlays;
+/// clean, mist-free surface or bounded blur for static cards and fallbacks.
 class OpticalGlassSurface extends StatefulWidget {
   const OpticalGlassSurface({
     super.key,
@@ -162,64 +229,16 @@ class OpticalGlassSurface extends StatefulWidget {
   final double radius;
   final bool solid, focused, enabled;
   final GlassMaterialSpec material;
-  bool get field => !material.refraction;
 
   @override
   State<OpticalGlassSurface> createState() => _OpticalGlassSurfaceState();
 }
 
 class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
-  static Future<ui.FragmentProgram>? _program;
   static final _lightTone = _lensTone(false);
   static final _darkTone = _lensTone(true);
-  ui.FragmentShader? shader;
-  bool loading = false, failed = false, pressed = false, hovered = false;
+  bool pressed = false, hovered = false;
   Alignment light = const Alignment(-.55, -1.0);
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    prepareLens();
-  }
-
-  @override
-  void didUpdateWidget(OpticalGlassSurface oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    prepareLens();
-  }
-
-  void prepareLens() {
-    if (loading ||
-        failed ||
-        shader != null ||
-        widget.solid ||
-        widget.field ||
-        !ui.ImageFilter.isShaderFilterSupported) {
-      return;
-    }
-    loading = true;
-    (_program ??= ui.FragmentProgram.fromAsset(
-      'shaders/liquid_lens.frag',
-    )).then(
-      (program) {
-        if (!mounted) return;
-        setState(() {
-          shader = program.fragmentShader();
-          loading = false;
-        });
-      },
-      onError: (Object error, StackTrace stack) {
-        // Drivers that cannot compile the effect retain a usable blur material.
-        debugPrint('Liquid lens unavailable; using bounded blur: $error');
-        if (mounted) {
-          setState(() {
-            loading = false;
-            failed = true;
-          });
-        }
-      },
-    );
-  }
 
   void point(Offset local) {
     final size = context.size;
@@ -231,20 +250,22 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
   }
 
   @override
-  void dispose() {
-    shader?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
+    final outline = MediaQuery.highContrastOf(context)
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : Theme.of(context).colorScheme.outlineVariant;
     final full =
         widget.enabled &&
         AppMotionScope.levelOf(context) == AppMotionLevel.full;
     final solid = widget.solid || AppMotionScope.solidOf(context);
+    final scopeBackdrop = AppBackdropScope.maybeOf(context);
+    final useFluidLens =
+        !solid && widget.material.refraction && scopeBackdrop != null;
     final radius = BorderRadius.circular(widget.radius);
+    final textDirection = Directionality.of(context);
+
     return MouseRegion(
       onEnter: full ? (_) => setState(() => hovered = true) : null,
       onExit: (_) {
@@ -286,124 +307,177 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                 child: widget.child,
               ),
             ),
-            builder: (context, touch, child) => DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                boxShadow: [
-                  if (widget.material.shadow > 0 && !solid) ...[
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: (dark ? .44 : .12) * widget.material.shadow,
-                      ),
-                      blurRadius: 28,
-                      spreadRadius: -4,
-                      offset: const Offset(0, 12),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: (dark ? .24 : .05) * widget.material.shadow,
-                      ),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                  if (focus > 0)
-                    BoxShadow(
-                      color: primary.withValues(alpha: .10 * focus),
-                      blurRadius: 12,
-                      spreadRadius: .5,
-                    ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: radius,
-                child: Builder(
-                  builder: (context) {
-                    final refracting =
-                        !solid && !widget.field && shader != null;
-                    final floating = !widget.field;
-                    final tint = widget.base.withValues(
-                      alpha: solid
-                          ? 1
-                          : dark
-                          ? widget.material.darkTint
-                          : widget.material.lightTint,
+            builder: (context, touch, child) {
+              if (useFluidLens) {
+                final shape = widget.radius >= 99
+                    ? const fg.Capsule()
+                    : fg.RoundedRectangle(widget.radius);
+                final tintAlpha = dark
+                    ? widget.material.darkTint
+                    : widget.material.lightTint;
+                final highlightAlpha =
+                    (widget.material.highlight * .85 + touch * .12).clamp(
+                      0.0,
+                      1.0,
                     );
-                    final surface = CustomPaint(
-                      foregroundPainter: _LensRimPainter(
-                        radius: widget.radius,
-                        dark: dark,
-                        solid: solid,
-                        field: widget.field,
-                        rim: widget.rim,
-                        primary: primary,
-                        outline: MediaQuery.highContrastOf(context)
-                            ? Theme.of(context).colorScheme.onSurfaceVariant
-                            : Theme.of(context).colorScheme.outlineVariant,
-                        focus: focus,
-                        touch: touch,
-                        light: light,
-                        highlight: widget.material.highlight,
-                      ),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: tint,
-                          gradient: solid
-                              ? null
-                              : LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color.alphaBlend(
-                                      widget.rim.withValues(
-                                        alpha:
-                                            ((dark ? .035 : .18) +
-                                                touch * .05) *
-                                            widget.material.highlight,
-                                      ),
-                                      tint,
-                                    ),
-                                    tint,
-                                    tint,
-                                  ],
-                                  stops: const [0, .34, 1],
-                                ),
-                        ),
-                        child: child,
-                      ),
-                    );
-                    if (solid || widget.material.blur == 0) {
-                      return surface;
+                return fg.DrawBackdrop(
+                  backdrop: scopeBackdrop,
+                  shape: () => shape,
+                  effects: (scope) {
+                    scope.vibrancy();
+                    if (widget.material.blur > 0) {
+                      scope.blur(widget.material.blur);
                     }
-                    if (refracting) {
-                      return _BackdropLens(
-                        shader: shader!,
-                        radius: widget.radius,
-                        dark: dark,
-                        scale: View.of(context).devicePixelRatio,
-                        blur: widget.material.blur,
-                        child: surface,
-                      );
-                    }
-                    final blur = ui.ImageFilter.blur(
-                      sigmaX: widget.material.blur,
-                      sigmaY: widget.material.blur,
+                    final height = math.min(
+                      14.0,
+                      math.max(8.0, scope.size.shortestSide * .24),
                     );
-                    // Match the shader's neutral contrast compression when
-                    // image-filter shaders are unavailable.
-                    final filter = floating
-                        ? ui.ImageFilter.compose(
-                            outer: dark ? _darkTone : _lightTone,
-                            inner: blur,
-                          )
-                        : blur;
-                    return widget.material.grouped
-                        ? BackdropFilter.grouped(filter: filter, child: surface)
-                        : BackdropFilter(filter: filter, child: surface);
+                    scope.lens(
+                      height,
+                      height * 1.85,
+                      chromaticAberration: true,
+                    );
                   },
+                  highlight: () => highlightAlpha <= 0
+                      ? null
+                      : fg.Highlight(
+                          width: .65,
+                          alpha: highlightAlpha,
+                          style: fg.HighlightStyle.standard,
+                        ),
+                  shadow: () => widget.material.shadow <= 0
+                      ? null
+                      : fg.GlassShadow(
+                          radius: 24,
+                          alpha: (dark ? .55 : .28) * widget.material.shadow,
+                        ),
+                  innerShadow: null,
+                  onDrawSurface: (canvas, size) {
+                    final rect = Offset.zero & size;
+                    canvas.drawRect(
+                      rect,
+                      Paint()..color = widget.base.withValues(alpha: tintAlpha),
+                    );
+                    if (focus > 0) {
+                      shape
+                          .createOutline(size, textDirection)
+                          .draw(
+                            canvas,
+                            Paint()
+                              ..style = PaintingStyle.stroke
+                              ..strokeWidth = 1.4
+                              ..color = primary.withValues(alpha: .65 * focus),
+                          );
+                    }
+                  },
+                  child: child,
+                );
+              }
+
+              final tint = widget.base.withValues(
+                alpha: solid
+                    ? 1.0
+                    : dark
+                    ? widget.material.darkTint
+                    : widget.material.lightTint,
+              );
+              final surface = CustomPaint(
+                foregroundPainter: _CleanRimPainter(
+                  radius: widget.radius,
+                  dark: dark,
+                  solid: solid,
+                  rim: widget.rim,
+                  primary: primary,
+                  outline: outline,
+                  focus: focus,
+                  touch: touch,
+                  light: light,
+                  highlight: widget.material.highlight,
                 ),
-              ),
-            ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: tint,
+                    gradient: solid || !dark && widget.material.blur == 0
+                        ? null
+                        : LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Color.alphaBlend(
+                                widget.rim.withValues(
+                                  alpha:
+                                      ((dark ? .035 : .14) + touch * .04) *
+                                      widget.material.highlight,
+                                ),
+                                tint,
+                              ),
+                              tint,
+                            ],
+                          ),
+                  ),
+                  child: child,
+                ),
+              );
+
+              final clipped = ClipRRect(
+                borderRadius: radius,
+                child: solid || widget.material.blur == 0
+                    ? surface
+                    : () {
+                        final blur = ui.ImageFilter.blur(
+                          sigmaX: widget.material.blur,
+                          sigmaY: widget.material.blur,
+                        );
+                        final filter = widget.material.refraction
+                            ? ui.ImageFilter.compose(
+                                outer: dark ? _darkTone : _lightTone,
+                                inner: blur,
+                              )
+                            : blur;
+                        return widget.material.grouped
+                            ? BackdropFilter.grouped(
+                                filter: filter,
+                                child: surface,
+                              )
+                            : BackdropFilter(filter: filter, child: surface);
+                      }(),
+              );
+
+              if (widget.material.shadow <= 0 && focus <= 0) {
+                return clipped;
+              }
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  boxShadow: [
+                    if (widget.material.shadow > 0 && !solid) ...[
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: (dark ? .40 : .10) * widget.material.shadow,
+                        ),
+                        blurRadius: 24,
+                        spreadRadius: -4,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: (dark ? .20 : .04) * widget.material.shadow,
+                        ),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                    if (focus > 0)
+                      BoxShadow(
+                        color: primary.withValues(alpha: .10 * focus),
+                        blurRadius: 12,
+                        spreadRadius: .5,
+                      ),
+                  ],
+                ),
+                child: clipped,
+              );
+            },
           ),
         ),
       ),
@@ -411,13 +485,12 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
   }
 }
 
-/// Linear counterpart of the shader's monotonic luminance compression.
-/// Color-filter offsets use 0–255; alpha and foreground content stay unchanged.
+/// Linear counterpart of monotonic luminance compression for fallback surfaces.
 ui.ColorFilter _lensTone(bool dark) {
   const luminance = [.2126, .7152, .0722];
-  final chroma = dark ? .14 : .12;
-  final range = dark ? .15 : .26;
-  final base = dark ? [.06, .06, .06] : [.69, .69, .69];
+  final chroma = dark ? .96 : .86;
+  final range = dark ? .13 : .24;
+  final base = dark ? [.15, .15, .155] : [.71, .71, .71];
   return ui.ColorFilter.matrix([
     for (var row = 0; row < 3; row++) ...[
       for (var column = 0; column < 3; column++)
@@ -433,111 +506,11 @@ ui.ColorFilter _lensTone(bool dark) {
   ]);
 }
 
-class _BackdropLens extends SingleChildRenderObjectWidget {
-  const _BackdropLens({
-    required this.shader,
-    required this.radius,
-    required this.dark,
-    required this.scale,
-    required this.blur,
-    required super.child,
-  });
-  final ui.FragmentShader shader;
-  final double radius, scale, blur;
-  final bool dark;
-
-  @override
-  RenderBackdropFilter createRenderObject(BuildContext context) =>
-      RenderLiquidLens(
-        shader: shader,
-        radius: radius,
-        dark: dark,
-        scale: scale,
-        blur: blur,
-      );
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    covariant RenderLiquidLens renderObject,
-  ) => renderObject.configure(shader, radius, dark, scale, blur);
-}
-
-class RenderLiquidLens extends RenderBackdropFilter {
-  RenderLiquidLens({
-    required this.shader,
-    required this.radius,
-    required this.dark,
-    required this.scale,
-    required this.blur,
-  }) : super(filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6));
-  ui.FragmentShader shader;
-  double radius, scale, blur;
-  bool dark;
-  (Size, Offset, double, double, bool, double)? geometry;
-  ui.ImageFilter? lensFilter;
-
-  void configure(
-    ui.FragmentShader nextShader,
-    double nextRadius,
-    bool nextDark,
-    double nextScale,
-    double nextBlur,
-  ) {
-    if (shader == nextShader &&
-        radius == nextRadius &&
-        dark == nextDark &&
-        scale == nextScale &&
-        blur == nextBlur) {
-      return;
-    }
-    shader = nextShader;
-    radius = nextRadius;
-    dark = nextDark;
-    scale = nextScale;
-    blur = nextBlur;
-    geometry = null;
-    markNeedsPaint();
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    final origin = localToGlobal(Offset.zero);
-    final next = (size, origin, radius, scale, dark, blur);
-    if (!size.isEmpty && geometry != next) {
-      geometry = next;
-      shader
-        ..setFloat(2, size.width)
-        ..setFloat(3, size.height)
-        ..setFloat(4, radius)
-        ..setFloat(5, dark ? 1 : 0)
-        ..setFloat(6, origin.dx)
-        ..setFloat(7, origin.dy)
-        ..setFloat(8, scale);
-      lensFilter = ui.ImageFilter.compose(
-        outer: ui.ImageFilter.shader(shader),
-        inner: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-      );
-    }
-    if (child == null || lensFilter == null) return;
-    // Update the retained layer directly during paint. Setting a render
-    // object's filter here would call markNeedsPaint during the paint phase.
-    layer ??= BackdropFilterLayer();
-    layer!.filter = lensFilter;
-    context.pushLayer(
-      layer!,
-      (context, offset) => context.paintChild(child!, offset),
-      offset,
-    );
-  }
-}
-
-class _LensRimPainter extends CustomPainter {
-  const _LensRimPainter({
+class _CleanRimPainter extends CustomPainter {
+  const _CleanRimPainter({
     required this.radius,
     required this.dark,
     required this.solid,
-    required this.field,
     required this.rim,
     required this.primary,
     required this.outline,
@@ -547,21 +520,19 @@ class _LensRimPainter extends CustomPainter {
     required this.highlight,
   });
   final double radius, focus, touch, highlight;
-  final bool dark, solid, field;
+  final bool dark, solid;
   final Color rim, primary, outline;
   final Alignment light;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    final rect = (Offset.zero & size).deflate(.55);
+    final rect = (Offset.zero & size).deflate(.5);
     final shape = RRect.fromRectAndRadius(
       rect,
-      Radius.circular(math.max(0, radius - .55)),
+      Radius.circular(math.max(0, radius - .5)),
     );
     final paint = Paint()..style = PaintingStyle.stroke;
-    Color reflection(double alpha) =>
-        rim.withValues(alpha: (alpha * highlight).clamp(0, 1));
     if (solid) {
       canvas.drawRRect(
         shape,
@@ -571,32 +542,26 @@ class _LensRimPainter extends CustomPainter {
       );
       return;
     }
-    // Apple iOS 26 single-hairline directional Fresnel specular rim:
-    // razor-thin top-left glint that fades cleanly along the sides so dark
-    // capsules stay crystal-clear instead of showing thick plastic borders.
+
     paint
-      ..strokeWidth = field ? .65 : .80
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          reflection(dark ? .30 : .86),
-          reflection(dark ? .04 : .12),
-          reflection(dark ? .03 : .08),
-          reflection(dark ? .12 : .40),
-        ],
-        stops: const [0, .34, .70, 1],
-      ).createShader(rect);
+      ..strokeWidth = .6
+      ..color = dark
+          ? rim.withValues(alpha: (.10 * highlight).clamp(0, 1))
+          : Colors.black.withValues(alpha: .05);
     canvas.drawRRect(shape, paint);
 
-    // Subtle pointer-following specular bloom on touch/hover.
     if (touch > 0) {
       paint
-        ..strokeWidth = 1.0
+        ..strokeWidth = .9
         ..shader = RadialGradient(
           center: light,
           radius: .9,
-          colors: [reflection((dark ? .40 : .82) * touch), reflection(0)],
+          colors: [
+            rim.withValues(
+              alpha: ((dark ? .32 : .64) * touch * highlight).clamp(0, 1),
+            ),
+            rim.withValues(alpha: 0),
+          ],
           stops: const [0, .72],
         ).createShader(rect);
       canvas.drawRRect(shape, paint);
@@ -604,7 +569,7 @@ class _LensRimPainter extends CustomPainter {
 
     if (focus > 0) {
       paint
-        ..strokeWidth = 1.0
+        ..strokeWidth = 1.1
         ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -619,11 +584,10 @@ class _LensRimPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LensRimPainter old) =>
+  bool shouldRepaint(_CleanRimPainter old) =>
       radius != old.radius ||
       dark != old.dark ||
       solid != old.solid ||
-      field != old.field ||
       rim != old.rim ||
       primary != old.primary ||
       outline != old.outline ||

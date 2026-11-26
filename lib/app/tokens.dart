@@ -66,48 +66,50 @@ class GlassMaterialSpec {
        assert(shadow >= 0 && shadow <= 1);
 
   static const standard = GlassMaterialSpec(
-    lightTint: .64,
-    darkTint: .42,
-    blur: 22,
-    highlight: .42,
-    shadow: .18,
+    lightTint: .84,
+    darkTint: .74,
+    blur: 18,
+    highlight: .45,
+    shadow: .16,
     grouped: true,
   );
   static const search = GlassMaterialSpec(
-    lightTint: .56,
-    darkTint: .22,
-    blur: 18,
-    highlight: .28,
-    shadow: .08,
-    grouped: true,
+    lightTint: .68,
+    darkTint: .42,
+    blur: 12,
+    highlight: .82,
+    shadow: .24,
+    refraction: true,
   );
   static const shortcut = GlassMaterialSpec(
-    lightTint: .54,
-    darkTint: .18,
-    blur: 16,
-    highlight: .22,
-    shadow: .06,
-    grouped: true,
+    lightTint: .88,
+    darkTint: .76,
+    blur: 0,
+    highlight: .45,
+    shadow: .10,
   );
   static const field = GlassMaterialSpec(
-    lightTint: .70,
-    darkTint: .48,
-    blur: 16,
-    highlight: .34,
-    shadow: .10,
+    lightTint: .88,
+    darkTint: .78,
+    blur: 14,
+    highlight: .40,
+    shadow: .08,
   );
   static const onColor = GlassMaterialSpec(
     lightTint: .16,
-    darkTint: .16,
-    blur: 18,
-    highlight: .52,
+    darkTint: .22,
+    blur: 10,
+    highlight: .84,
+    shadow: .18,
+    refraction: true,
   );
   static const stageControl = GlassMaterialSpec(
-    lightTint: .12,
-    darkTint: .12,
-    blur: 24,
-    highlight: .44,
-    shadow: .22,
+    lightTint: .18,
+    darkTint: .28,
+    blur: 12,
+    highlight: .80,
+    shadow: .28,
+    refraction: true,
   );
   // Native video cannot be sampled. Its small overlay uses the same optical
   // edge and touch light, with no backdrop filter or displacement.
@@ -115,31 +117,31 @@ class GlassMaterialSpec {
     lightTint: .72,
     darkTint: .72,
     blur: 0,
-    highlight: .36,
+    highlight: .55,
   );
   static const floating = GlassMaterialSpec(
-    lightTint: .48,
-    darkTint: .26,
-    blur: 32,
-    highlight: .76,
-    shadow: .52,
+    lightTint: .56,
+    darkTint: .38,
+    blur: 12,
+    highlight: .90,
+    shadow: .50,
     refraction: true,
   );
   // Floating player capsule with luminous specular edge and soft color wash.
   static const player = GlassMaterialSpec(
-    lightTint: .54,
-    darkTint: .30,
-    blur: 32,
-    highlight: .72,
-    shadow: .52,
+    lightTint: .58,
+    darkTint: .42,
+    blur: 14,
+    highlight: .92,
+    shadow: .54,
     refraction: true,
   );
   static const sheet = GlassMaterialSpec(
-    lightTint: .76,
-    darkTint: .46,
-    blur: 36,
-    highlight: .82,
-    shadow: .74,
+    lightTint: .86,
+    darkTint: .80,
+    blur: 26,
+    highlight: .65,
+    shadow: .72,
   );
   // Unified zero-blur smoked Liquid Glass for sheets over native routes
   // (player audio & video, TV, scan, admin): high opacity eliminates sharp
@@ -149,8 +151,8 @@ class GlassMaterialSpec {
     lightTint: .94,
     darkTint: .94,
     blur: 0,
-    highlight: .90,
-    shadow: .82,
+    highlight: .65,
+    shadow: .80,
   );
 
   final double lightTint, darkTint, blur, highlight, shadow;
@@ -160,9 +162,9 @@ class GlassMaterialSpec {
     // Zero-blur materials include native video overlays and stable form fields.
     if (context == GlassBackdropContext.plain || blur == 0) return this;
     final content = context == GlassBackdropContext.content;
-    final minLight = content ? .54 : .50;
-    final minDark = content ? .32 : .26;
-    final minBlur = content ? 30.0 : 26.0;
+    final minLight = content ? .56 : .50;
+    final minDark = content ? .38 : .32;
+    final minBlur = content ? 12.0 : 10.0;
     return GlassMaterialSpec(
       lightTint: lightTint < minLight ? minLight : lightTint,
       darkTint: darkTint < minDark ? minDark : darkTint,
@@ -192,9 +194,9 @@ class AppSurfaces extends ThemeExtension<AppSurfaces> {
   factory AppSurfaces.forBrightness(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     return AppSurfaces(
-      background: dark ? const Color(0xFF09090D) : const Color(0xFFF2F3F8),
-      group: dark ? const Color(0xFF1F1F27) : const Color(0xFFE9EBF1),
-      glass: dark ? const Color(0xFF22222C) : Colors.white,
+      background: dark ? const Color(0xFF0C0C0F) : const Color(0xFFF2F3F8),
+      group: dark ? const Color(0xFF1C1C23) : const Color(0xFFE9EBF1),
+      glass: dark ? const Color(0xFF1B1B22) : Colors.white,
       rim: Colors.white,
       shadow: Colors.black.withValues(alpha: dark ? .46 : .12),
       spotlight: dark ? const Color(0xFF1D1B2A) : const Color(0xFF1F1D2C),

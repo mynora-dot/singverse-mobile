@@ -4,7 +4,13 @@ import 'motion.dart';
 import 'glass_optics.dart';
 import 'tokens.dart';
 
-export 'glass_optics.dart' show AppEnvironment, NasEnvironment;
+export 'glass_optics.dart'
+    show
+        AppBackdropCapture,
+        AppBackdropScope,
+        AppBackdropSource,
+        AppEnvironment,
+        NasEnvironment;
 export 'tokens.dart';
 
 enum GlassVariant { regular, control, sheet, toolbar, liquid, field }

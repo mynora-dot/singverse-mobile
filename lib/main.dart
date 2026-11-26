@@ -1,5 +1,7 @@
 import 'features/updates/update_page.dart';
 
+import 'package:fluid_glass/fluid_glass.dart' show FluidGlass;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +15,10 @@ import 'features/player/player_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _registerThirdPartyLicenses();
+  try {
+    await FluidGlass.ensureInitialized();
+  } catch (_) {}
   try {
     final state = AppState(
       api: NativeNasApi(),
@@ -38,6 +44,22 @@ Future<void> main() async {
       ),
     );
   }
+}
+
+bool _licensesRegistered = false;
+
+void _registerThirdPartyLicenses() {
+  if (_licensesRegistered) return;
+  _licensesRegistered = true;
+  LicenseRegistry.addLicense(() async* {
+    yield const LicenseEntryWithLineBreaks(
+      ['fluid_glass'],
+      'FluidGlass (Copyright 2026 Tianli, Apache-2.0)\n'
+      'Portions derived from Kyant0/AndroidLiquidGlass ("backdrop", '
+      'Copyright 2025 Kyant, Apache-2.0) and Kyant0/Shapes '
+      '(Copyright 2025 Kyant, Apache-2.0).',
+    );
+  });
 }
 
 class SingVerseApp extends StatefulWidget {

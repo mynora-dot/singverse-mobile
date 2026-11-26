@@ -519,215 +519,235 @@ class SongSpotlight extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 168),
               child: IntrinsicHeight(
-                child: Stack(
-                  fit: StackFit.passthrough,
-                  children: [
-                    Positioned.fill(
-                      child: ExcludeSemantics(
-                        child: Opacity(
-                          opacity: .42,
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            child: Artwork(
-                              state: state,
-                              path: song.cover,
-                              revision: song.coverVersion,
-                              size: 320,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color(0xE01A1828),
-                              Color(0xC83A1E34),
-                              Color(0xB8922C42),
+                child: AppBackdropCapture(
+                  builder: (context, layerBackdrop) => Stack(
+                    fit: StackFit.passthrough,
+                    children: [
+                      Positioned.fill(
+                        child: AppBackdropSource(
+                          backdrop: layerBackdrop,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ExcludeSemantics(
+                                child: Opacity(
+                                  opacity: .42,
+                                  child: FittedBox(
+                                    fit: BoxFit.cover,
+                                    child: Artwork(
+                                      state: state,
+                                      path: song.cover,
+                                      revision: song.coverVersion,
+                                      size: 320,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xE01A1828),
+                                      Color(0xC83A1E34),
+                                      Color(0xB8922C42),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    colors: [
+                                      Color(0xC00E0E15),
+                                      Color(0x280E0E15),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
-                    ),
-                    const Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [Color(0xC00E0E15), Color(0x280E0E15)],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: song.available ? open : null,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Glass(
-                                        state: state,
-                                        radius: 999,
-                                        material: GlassMaterialSpec.onColor,
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4,
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const AppVectorIcon(
-                                                AppGlyph.sparkles,
-                                                size: 11,
-                                                color: Color(0xFFFFD580),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Flexible(
-                                                child: Text(
-                                                  continuing
-                                                      ? '继续练唱'
-                                                      : '家庭精选开唱',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall
-                                                      ?.copyWith(
-                                                        color: Colors.white
-                                                            .withValues(
-                                                              alpha: .94,
-                                                            ),
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        song.title,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(
-                                              color: Colors.white,
-                                              fontSize: narrow ? 20 : 22,
-                                              height: 1.2,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: -.5,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        song.artist.isEmpty
-                                            ? '歌手未知'
-                                            : song.artist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: const Color(0xCCFFFFFF),
-                                              fontSize: 13,
-                                              height: 1.35,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                Row(
+                      AppBackdropScope(
+                        backdrop: layerBackdrop,
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Flexible(
-                                      child: FilledButton.icon(
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: Colors.white
-                                              .withValues(alpha: .94),
-                                          foregroundColor: AppPalette.ink,
-                                          minimumSize: const Size(48, 48),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 14,
-                                          ),
-                                          shape: const StadiumBorder(),
-                                          textStyle: Theme.of(context)
-                                              .textTheme
-                                              .labelLarge
-                                              ?.copyWith(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: song.available ? open : null,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Glass(
+                                            state: state,
+                                            radius: 999,
+                                            material: GlassMaterialSpec.onColor,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 4,
+                                                  ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const AppVectorIcon(
+                                                    AppGlyph.sparkles,
+                                                    size: 11,
+                                                    color: Color(0xFFFFD580),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Flexible(
+                                                    child: Text(
+                                                      continuing
+                                                          ? '继续练唱'
+                                                          : '家庭精选开唱',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color: Colors.white
+                                                                .withValues(
+                                                                  alpha: .94,
+                                                                ),
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                        ),
-                                        onPressed: song.available ? open : null,
-                                        icon: const AppVectorIcon(
-                                          AppGlyph.play,
-                                          size: 14,
-                                          color: AppPalette.ink,
-                                        ),
-                                        label: Text(
-                                          continuing ? '继续练唱' : '开始练唱',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            song.title,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .headlineSmall
+                                                ?.copyWith(
+                                                  color: Colors.white,
+                                                  fontSize: narrow ? 20 : 22,
+                                                  height: 1.2,
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: -.5,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            song.artist.isEmpty
+                                                ? '歌手未知'
+                                                : song.artist,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: const Color(
+                                                    0xCCFFFFFF,
+                                                  ),
+                                                  fontSize: 13,
+                                                  height: 1.35,
+                                                ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Glass(
-                                      state: state,
-                                      radius: 24,
-                                      material: GlassMaterialSpec.onColor,
-                                      tint: favorite
-                                          ? Colors.white
-                                          : const Color(0xFF3A3A44),
-                                      child: IconButton(
-                                        tooltip:
-                                            '${favorite ? '取消收藏' : '收藏'} ${song.title}',
-                                        style: IconButton.styleFrom(
-                                          foregroundColor: favorite
-                                              ? AppPalette.brand
-                                              : Colors.white,
-                                          minimumSize: const Size.square(48),
-                                          fixedSize: const Size.square(48),
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                        onPressed: state.favoriteSaving
-                                            ? null
-                                            : () => uiTask(
-                                                context,
-                                                () => state.favorite(song),
-                                              ),
-                                        icon: AnimatedSwitcher(
-                                          duration: AppMotionScope.durationOf(
-                                            context,
-                                            const Duration(milliseconds: 220),
+                                    const SizedBox(height: 14),
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: FilledButton.icon(
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: Colors.white
+                                                  .withValues(alpha: .94),
+                                              foregroundColor: AppPalette.ink,
+                                              minimumSize: const Size(48, 48),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                  ),
+                                              shape: const StadiumBorder(),
+                                              textStyle: Theme.of(context)
+                                                  .textTheme
+                                                  .labelLarge
+                                                  ?.copyWith(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                            onPressed: song.available
+                                                ? open
+                                                : null,
+                                            icon: const AppVectorIcon(
+                                              AppGlyph.play,
+                                              size: 14,
+                                              color: AppPalette.ink,
+                                            ),
+                                            label: Text(
+                                              continuing ? '继续练唱' : '开始练唱',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
-                                          transitionBuilder:
-                                              (child, animation) =>
-                                                  ScaleTransition(
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Glass(
+                                          state: state,
+                                          radius: 999,
+                                          material: GlassMaterialSpec.onColor,
+                                          child: IconButton(
+                                            tooltip:
+                                                '${favorite ? '取消收藏' : '收藏'} ${song.title}',
+                                            style: IconButton.styleFrom(
+                                              foregroundColor: favorite
+                                                  ? AppPalette.brand
+                                                  : Colors.white,
+                                              minimumSize: const Size.square(
+                                                48,
+                                              ),
+                                              fixedSize: const Size.square(48),
+                                              padding: EdgeInsets.zero,
+                                            ),
+                                            onPressed: state.favoriteSaving
+                                                ? null
+                                                : () => uiTask(
+                                                    context,
+                                                    () => state.favorite(song),
+                                                  ),
+                                            icon: AnimatedSwitcher(
+                                              duration:
+                                                  AppMotionScope.durationOf(
+                                                    context,
+                                                    const Duration(
+                                                      milliseconds: 220,
+                                                    ),
+                                                  ),
+                                              transitionBuilder:
+                                                  (
+                                                    child,
+                                                    animation,
+                                                  ) => ScaleTransition(
                                                     scale:
                                                         Tween<double>(
                                                           begin: .72,
@@ -741,58 +761,63 @@ class SongSpotlight extends StatelessWidget {
                                                         ),
                                                     child: child,
                                                   ),
-                                          child: Icon(
-                                            favorite
-                                                ? Icons.favorite_rounded
-                                                : Icons.favorite_border_rounded,
-                                            key: ValueKey(favorite),
-                                            size: 19,
+                                              child: Icon(
+                                                favorite
+                                                    ? Icons.favorite_rounded
+                                                    : Icons
+                                                          .favorite_border_rounded,
+                                                key: ValueKey(favorite),
+                                                size: 19,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (!narrow) ...[
-                            const SizedBox(width: 14),
-                            GestureDetector(
-                              onTap: song.available ? open : null,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: .32),
-                                    width: 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: .38,
-                                      ),
-                                      blurRadius: 22,
-                                      offset: const Offset(0, 10),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: Artwork(
-                                    state: state,
-                                    path: song.cover,
-                                    revision: song.coverVersion,
-                                    size: 108,
-                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ],
+                              if (!narrow) ...[
+                                const SizedBox(width: 14),
+                                GestureDetector(
+                                  onTap: song.available ? open : null,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: .32,
+                                        ),
+                                        width: 1,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: .38,
+                                          ),
+                                          blurRadius: 22,
+                                          offset: const Offset(0, 10),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(15),
+                                      child: Artwork(
+                                        state: state,
+                                        path: song.cover,
+                                        revision: song.coverVersion,
+                                        size: 108,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

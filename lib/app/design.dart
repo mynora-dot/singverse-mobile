@@ -64,7 +64,7 @@ ThemeData singVerseTheme(
         surfaceTint: Colors.transparent,
         onSurface: dark ? AppPalette.inkDark : ink,
         onSurfaceVariant: dark
-            ? const Color(0xFFB4B4C0)
+            ? const Color(0xFFBCBCC8)
             : const Color(0xFF54545E),
         secondaryContainer: surfaces.group,
         onSecondaryContainer: dark ? AppPalette.inkDark : ink,
@@ -508,21 +508,40 @@ class AppSegments<T> extends StatelessWidget {
                   heightFactor: 1,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: thumbColor,
+                      color: accent || solid || !(glass || liquid)
+                          ? thumbColor
+                          : null,
+                      gradient: !accent && (glass || liquid) && !solid
+                          ? (dark
+                                ? LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.white.withValues(alpha: .16),
+                                      Colors.white.withValues(alpha: .12),
+                                    ],
+                                  )
+                                : LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withValues(alpha: .88),
+                                      Colors.white.withValues(alpha: .74),
+                                    ],
+                                  ))
+                          : null,
                       borderRadius: pillRadius,
-                      border: !solid && !compact && glass
+                      border: !solid && !dark && (glass || liquid) && !accent
                           ? Border.all(
-                              color: Colors.white.withValues(
-                                alpha: dark ? .18 : .78,
-                              ),
-                              width: .6,
+                              color: Colors.white.withValues(alpha: .92),
+                              width: .75,
                             )
                           : null,
                       boxShadow: [
                         if (!solid)
                           BoxShadow(
                             color: Colors.black.withValues(
-                              alpha: dark ? .22 : .07,
+                              alpha: dark ? .18 : .08,
                             ),
                             blurRadius: compact ? 5 : 8,
                             offset: Offset(0, compact ? 1.5 : 2),

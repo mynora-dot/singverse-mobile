@@ -108,7 +108,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
           dragging || AppMotionScope.levelOf(context) != AppMotionLevel.full
           ? Duration.zero
           : AppMotion.release;
-      final radius = state.senior ? 24.0 : 30.0;
+      final radius = state.senior ? 26.0 : 32.0;
       return Padding(
         padding: widget.inset
             ? const EdgeInsets.fromLTRB(12, 8, 12, 8)
@@ -172,17 +172,31 @@ class _MiniPlayerState extends State<MiniPlayer> {
                               child: Row(
                                 children: [
                                   if (artwork) ...[
-                                    Artwork(
-                                      state: state,
-                                      path: state.current!.cover,
-                                      revision: state.current!.coverVersion,
-                                      label: state.current!.title,
-                                      round: !state.senior,
-                                      size: state.senior
-                                          ? 48
-                                          : widget.compact
-                                          ? 36
-                                          : 42,
+                                    DecoratedBox(
+                                      position: DecorationPosition.foreground,
+                                      decoration: state.senior
+                                          ? const BoxDecoration()
+                                          : BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white.withValues(
+                                                  alpha: dark ? .16 : .50,
+                                                ),
+                                                width: .6,
+                                              ),
+                                            ),
+                                      child: Artwork(
+                                        state: state,
+                                        path: state.current!.cover,
+                                        revision: state.current!.coverVersion,
+                                        label: state.current!.title,
+                                        round: !state.senior,
+                                        size: state.senior
+                                            ? 48
+                                            : widget.compact
+                                            ? 36
+                                            : 42,
+                                      ),
                                     ),
                                     SizedBox(width: widget.compact ? 8 : 11),
                                   ],
@@ -298,10 +312,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                       iconSize: 22,
                                       color: scheme.onSurface,
                                       style: IconButton.styleFrom(
-                                        backgroundColor: scheme.onSurface
-                                            .withValues(
-                                              alpha: dark ? .10 : .06,
-                                            ),
+                                        backgroundColor: Colors.transparent,
                                         shape: const CircleBorder(),
                                       ),
                                       constraints: BoxConstraints.tightFor(
@@ -340,9 +351,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
                             ),
                             if (!widget.compact)
                               Positioned(
-                                left: 30,
-                                right: 30,
-                                bottom: 1.5,
+                                left: 32,
+                                right: 32,
+                                bottom: 2.0,
                                 child: ExcludeSemantics(
                                   child: ListenableBuilder(
                                     listenable: state.playback,

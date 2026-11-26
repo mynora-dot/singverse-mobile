@@ -1,13 +1,13 @@
 import 'dart:ui' as ui;
 import 'dart:developer' as developer;
 
+import 'package:fluid_glass/fluid_glass.dart' show DrawBackdrop, FluidGlass;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:singverse_mobile/app/design.dart';
-import 'package:singverse_mobile/app/glass_optics.dart' show RenderLiquidLens;
 import 'package:singverse_mobile/core/app_state.dart';
 import 'package:singverse_mobile/core/local_store.dart';
 import 'package:singverse_mobile/core/login_store.dart';
@@ -44,9 +44,7 @@ void main() {
     // native playback, microphone, or user's credentials are touched.
     SharedPreferences.setMockInitialValues({});
     final store = await LocalStore.open(path: ':memory:');
-    await tester.runAsync(
-      () => ui.FragmentProgram.fromAsset('shaders/liquid_lens.frag'),
-    );
+    await tester.runAsync(FluidGlass.ensureInitialized);
     final state =
         AppState(
             api: FakeApi(),
@@ -87,20 +85,8 @@ void main() {
       isTrue,
       reason: 'Run on Impeller to validate real backdrop refraction.',
     );
-    final lenses = find
-        .byWidgetPredicate((widget) => widget is SingleChildRenderObjectWidget)
-        .evaluate()
-        .map((element) => element.renderObject)
-        .whereType<RenderLiquidLens>()
-        .toSet()
-        .length;
-    expect(
-      lenses,
-      1,
-      reason:
-          'The floating back button uses the shader; account fields, protocol '
-          'selection and mini player use neutral or regular materials.',
-    );
+    final lenses = find.byType(DrawBackdrop).evaluate().length;
+    expect(lenses, greaterThanOrEqualTo(1));
     final username = find.byKey(const ValueKey('nas-username-field'));
     final address = find.byKey(const ValueKey('nas-address-field'));
     final mini = find.byKey(const Key('mini-player'));

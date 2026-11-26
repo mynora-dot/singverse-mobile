@@ -2887,99 +2887,113 @@ class _PlayerPageState extends State<PlayerPage> {
                         ? SystemUiOverlayStyle.light
                         : SystemUiOverlayStyle.dark,
                   ),
-                  body: AppEnvironment(
+                  body: AppBackdropCapture(
                     solid:
                         state.senior ||
                         state.reduceTransparency ||
                         state.performanceMode ||
-                        MediaQuery.highContrastOf(context),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (song != null && song.mediaType != 'VIDEO') ...[
-                          const Positioned.fill(
-                            child: IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: RadialGradient(
-                                    center: Alignment(-.55, -.62),
-                                    radius: 1.15,
-                                    colors: [
-                                      Color(0x52E63963),
-                                      Color(0x00101016),
-                                    ],
-                                  ),
+                        MediaQuery.highContrastOf(context) ||
+                        song == null ||
+                        song.mediaType == 'VIDEO',
+                    builder: (context, layerBackdrop) => AppEnvironment(
+                      solid:
+                          state.senior ||
+                          state.reduceTransparency ||
+                          state.performanceMode ||
+                          MediaQuery.highContrastOf(context),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (song != null && song.mediaType != 'VIDEO')
+                            Positioned.fill(
+                              child: AppBackdropSource(
+                                backdrop: layerBackdrop,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    const IgnorePointer(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: RadialGradient(
+                                            center: Alignment(-.55, -.62),
+                                            radius: 1.15,
+                                            colors: [
+                                              Color(0x52E63963),
+                                              Color(0x00101016),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const IgnorePointer(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: RadialGradient(
+                                            center: Alignment(.65, .38),
+                                            radius: 1.1,
+                                            colors: [
+                                              Color(0x484460B8),
+                                              Color(0x00101016),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    AmbientArtwork(state: state, song: song),
+                                    const IgnorePointer(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            stops: [0, .50, 1],
+                                            colors: [
+                                              Color(0x42101016),
+                                              Color(0x78101016),
+                                              Color(0xE8101016),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
-                          const Positioned.fill(
-                            child: IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: RadialGradient(
-                                    center: Alignment(.65, .38),
-                                    radius: 1.1,
-                                    colors: [
-                                      Color(0x484460B8),
-                                      Color(0x00101016),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: AmbientArtwork(state: state, song: song),
-                          ),
-                          const Positioned.fill(
-                            child: IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    stops: [0, .50, 1],
-                                    colors: [
-                                      Color(0x42101016),
-                                      Color(0x78101016),
-                                      Color(0xE8101016),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                          AppBackdropScope(
+                            backdrop: layerBackdrop,
+                            child: SafeArea(
+                              child: song == null
+                                  ? Notice(
+                                      '还没有正在演唱的歌曲。',
+                                      action: close,
+                                      label: '返回曲库',
+                                    )
+                                  : LayoutBuilder(
+                                      builder: (context, size) {
+                                        final wide =
+                                            size.maxWidth > size.maxHeight;
+                                        accessibleControls =
+                                            MediaQuery.accessibleNavigationOf(
+                                              context,
+                                            ) ||
+                                            MediaQuery.viewInsetsOf(context)
+                                                    .bottom >
+                                                0;
+                                        if (accessibleControls) {
+                                          controlsVisible = true;
+                                          controlsTimer?.cancel();
+                                        }
+                                        updateLayout(wide);
+                                        if (wide) return immersive(song, size);
+                                        measureChrome(size.maxHeight);
+                                        return portrait(song, size);
+                                      },
+                                    ),
                             ),
                           ),
                         ],
-                        SafeArea(
-                          child: song == null
-                              ? Notice(
-                                  '还没有正在演唱的歌曲。',
-                                  action: close,
-                                  label: '返回曲库',
-                                )
-                              : LayoutBuilder(
-                                  builder: (context, size) {
-                                    final wide = size.maxWidth > size.maxHeight;
-                                    accessibleControls =
-                                        MediaQuery.accessibleNavigationOf(
-                                          context,
-                                        ) ||
-                                        MediaQuery.viewInsetsOf(context)
-                                                .bottom >
-                                            0;
-                                    if (accessibleControls) {
-                                      controlsVisible = true;
-                                      controlsTimer?.cancel();
-                                    }
-                                    updateLayout(wide);
-                                    if (wide) return immersive(song, size);
-                                    measureChrome(size.maxHeight);
-                                    return portrait(song, size);
-                                  },
-                                ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

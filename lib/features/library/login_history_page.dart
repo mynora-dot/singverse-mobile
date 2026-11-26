@@ -67,203 +67,219 @@ class _LoginHistoryPageState extends State<LoginHistoryPage> {
     for (final record in records) {
       groups.putIfAbsent(record.instanceId, () => []).add(record);
     }
-    return AppEnvironment(
-      child: Scaffold(
+    return AppBackdropCapture(
+      builder: (context, layerBackdrop) => Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppToolbar(
           leading: Navigator.canPop(context)
-              ? Padding(
-                  padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
-                  child: GlassSurface(
-                    radius: 24,
-                    variant: GlassVariant.liquid,
-                    child: const BackButton(),
+              ? AppBackdropScope(
+                  backdrop: layerBackdrop,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+                    child: GlassSurface(
+                      radius: 24,
+                      variant: GlassVariant.liquid,
+                      child: const BackButton(),
+                    ),
                   ),
                 )
               : null,
           title: const Text('历史登录'),
         ),
-        body: SafeArea(
-          child: ContentWidth(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-              children: [
-                if (loading)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        minHeight: 4,
-                        color: AppPalette.brand,
-                        backgroundColor: scheme.onSurface.withValues(
-                          alpha: .10,
+        body: AppBackdropSource(
+          backdrop: layerBackdrop,
+          child: AppEnvironment(
+            child: SafeArea(
+              child: ContentWidth(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+                  children: [
+                    if (loading)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            minHeight: 4,
+                            color: AppPalette.brand,
+                            backgroundColor: scheme.onSurface.withValues(
+                              alpha: .10,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                if (error != null) Notice(error!, action: load),
-                if (!loading && error == null && records.isEmpty)
-                  const Notice('还没有历史登录'),
-                for (final group in groups.values) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    child: Text(
-                      group.first.name.isEmpty
-                          ? 'SingVerse NAS'
-                          : group.first.name,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: scheme.onSurfaceVariant,
+                    if (error != null) Notice(error!, action: load),
+                    if (!loading && error == null && records.isEmpty)
+                      const Notice('还没有历史登录'),
+                    for (final group in groups.values) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        child: Text(
+                          group.first.name.isEmpty
+                              ? 'SingVerse NAS'
+                              : group.first.name,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  GlassSurface(
-                    radius: 24,
-                    material: GlassMaterialSpec.standard,
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < group.length; i++) ...[
-                          if (i > 0)
-                            Divider(
-                              height: 1,
-                              indent: 64,
-                              endIndent: 16,
-                              color: scheme.onSurface.withValues(
-                                alpha: dark ? .08 : .06,
-                              ),
-                            ),
-                          ListTile(
-                            key: ValueKey('login-record:${group[i].id}'),
-                            contentPadding: const EdgeInsets.fromLTRB(
-                              16,
-                              6,
-                              8,
-                              6,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(
-                                top: i == 0
-                                    ? const Radius.circular(24)
-                                    : Radius.zero,
-                                bottom: i == group.length - 1
-                                    ? const Radius.circular(24)
-                                    : Radius.zero,
-                              ),
-                            ),
-                            enabled: !loading,
-                            leading: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [AppPalette.brand, AppPalette.coral],
+                      GlassSurface(
+                        radius: 24,
+                        material: GlassMaterialSpec.standard,
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < group.length; i++) ...[
+                              if (i > 0)
+                                Divider(
+                                  height: 1,
+                                  indent: 64,
+                                  endIndent: 16,
+                                  color: scheme.onSurface.withValues(
+                                    alpha: dark ? .08 : .06,
+                                  ),
                                 ),
-                              ),
-                              child: const Icon(
-                                Icons.dns_rounded,
-                                size: 19,
-                                color: Colors.white,
-                              ),
-                            ),
-                            title: Text(
-                              group[i].username,
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15.5,
-                              ),
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 3),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    group[i].address,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
+                              ListTile(
+                                key: ValueKey('login-record:${group[i].id}'),
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  6,
+                                  8,
+                                  6,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                    top: i == 0
+                                        ? const Radius.circular(24)
+                                        : Radius.zero,
+                                    bottom: i == group.length - 1
+                                        ? const Radius.circular(24)
+                                        : Radius.zero,
+                                  ),
+                                ),
+                                enabled: !loading,
+                                leading: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        AppPalette.brand,
+                                        AppPalette.coral,
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${group[i].protocol} · ${group[i].hasPassword ? '已记住密码' : '需输入密码'}',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      fontSize: 12,
-                                      color: scheme.onSurfaceVariant.withValues(
-                                        alpha: .78,
-                                      ),
-                                    ),
+                                  child: const Icon(
+                                    Icons.dns_rounded,
+                                    size: 19,
+                                    color: Colors.white,
                                   ),
-                                ],
-                              ),
-                            ),
-                            onTap: loading
-                                ? null
-                                : () => Navigator.pop(context, group[i]),
-                            trailing: PopupMenuButton<String>(
-                              tooltip: '管理 ${group[i].username} 的登录记录',
-                              enabled: !loading,
-                              icon: Icon(
-                                Icons.more_horiz_rounded,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              elevation: 10,
-                              onSelected: (action) => manage(group[i], action),
-                              itemBuilder: (_) => [
-                                if (group[i].hasPassword)
-                                  PopupMenuItem(
-                                    value: 'forget',
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.key_off_rounded,
-                                          size: 18,
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        const Text('忘记已保存密码'),
-                                      ],
-                                    ),
+                                ),
+                                title: Text(
+                                  group[i].username,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15.5,
                                   ),
-                                PopupMenuItem(
-                                  value: 'remove',
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 3),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        Icons.delete_outline_rounded,
-                                        size: 18,
-                                        color: scheme.error,
-                                      ),
-                                      const SizedBox(width: 10),
                                       Text(
-                                        '移除登录记录',
-                                        style: TextStyle(color: scheme.error),
+                                        group[i].address,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${group[i].protocol} · ${group[i].hasPassword ? '已记住密码' : '需输入密码'}',
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              fontSize: 12,
+                                              color: scheme.onSurfaceVariant
+                                                  .withValues(alpha: .78),
+                                            ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ],
+                                onTap: loading
+                                    ? null
+                                    : () => Navigator.pop(context, group[i]),
+                                trailing: PopupMenuButton<String>(
+                                  tooltip: '管理 ${group[i].username} 的登录记录',
+                                  enabled: !loading,
+                                  icon: Icon(
+                                    Icons.more_horiz_rounded,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  elevation: 10,
+                                  onSelected: (action) =>
+                                      manage(group[i], action),
+                                  itemBuilder: (_) => [
+                                    if (group[i].hasPassword)
+                                      PopupMenuItem(
+                                        value: 'forget',
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.key_off_rounded,
+                                              size: 18,
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            const Text('忘记已保存密码'),
+                                          ],
+                                        ),
+                                      ),
+                                    PopupMenuItem(
+                                      value: 'remove',
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 18,
+                                            color: scheme.error,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Text(
+                                            '移除登录记录',
+                                            style: TextStyle(
+                                              color: scheme.error,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),

@@ -115,14 +115,14 @@ class _AppShellState extends State<AppShell> {
         : navigationHeight(context, state);
     return Glass(
       state: state,
-      radius: 31,
+      radius: 999,
       variant: GlassVariant.liquid,
       backdropContext: GlassBackdropContext.content,
       child: AnimatedContainer(
         duration: full ? AppMotion.expand : Duration.zero,
         curve: AppMotion.fluid,
         height: height,
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(5),
         child: Stack(
           children: [
             Positioned.fill(
@@ -135,27 +135,40 @@ class _AppShellState extends State<AppShell> {
                   heightFactor: 1,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: solid
-                          ? scheme.primaryContainer
-                          : dark
+                      color: solid ? scheme.primaryContainer : null,
+                      gradient: solid
                           ? null
-                          : Colors.white.withValues(alpha: .90),
-                      gradient: !solid && dark
+                          : dark
                           ? LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.white.withValues(alpha: .16),
-                                Colors.white.withValues(alpha: .09),
+                                Colors.white.withValues(alpha: .15),
+                                Colors.white.withValues(alpha: .12),
                               ],
                             )
-                          : null,
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Colors.white.withValues(alpha: .94),
+                                Colors.white.withValues(alpha: .86),
+                              ],
+                            ),
                       borderRadius: BorderRadius.circular(999),
+                      border: solid || dark
+                          ? null
+                          : Border.all(
+                              color: Colors.white.withValues(alpha: .92),
+                              width: .75,
+                            ),
                       boxShadow: [
-                        if (!solid && !dark)
+                        if (!solid)
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: .08),
-                            blurRadius: 10,
+                            color: Colors.black.withValues(
+                              alpha: dark ? .18 : .08,
+                            ),
+                            blurRadius: dark ? 8 : 10,
                             offset: const Offset(0, 2),
                           ),
                       ],
@@ -274,6 +287,11 @@ class _AppShellState extends State<AppShell> {
     final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
     final duration = full ? AppMotion.expand : Duration.zero;
     final background = Theme.of(context).scaffoldBackgroundColor;
+    final solidDock =
+        AppMotionScope.solidOf(context) ||
+        state.reduceTransparency ||
+        state.senior ||
+        state.performanceMode;
     final safe = MediaQuery.viewPaddingOf(context).bottom;
     final navHeight = compact ? 54.0 : navigationHeight(context, state);
     final miniHeight = hasPlayer
@@ -291,28 +309,35 @@ class _AppShellState extends State<AppShell> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // Progressive bottom veil: keeps center translucent for Liquid Glass
-            // refraction while hiding awkward song cover corners peeking around
-            // the outer pill radius of the floating dock.
+            // Soft bottom vignette in safe area only so scrolling artwork and
+            // list content stay visible behind the Liquid Glass capsules.
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              height: dockHeight + 36,
+              height: solidDock ? dockHeight + 36 : safe + 38,
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      stops: const [0, .24, .52, .80, 1],
-                      colors: [
-                        background.withValues(alpha: 0),
-                        background.withValues(alpha: .42),
-                        background.withValues(alpha: .84),
-                        background.withValues(alpha: .96),
-                        background,
-                      ],
+                      stops: solidDock
+                          ? const [0, .24, .52, .80, 1]
+                          : const [0, .52, 1],
+                      colors: solidDock
+                          ? [
+                              background.withValues(alpha: 0),
+                              background.withValues(alpha: .42),
+                              background.withValues(alpha: .84),
+                              background.withValues(alpha: .96),
+                              background,
+                            ]
+                          : [
+                              background.withValues(alpha: 0),
+                              background.withValues(alpha: .14),
+                              background.withValues(alpha: .34),
+                            ],
                     ),
                   ),
                 ),
@@ -392,85 +417,103 @@ class _AppShellState extends State<AppShell> {
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop) selectTab(0);
         },
-        child: Scaffold(
-          extendBody: true,
-          backgroundColor: Colors.transparent,
-          appBar: homeHeader
-              ? null
-              : AppBar(
-                  automaticallyImplyLeading: false,
-                  centerTitle: false,
-                  titleSpacing: 20,
-                  toolbarHeight: state.senior ? 68 : 58,
-                  title: Text(
-                    const ['点歌', '常唱', '作品'][tab],
-                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontSize: state.senior ? 32 : 30,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -.8,
+        child: AppBackdropCapture(
+          builder: (context, layerBackdrop) => Scaffold(
+            extendBody: true,
+            backgroundColor: Colors.transparent,
+            appBar: homeHeader
+                ? null
+                : AppBar(
+                    automaticallyImplyLeading: false,
+                    centerTitle: false,
+                    titleSpacing: 20,
+                    toolbarHeight: state.senior ? 68 : 58,
+                    title: Text(
+                      const ['点歌', '常唱', '作品'][tab],
+                      style: Theme.of(context).textTheme.headlineLarge
+                          ?.copyWith(
+                            fontSize: state.senior ? 32 : 30,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.8,
+                          ),
+                    ),
+                    backgroundColor: Colors.transparent,
+                    systemOverlayStyle:
+                        Theme.of(context).brightness == Brightness.dark
+                        ? SystemUiOverlayStyle.light
+                        : SystemUiOverlayStyle.dark,
+                    actions: [
+                      AppBackdropScope(
+                        backdrop: layerBackdrop,
+                        child: tools(state),
+                      ),
+                      const SizedBox(width: 16),
+                    ],
+                  ),
+            body: AppBackdropSource(
+              backdrop: layerBackdrop,
+              child: AppEnvironment(
+                child: SafeArea(
+                  top: homeHeader,
+                  bottom: false,
+                  child: ContentWidth(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: trackScroll,
+                      child: IndexedStack(
+                        index: tab,
+                        children: [
+                          TickerMode(
+                            enabled: tab == 0,
+                            child: MotionTabPane(
+                              active: tab == 0,
+                              child: state.authenticated
+                                  ? SongsPage(
+                                      key: ValueKey(state.instanceId),
+                                      state: state,
+                                      embedded: true,
+                                      showBrowse: true,
+                                      headerActions: state.senior
+                                          ? null
+                                          : tools(state),
+                                    )
+                                  : _Disconnected(
+                                      state: state,
+                                      onOpenWorks: () => selectTab(2),
+                                    ),
+                            ),
+                          ),
+                          TickerMode(
+                            enabled: tab == 1,
+                            child: MotionTabPane(
+                              active: tab == 1,
+                              child: FrequentPage(
+                                key: ValueKey('personal:${state.instanceId}'),
+                                state: state,
+                              ),
+                            ),
+                          ),
+                          TickerMode(
+                            enabled: tab == 2,
+                            child: MotionTabPane(
+                              active: tab == 2,
+                              child: WorksPage(state: state, embedded: true),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  backgroundColor: Colors.transparent,
-                  systemOverlayStyle:
-                      Theme.of(context).brightness == Brightness.dark
-                      ? SystemUiOverlayStyle.light
-                      : SystemUiOverlayStyle.dark,
-                  actions: [tools(state), const SizedBox(width: 16)],
-                ),
-          body: SafeArea(
-            top: homeHeader,
-            bottom: false,
-            child: ContentWidth(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: trackScroll,
-                child: IndexedStack(
-                  index: tab,
-                  children: [
-                    TickerMode(
-                      enabled: tab == 0,
-                      child: MotionTabPane(
-                        active: tab == 0,
-                        child: state.authenticated
-                            ? SongsPage(
-                                key: ValueKey(state.instanceId),
-                                state: state,
-                                embedded: true,
-                                showBrowse: true,
-                                headerActions: state.senior
-                                    ? null
-                                    : tools(state),
-                              )
-                            : _Disconnected(
-                                state: state,
-                                onOpenWorks: () => selectTab(2),
-                              ),
-                      ),
-                    ),
-                    TickerMode(
-                      enabled: tab == 1,
-                      child: MotionTabPane(
-                        active: tab == 1,
-                        child: FrequentPage(
-                          key: ValueKey('personal:${state.instanceId}'),
-                          state: state,
-                        ),
-                      ),
-                    ),
-                    TickerMode(
-                      enabled: tab == 2,
-                      child: MotionTabPane(
-                        active: tab == 2,
-                        child: WorksPage(state: state, embedded: true),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
-          ),
-          bottomNavigationBar: ValueListenableBuilder<bool>(
-            valueListenable: collapsed,
-            builder: (context, value, _) => dock(context, state, drafts, value),
+            bottomNavigationBar: AppBackdropScope(
+              backdrop: layerBackdrop,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: collapsed,
+                builder: (context, value, _) =>
+                    dock(context, state, drafts, value),
+              ),
+            ),
           ),
         ),
       );

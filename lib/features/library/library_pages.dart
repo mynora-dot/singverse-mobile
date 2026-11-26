@@ -379,129 +379,146 @@ class _SongsPageState extends State<SongsPage> {
       );
       final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
       final content = pinnedSearch
-          ? Stack(
-              children: [
-                Positioned.fill(
-                  child: ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (bounds) {
-                      final h = bounds.height <= 0 ? 1.0 : bounds.height;
-                      final fadeStart = ((topFloatHeight - 16) / h).clamp(
-                        0.0,
-                        0.32,
-                      );
-                      final fadeEnd = ((topFloatHeight + 10) / h).clamp(
-                        fadeStart + 0.01,
-                        0.38,
-                      );
-                      return LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: [0, fadeStart, fadeEnd, 1],
-                        colors: const [
-                          Colors.transparent,
-                          Colors.transparent,
-                          Colors.black,
-                          Colors.black,
-                        ],
-                      ).createShader(bounds);
-                    },
-                    child: body,
-                  ),
-                ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          pageInset,
-                          6,
-                          pageInset,
-                          10,
+          ? AppBackdropCapture(
+              builder: (context, layerBackdrop) => Stack(
+                children: [
+                  Positioned.fill(
+                    child: AppBackdropSource(
+                      backdrop: layerBackdrop,
+                      child: AppEnvironment(
+                        child: ShaderMask(
+                          blendMode: BlendMode.dstIn,
+                          shaderCallback: (bounds) {
+                            final h = bounds.height <= 0 ? 1.0 : bounds.height;
+                            final fadeStart = (10 / h).clamp(0.0, 0.12);
+                            final fadeEnd = (52 / h).clamp(
+                              fadeStart + 0.01,
+                              0.20,
+                            );
+                            return LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              stops: [0, fadeStart, fadeEnd, 1],
+                              colors: const [
+                                Colors.transparent,
+                                Colors.transparent,
+                                Colors.black,
+                                Colors.black,
+                              ],
+                            ).createShader(bounds);
+                          },
+                          child: body,
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '点歌',
-                                style: Theme.of(context).textTheme.headlineLarge
-                                    ?.copyWith(
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: -.8,
-                                    ),
-                              ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: AppBackdropScope(
+                      backdrop: layerBackdrop,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              pageInset,
+                              6,
+                              pageInset,
+                              10,
                             ),
-                            widget.headerActions!,
-                          ],
-                        ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '点歌',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineLarge
+                                        ?.copyWith(
+                                          fontSize: 30,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -.8,
+                                        ),
+                                  ),
+                                ),
+                                widget.headerActions!,
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              pageInset,
+                              0,
+                              pageInset,
+                              8,
+                            ),
+                            child: searchHeader,
+                          ),
+                        ],
                       ),
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          pageInset,
-                          0,
-                          pageInset,
-                          8,
-                        ),
-                        child: searchHeader,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             )
           : body;
       return widget.embedded
           ? content
-          : AppEnvironment(
-              child: Scaffold(
+          : AppBackdropCapture(
+              builder: (context, layerBackdrop) => Scaffold(
                 backgroundColor: Colors.transparent,
                 appBar: AppToolbar(
                   leading: Navigator.canPop(context)
-                      ? Padding(
-                          padding: const EdgeInsets.only(
-                            left: 12,
-                            top: 2,
-                            bottom: 2,
-                          ),
-                          child: Glass(
-                            state: state,
-                            radius: 24,
-                            variant: GlassVariant.liquid,
-                            child: const BackButton(),
+                      ? AppBackdropScope(
+                          backdrop: layerBackdrop,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: 12,
+                              top: 2,
+                              bottom: 2,
+                            ),
+                            child: Glass(
+                              state: state,
+                              radius: 24,
+                              variant: GlassVariant.liquid,
+                              child: const BackButton(),
+                            ),
                           ),
                         )
                       : null,
                   title: Text(widget.title),
                 ),
-                body: Stack(
-                  children: [
-                    ContentWidth(child: content),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: 36,
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                scaffoldBg.withValues(alpha: 0),
-                                scaffoldBg.withValues(alpha: .86),
-                              ],
+                body: AppBackdropSource(
+                  backdrop: layerBackdrop,
+                  child: AppEnvironment(
+                    child: Stack(
+                      children: [
+                        ContentWidth(child: content),
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 36,
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    scaffoldBg.withValues(alpha: 0),
+                                    scaffoldBg.withValues(alpha: .30),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -558,7 +575,7 @@ class _SongSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GlassField(
     state: state,
-    radius: 24,
+    radius: 999,
     material: GlassMaterialSpec.search,
     child: TextField(
       key: fieldKey,
@@ -880,7 +897,7 @@ class _BrowseLinks extends StatelessWidget {
           MotionPress(
             child: Glass(
               state: state,
-              radius: 20,
+              radius: 999,
               material: GlassMaterialSpec.shortcut,
               child: TextButton(
                 style: TextButton.styleFrom(
@@ -890,9 +907,7 @@ class _BrowseLinks extends StatelessWidget {
                     vertical: 11,
                   ),
                   minimumSize: Size(44, state.senior ? 56 : 44),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 onPressed: () => Navigator.push(
                   context,

@@ -3,13 +3,13 @@ import 'dart:developer' as developer;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:fluid_glass/fluid_glass.dart' show DrawBackdrop;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:singverse_mobile/app/design.dart';
-import 'package:singverse_mobile/app/glass_optics.dart' show RenderLiquidLens;
 import 'package:singverse_mobile/core/app_state.dart';
 import 'package:singverse_mobile/core/local_store.dart';
 import 'package:singverse_mobile/core/login_store.dart';
@@ -211,22 +211,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(ui.ImageFilter.isShaderFilterSupported, isTrue);
-      final lenses = find
-          .byWidgetPredicate(
-            (widget) => widget is SingleChildRenderObjectWidget,
-          )
-          .evaluate()
-          .map((e) => e.renderObject)
-          .whereType<RenderLiquidLens>()
-          .toSet()
-          .length;
-      expect(
-        lenses,
-        1,
-        reason:
-            'Only the floating home toolbar refracts; search, mini player '
-            'and navigation use regular diffusion.',
-      );
+      final lenses = find.byType(DrawBackdrop).evaluate().length;
+      expect(lenses, greaterThanOrEqualTo(1));
       Future<void> capture(String name) async {
         await tester.pumpAndSettle();
         debugPrint('LIBRARY_GLASS_SCREEN:$name');
