@@ -320,29 +320,41 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                         height: widget.compact ? 38 : 44,
                                       ),
                                       padding: EdgeInsets.zero,
-                                      icon: AnimatedSwitcher(
-                                        duration: AppMotionScope.durationOf(
-                                          context,
-                                          const Duration(milliseconds: 180),
+                                      icon: Container(
+                                        width: widget.compact ? 30 : 34,
+                                        height: widget.compact ? 30 : 34,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: scheme.onSurface.withValues(
+                                            alpha: dark ? .10 : .06,
+                                          ),
                                         ),
-                                        transitionBuilder: (child, animation) =>
-                                            ScaleTransition(
-                                              scale: Tween<double>(
-                                                begin: .76,
-                                                end: 1,
-                                              ).animate(animation),
-                                              child: FadeTransition(
-                                                opacity: animation,
-                                                child: child,
-                                              ),
-                                            ),
-                                        child: AppVectorIcon(
-                                          state.isPlaying
-                                              ? AppGlyph.pause
-                                              : AppGlyph.play,
-                                          key: ValueKey(state.isPlaying),
-                                          size: 16.5,
-                                          color: scheme.onSurface,
+                                        alignment: Alignment.center,
+                                        child: AnimatedSwitcher(
+                                          duration: AppMotionScope.durationOf(
+                                            context,
+                                            const Duration(milliseconds: 180),
+                                          ),
+                                          transitionBuilder:
+                                              (child, animation) =>
+                                                  ScaleTransition(
+                                                    scale: Tween<double>(
+                                                      begin: .76,
+                                                      end: 1,
+                                                    ).animate(animation),
+                                                    child: FadeTransition(
+                                                      opacity: animation,
+                                                      child: child,
+                                                    ),
+                                                  ),
+                                          child: AppVectorIcon(
+                                            state.isPlaying
+                                                ? AppGlyph.pause
+                                                : AppGlyph.play,
+                                            key: ValueKey(state.isPlaying),
+                                            size: 15,
+                                            color: scheme.onSurface,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -351,9 +363,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
                             ),
                             if (!widget.compact)
                               Positioned(
-                                left: 32,
-                                right: 32,
-                                bottom: 2.0,
+                                left: state.senior ? 68 : 59,
+                                right: 24,
+                                bottom: 4.0,
                                 child: ExcludeSemantics(
                                   child: ListenableBuilder(
                                     listenable: state.playback,

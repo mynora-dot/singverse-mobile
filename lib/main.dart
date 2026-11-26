@@ -3,6 +3,7 @@ import 'features/updates/update_page.dart';
 import 'package:fluid_glass/fluid_glass.dart' show FluidGlass;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/design.dart';
@@ -17,6 +18,7 @@ import 'features/player/player_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _registerThirdPartyLicenses();
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   try {
     await FluidGlass.ensureInitialized();
   } catch (_) {}

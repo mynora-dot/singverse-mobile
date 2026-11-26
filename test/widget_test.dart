@@ -150,7 +150,7 @@ void main() {
       await state.initialize();
       await tester.pumpWidget(SingVerseApp(state: state));
       await tester.pumpAndSettle();
-      expect(find.text('点歌'), findsNWidgets(2));
+      expect(find.text('点歌'), findsOneWidget);
       expect(find.text('常唱'), findsOneWidget);
       expect(find.text('作品'), findsOneWidget);
       expect(find.byTooltip('扫一扫'), findsOneWidget);
@@ -188,12 +188,12 @@ void main() {
       }
       await tester.tap(find.byKey(const Key('nav-works')));
       await tester.pumpAndSettle();
-      expect(find.text('作品'), findsNWidgets(2));
+      expect(find.text('作品'), findsOneWidget);
       expect(find.text('留下你的声音'), findsOneWidget);
       await state.setUiMode(UiMode.standard);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('nav-songs')), findsOneWidget);
-      expect(find.text('作品'), findsNWidgets(2));
+      expect(find.text('作品'), findsOneWidget);
       expect(state.takeId, 'take-a');
       expect(state.recording, isTrue);
       expect(state.current!.id, 'active');
@@ -219,14 +219,11 @@ void main() {
         expect(entry.hitTestable(), findsOneWidget);
         expect(tester.getSize(entry).height, greaterThanOrEqualTo(56));
       }
-      for (final entry in [('open-tv', '扫码'), ('open-settings', '设置')]) {
+      for (final entry in [('open-tv', '扫一扫'), ('open-settings', '设置')]) {
         final button = find.byKey(Key(entry.$1));
         expect(button.hitTestable(), findsOneWidget);
         expect(tester.getSize(button).height, greaterThanOrEqualTo(56));
-        expect(
-          find.descendant(of: button, matching: find.text(entry.$2)),
-          findsOneWidget,
-        );
+        expect(tester.widget<IconButton>(button).tooltip, entry.$2);
       }
       expect(tester.takeException(), isNull);
     }

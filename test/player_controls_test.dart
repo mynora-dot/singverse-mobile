@@ -113,7 +113,7 @@ void main() {
         {'format': 'lrc', 'text': '[00:00.00]第一句\n[00:06.00]第二句'},
       ];
       await player(tester, const Size(390, 844));
-      final title = tester.widget<Text>(find.text('正在练唱'));
+      final title = tester.widget<Text>(find.text('测试歌曲'));
       final play = tester.widget<FilledButton>(
         find.byKey(const ValueKey('player-play')),
       );
@@ -123,7 +123,7 @@ void main() {
       state.positionMs = 6500;
       state.playback.notifyListeners();
       await tester.pumpAndSettle();
-      expect(identical(title, tester.widget<Text>(find.text('正在练唱'))), isTrue);
+      expect(identical(title, tester.widget<Text>(find.text('测试歌曲'))), isTrue);
       expect(
         identical(
           play,
@@ -208,15 +208,19 @@ void main() {
       MediaQuery.sizeOf(tester.element(find.byType(PlayerPage))),
       const Size(360, 800),
     );
-    final title = tester.getRect(find.text('正在练唱'));
-    expect(title.center.dx, 180);
-    for (final tooltip in ['收起演唱', '歌曲信息', '全屏视频', '收藏歌曲']) {
+    final title = tester.getRect(find.text('我和你'));
+    expect(title.center.dx, lessThan(220));
+    for (final tooltip in ['收起演唱', '全屏视频', '收藏歌曲']) {
       final button = find.ancestor(
         of: find.byTooltip(tooltip),
         matching: find.byType(IconButton),
       );
       expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(48));
     }
+    expect(
+      tester.getSize(find.byTooltip('歌曲信息')).shortestSide,
+      greaterThanOrEqualTo(48),
+    );
     final overlay = find.byWidgetPredicate(
       (w) => w is Glass && w.material == GlassMaterialSpec.mediaOverlay,
     );
@@ -590,8 +594,8 @@ void main() {
             );
             if (!senior && scale == 1) {
               expect(
-                recordRect.top,
-                greaterThan(playRect.bottom),
+                playRect.right,
+                lessThanOrEqualTo(recordRect.left),
                 reason: reason,
               );
             }

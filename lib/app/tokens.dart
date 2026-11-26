@@ -69,7 +69,7 @@ class GlassMaterialSpec {
        assert(shadow >= 0 && shadow <= 1);
 
   static const standard = GlassMaterialSpec(
-    lightTint: .58,
+    lightTint: .76,
     darkTint: .46,
     blur: 12,
     highlight: .88,
@@ -81,7 +81,7 @@ class GlassMaterialSpec {
     lensAmount: 18,
   );
   static const search = GlassMaterialSpec(
-    lightTint: .46,
+    lightTint: .72,
     darkTint: .38,
     blur: 10,
     highlight: .90,
@@ -89,7 +89,7 @@ class GlassMaterialSpec {
     refraction: true,
   );
   static const shortcut = GlassMaterialSpec(
-    lightTint: .52,
+    lightTint: .74,
     darkTint: .40,
     blur: 10,
     highlight: .90,
@@ -100,7 +100,7 @@ class GlassMaterialSpec {
     lensAmount: 22,
   );
   static const field = GlassMaterialSpec(
-    lightTint: .60,
+    lightTint: .76,
     darkTint: .50,
     blur: 12,
     highlight: .80,
@@ -119,12 +119,14 @@ class GlassMaterialSpec {
     refraction: true,
   );
   static const stageControl = GlassMaterialSpec(
-    lightTint: .18,
-    darkTint: .24,
-    blur: 12,
-    highlight: .92,
-    shadow: .34,
+    lightTint: .44,
+    darkTint: .52,
+    blur: 16,
+    highlight: .46,
+    shadow: .38,
     refraction: true,
+    lensHeight: 12,
+    lensAmount: 20,
   );
   // Native video cannot be sampled. Its small overlay uses the same optical
   // edge and touch light, with no backdrop filter or displacement.
@@ -135,7 +137,7 @@ class GlassMaterialSpec {
     highlight: .55,
   );
   static const floating = GlassMaterialSpec(
-    lightTint: .38,
+    lightTint: .68,
     darkTint: .34,
     blur: 10,
     highlight: .94,
@@ -144,7 +146,7 @@ class GlassMaterialSpec {
   );
   // Floating player capsule with luminous specular edge and soft color wash.
   static const player = GlassMaterialSpec(
-    lightTint: .40,
+    lightTint: .72,
     darkTint: .36,
     blur: 12,
     highlight: .96,
@@ -152,7 +154,7 @@ class GlassMaterialSpec {
     refraction: true,
   );
   static const sheet = GlassMaterialSpec(
-    lightTint: .60,
+    lightTint: .76,
     darkTint: .46,
     blur: 20,
     highlight: .92,
@@ -215,8 +217,8 @@ class AppSurfaces extends ThemeExtension<AppSurfaces> {
   factory AppSurfaces.forBrightness(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     return AppSurfaces(
-      background: dark ? const Color(0xFF0C0C0F) : const Color(0xFFF2F3F8),
-      group: dark ? const Color(0xFF1C1C23) : const Color(0xFFE9EBF1),
+      background: dark ? const Color(0xFF0C0C0F) : const Color(0xFFF7F8FB),
+      group: dark ? const Color(0xFF1C1C23) : const Color(0xFFEEEFF5),
       glass: dark ? const Color(0xFF1B1B22) : Colors.white,
       rim: Colors.white,
       shadow: Colors.black.withValues(alpha: dark ? .46 : .12),

@@ -528,6 +528,8 @@ class AppSegments<T> extends StatelessWidget {
     this.liquid = false,
     this.plain = false,
     this.material,
+    this.selectedColor,
+    this.trackColor,
   });
   final List<(T, String)> values;
   final T selected;
@@ -538,6 +540,7 @@ class AppSegments<T> extends StatelessWidget {
   final Widget Function(T, String)? labelBuilder;
   final TextStyle? textStyle;
   final GlassMaterialSpec? material;
+  final Color? selectedColor, trackColor;
 
   @override
   Widget build(BuildContext context) {
@@ -684,11 +687,12 @@ class AppSegments<T> extends StatelessWidget {
                                 : 8,
                           ),
                           foregroundColor: value.$1 == selected
-                              ? (accent
-                                    ? scheme.onPrimary
-                                    : liquid
-                                    ? scheme.primary
-                                    : scheme.onSurface)
+                              ? (selectedColor ??
+                                    (accent
+                                          ? scheme.onPrimary
+                                          : liquid
+                                          ? scheme.primary
+                                          : scheme.onSurface))
                               : scheme.onSurfaceVariant,
                         ),
                         onPressed: enabled && !disabled.contains(value.$1)
@@ -709,9 +713,11 @@ class AppSegments<T> extends StatelessWidget {
     if (liquid) {
       return DecoratedBox(
         decoration: BoxDecoration(
-          color: solid
-              ? scheme.secondaryContainer
-              : scheme.onSurface.withValues(alpha: dark ? .10 : .055),
+          color:
+              trackColor ??
+              (solid
+                  ? scheme.secondaryContainer
+                  : scheme.onSurface.withValues(alpha: dark ? .10 : .055)),
           borderRadius: pillRadius,
         ),
         child: content,
@@ -861,6 +867,7 @@ class GlassField extends StatefulWidget {
     this.enabled = true,
     this.radius = AppRadii.control,
     this.material,
+    this.focusNode,
     this.backdropContext = GlassBackdropContext.plain,
   });
   final AppState state;
@@ -868,6 +875,7 @@ class GlassField extends StatefulWidget {
   final bool enabled;
   final double radius;
   final GlassMaterialSpec? material;
+  final FocusNode? focusNode;
   final GlassBackdropContext backdropContext;
   @override
   State<GlassField> createState() => _GlassFieldState();
@@ -876,21 +884,38 @@ class GlassField extends StatefulWidget {
 class _GlassFieldState extends State<GlassField> {
   bool focused = false;
   @override
-  Widget build(BuildContext context) => Focus(
-    canRequestFocus: false,
-    skipTraversal: true,
-    onFocusChange: (value) => setState(() => focused = value),
-    child: Glass(
-      state: widget.state,
-      radius: widget.radius,
-      variant: GlassVariant.field,
-      material: widget.material,
-      focused: focused && widget.enabled,
-      enabled: widget.enabled,
-      backdropContext: widget.backdropContext,
-      child: widget.child,
-    ),
-  );
+  Widget build(BuildContext context) {
+    if (widget.focusNode != null) {
+      return ListenableBuilder(
+        listenable: widget.focusNode!,
+        builder: (context, _) => Glass(
+          state: widget.state,
+          radius: widget.radius,
+          variant: GlassVariant.field,
+          material: widget.material,
+          focused: widget.focusNode!.hasFocus && widget.enabled,
+          enabled: widget.enabled,
+          backdropContext: widget.backdropContext,
+          child: widget.child,
+        ),
+      );
+    }
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (value) => setState(() => focused = value),
+      child: Glass(
+        state: widget.state,
+        radius: widget.radius,
+        variant: GlassVariant.field,
+        material: widget.material,
+        focused: focused && widget.enabled,
+        enabled: widget.enabled,
+        backdropContext: widget.backdropContext,
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 /// A shared functional layer; the content underneath stays unfiltered.
@@ -908,7 +933,7 @@ class GlassToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Glass(
     state: state,
-    radius: 26,
+    radius: 999,
     variant: GlassVariant.liquid,
     backdropContext: backdropContext,
     child: Padding(
@@ -945,8 +970,9 @@ class GlassSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GlassField(
     state: state,
-    radius: 26,
+    radius: 999,
     material: GlassMaterialSpec.search,
+    focusNode: focusNode,
     backdropContext: backdropContext,
     child: TextField(
       key: fieldKey,
@@ -985,11 +1011,11 @@ class GlassSearchField extends StatelessWidget {
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
         constraints: BoxConstraints(
-          minHeight: state.senior ? AppSizes.seniorTouch : AppSizes.touch,
+          minHeight: state.senior ? AppSizes.seniorTouch : 48,
         ),
-        contentPadding: const EdgeInsets.symmetric(
+        contentPadding: EdgeInsets.symmetric(
           horizontal: AppSpace.sm,
-          vertical: 12,
+          vertical: state.senior ? 15 : 13,
         ),
       ),
       onChanged: onChanged,

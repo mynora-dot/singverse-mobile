@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:singverse_mobile/app/design.dart';
+import 'package:singverse_mobile/app/main_tab_header.dart';
 import 'package:singverse_mobile/app/mini_player.dart';
 import 'package:singverse_mobile/features/library/connection.dart';
 import 'package:singverse_mobile/features/library/widgets.dart';
@@ -404,13 +405,13 @@ void main() {
     await tester.tap(target);
     await tester.pumpAndSettle();
     expect(
-      find.descendant(
-        of: find.byType(AppBar).first,
-        matching: find.text(
-          {'songs': '点歌', 'frequent': '常唱', 'works': '作品'}[name]!,
-        ),
-      ),
-      findsOneWidget,
+      tester
+          .widget<Semantics>(
+            find.ancestor(of: target, matching: find.byType(Semantics)).first,
+          )
+          .properties
+          .selected,
+      isTrue,
     );
   }
 
@@ -518,6 +519,117 @@ void main() {
     expect(native.calls.where((c) => c == 'end'), hasLength(1));
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'main tab headers align below the status bar and blur only on scroll',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = const FakeViewPadding(top: 32);
+      tester.view.viewPadding = const FakeViewPadding(top: 32);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      await size(tester, const Size(390, 844));
+      for (final song in api.rows) {
+        api.favoriteRows[song['id'] as String] = song;
+      }
+      state.works = List.generate(
+        16,
+        (i) => workFixture(id: 'work-$i', status: 'SAVED'),
+      );
+      await app(tester);
+
+      Rect? firstHeader;
+      for (final (tab, title, hint) in const [
+        ('songs', '点歌', '搜索歌名或歌手'),
+        ('frequent', '常唱', '搜索收藏歌曲'),
+        ('works', '作品', '搜索作品和草稿'),
+      ]) {
+        await section(tester, tab);
+        expect(find.byType(AppBar), findsNothing);
+        final header = find.byType(MainTabHeader);
+        expect(header, findsOneWidget);
+        expect(
+          find.descendant(of: header, matching: find.text(title)),
+          findsNothing,
+        );
+        final search = find.descendant(
+          of: header,
+          matching: find.byType(TextField),
+        );
+        final scan = find.byKey(const Key('open-tv'));
+        final profile = find.byKey(const Key('open-settings'));
+        expect(tester.widget<TextField>(search).decoration?.hintText, hint);
+        expect(scan.hitTestable(), findsOneWidget);
+        expect(profile.hitTestable(), findsOneWidget);
+        final searchRect = tester.getRect(search);
+        final profileRect = tester.getRect(profile);
+        expect(searchRect.top, greaterThanOrEqualTo(32));
+        expect(searchRect.right, lessThan(tester.getRect(scan).left));
+        expect(searchRect.center.dy, profileRect.center.dy);
+        firstHeader ??= searchRect;
+        expect(searchRect, firstHeader);
+
+        final view = find.byType(CustomScrollView).first;
+        final scroll = tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position;
+        final width = tester.getSize(view).width;
+        final headerBlur = find.descendant(
+          of: header,
+          matching: find.byType(BackdropFilter),
+        );
+        bool hasFullWidthBlur() => headerBlur.evaluate().any(
+          (element) =>
+              (element.findRenderObject() as RenderBox).size.width == width,
+        );
+        expect(scroll.pixels, 0);
+        expect(hasFullWidthBlur(), isFalse);
+        expect(scroll.maxScrollExtent, greaterThan(48), reason: tab);
+        scroll.jumpTo(48);
+        await tester.pumpAndSettle();
+        expect(tester.getRect(search), searchRect);
+        expect(tester.getRect(profile), profileRect);
+        expect(hasFullWidthBlur(), isTrue, reason: tab);
+        expect(tester.getTopLeft(headerBlur.first).dy, 0);
+        expect(headerBlur.evaluate().length, greaterThan(1), reason: tab);
+        expect(
+          tester.getSize(headerBlur.first).height,
+          greaterThan(tester.getSize(headerBlur.last).height),
+          reason: tab,
+        );
+        expect(
+          tester.getBottomLeft(headerBlur.first).dy,
+          greaterThan(
+            tester
+                .getBottomLeft(
+                  find
+                      .descendant(of: header, matching: find.byType(Stack))
+                      .first,
+                )
+                .dy,
+          ),
+          reason: tab,
+        );
+        if (tab == 'works') {
+          await tester.enterText(search, '不存在的录音名称');
+        } else {
+          scroll.jumpTo(0);
+        }
+        await tester.pumpAndSettle();
+        expect(scroll.pixels, 0);
+        expect(hasFullWidthBlur(), isFalse);
+      }
+
+      final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+        find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
+      );
+      expect(overlay.value.statusBarColor, Colors.transparent);
+      expect(overlay.value.systemStatusBarContrastEnforced, isFalse);
+      expect(tester.getTopLeft(find.byType(AppEnvironment).last).dy, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('library keeps search and scroll when switching main tabs', (
     tester,
   ) async {
@@ -2136,7 +2248,9 @@ void main() {
         ..isPlaying = true
         ..playbackState = 'PLAYING';
       await app(tester);
-      BuildContext pageContext() => tester.element(find.byType(AppBar).first);
+      BuildContext pageContext() => tester.element(
+        find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
+      );
       final media = MediaQuery.of(pageContext());
       expect(media.size, const Size(360, 800));
       expect(media.devicePixelRatio, 3.5);

@@ -255,7 +255,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(-.74, -.94),
           radius: 1.25,
           colors: [
-            topWarm.withValues(alpha: dark ? .15 : .18),
+            topWarm.withValues(alpha: dark ? .15 : .065),
             topWarm.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -267,7 +267,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(.82, -.82),
           radius: 1.20,
           colors: [
-            topCool.withValues(alpha: dark ? .13 : .17),
+            topCool.withValues(alpha: dark ? .13 : .065),
             topCool.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -279,7 +279,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(0.12, -0.05),
           radius: 1.05,
           colors: [
-            midAccent.withValues(alpha: dark ? .07 : .08),
+            midAccent.withValues(alpha: dark ? .07 : .035),
             midAccent.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -291,7 +291,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(-.62, .96),
           radius: 1.05,
           colors: [
-            bottomWarm.withValues(alpha: dark ? .16 : .19),
+            bottomWarm.withValues(alpha: dark ? .16 : .07),
             bottomWarm.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -303,7 +303,7 @@ class _EnvironmentPainter extends CustomPainter {
           center: const Alignment(.68, .98),
           radius: 1.05,
           colors: [
-            bottomCool.withValues(alpha: dark ? .14 : .18),
+            bottomCool.withValues(alpha: dark ? .14 : .06),
             bottomCool.withValues(alpha: 0),
           ],
         ).createShader(rect),
@@ -437,7 +437,11 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                   isolateSurface: false,
                   shape: () => shape,
                   effects: (scope) {
-                    scope.vibrancy();
+                    if (dark ||
+                        widget.material == GlassMaterialSpec.onColor ||
+                        widget.material == GlassMaterialSpec.stageControl) {
+                      scope.vibrancy();
+                    }
                     if (widget.material.blur > 0) {
                       scope.blur(widget.material.blur);
                     }
@@ -459,7 +463,7 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                       ? null
                       : fg.Highlight(
                           width: 1.0,
-                          blurRadius: .45,
+                          blurRadius: dark ? .45 : .40,
                           alpha: highlightAlpha,
                           style: dark
                               ? const fg.DefaultHighlightStyle(
@@ -467,26 +471,30 @@ class _OpticalGlassSurfaceState extends State<OpticalGlassSurface> {
                                   angle: 45,
                                   falloff: 1.0,
                                 )
-                              : const fg.AmbientHighlightStyle(intensity: .28),
+                              : const fg.DefaultHighlightStyle(
+                                  color: Color(0xECFFFFFF),
+                                  angle: 45,
+                                  falloff: 1.0,
+                                ),
                         ),
                   shadow: () => widget.material.shadow <= 0
                       ? null
                       : fg.GlassShadow(
-                          radius: 22,
+                          radius: dark ? 22 : 20,
                           offset: const Offset(0, 6),
                           color: dark
                               ? const Color(0x66000000)
-                              : const Color(0x22000000),
+                              : const Color(0x140E1220),
                           alpha: widget.material.shadow,
                         ),
                   innerShadow: () => widget.material.highlight <= 0
                       ? null
                       : fg.GlassInnerShadow(
-                          radius: 5,
-                          offset: Offset(0, dark ? 2.0 : -2.0),
+                          radius: dark ? 5 : 4,
+                          offset: Offset(0, dark ? 2.0 : 1.5),
                           color: dark
                               ? const Color(0x22FFFFFF)
-                              : const Color(0x14000000),
+                              : const Color(0x52FFFFFF),
                           alpha: widget.material.highlight,
                         ),
                   onDrawSurface: (canvas, size) {
@@ -827,14 +835,14 @@ class LiquidDropletBox extends StatelessWidget {
               ? AppPalette.brand.withValues(alpha: dark ? .68 : .52)
               : dark
               ? Colors.white.withValues(alpha: .26)
-              : Colors.black.withValues(alpha: .05),
+              : Colors.white.withValues(alpha: .92),
           width: accent ? 1.0 : .75,
         ),
         boxShadow: [
           BoxShadow(
             color: accent
                 ? AppPalette.brand.withValues(alpha: dark ? .24 : .14)
-                : Colors.black.withValues(alpha: dark ? .26 : .10),
+                : Colors.black.withValues(alpha: dark ? .26 : .06),
             blurRadius: compact ? 6 : 12,
             offset: Offset(0, compact ? 1.5 : 3),
           ),

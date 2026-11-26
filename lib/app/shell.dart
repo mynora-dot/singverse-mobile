@@ -15,6 +15,7 @@ import '../features/library/widgets.dart';
 import '../features/singing/works_page.dart';
 import '../features/tv_control/tv_page.dart';
 import 'design.dart';
+import 'main_tab_header.dart';
 import 'mini_player.dart';
 
 class AppShell extends StatefulWidget {
@@ -70,23 +71,30 @@ class _AppShellState extends State<AppShell> {
     if (value == 1) unawaited(state.refreshPersonal());
   }
 
-  Widget tools(AppState state) => GlassToolbar(
-    state: state,
-    children: [
-      IconButton(
-        key: const Key('open-tv'),
-        tooltip: '扫一扫',
-        onPressed: () => openTv(context, state),
-        icon: AppVectorIcon(AppGlyph.scan, size: state.senior ? 22 : 19),
-      ),
-      IconButton(
-        key: const Key('open-settings'),
-        tooltip: '设置',
-        onPressed: () => openSettings(context, state),
-        icon: AppVectorIcon(AppGlyph.person, size: state.senior ? 22 : 19),
-      ),
-    ],
-  );
+  Widget tools(AppState state) {
+    final style = IconButton.styleFrom(
+      minimumSize: Size.square(MainTabHeader.actionSize(state.senior)),
+    );
+    return GlassToolbar(
+      state: state,
+      children: [
+        IconButton(
+          key: const Key('open-tv'),
+          tooltip: '扫一扫',
+          style: style,
+          onPressed: () => openTv(context, state),
+          icon: AppVectorIcon(AppGlyph.scan, size: state.senior ? 22 : 19),
+        ),
+        IconButton(
+          key: const Key('open-settings'),
+          tooltip: '设置',
+          style: style,
+          onPressed: () => openSettings(context, state),
+          icon: AppVectorIcon(AppGlyph.person, size: state.senior ? 22 : 19),
+        ),
+      ],
+    );
+  }
 
   double navigationHeight(BuildContext context, AppState state) => math.max(
     state.senior ? 74 : 62,
@@ -181,24 +189,62 @@ class _AppShellState extends State<AppShell> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Badge(
-                              isLabelVisible: entry.$1 == 2 && drafts > 0,
-                              backgroundColor: AppPalette.brand,
-                              textColor: Colors.white,
-                              label: Text('$drafts'),
-                              child: entry.$1 == 2
-                                  ? AppVectorIcon(
-                                      AppGlyph.waveform,
-                                      size: state.senior ? 25 : 21,
-                                      filled: tab == 2,
-                                      color: tab == 2
-                                          ? scheme.primary
-                                          : scheme.onSurfaceVariant,
-                                    )
-                                  : Icon(
-                                      tab == entry.$1 ? entry.$3 : entry.$2,
-                                      size: state.senior ? 26 : 21,
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                entry.$1 == 2
+                                    ? AppVectorIcon(
+                                        AppGlyph.waveform,
+                                        size: state.senior ? 25 : 21,
+                                        filled: tab == 2,
+                                        color: tab == 2
+                                            ? scheme.primary
+                                            : scheme.onSurfaceVariant,
+                                      )
+                                    : Icon(
+                                        tab == entry.$1 ? entry.$3 : entry.$2,
+                                        size: state.senior ? 26 : 21,
+                                      ),
+                                if (entry.$1 == 2 && drafts > 0)
+                                  Positioned(
+                                    right: -10,
+                                    top: -5,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 1,
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 16,
+                                        minHeight: 16,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppPalette.brand,
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                        border: Border.all(
+                                          color:
+                                              Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? const Color(0xFF23232D)
+                                              : Colors.white,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '$drafts',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          height: 1.1,
+                                        ),
+                                      ),
                                     ),
+                                  ),
+                              ],
                             ),
                             if (!compact) ...[
                               const SizedBox(height: 2),
@@ -242,7 +288,12 @@ class _AppShellState extends State<AppShell> {
         !state.senior &&
         !state.taking &&
         MediaQuery.textScalerOf(context).scale(16) <= 21;
-    final hasPlayer = state.current != null;
+    final hideRedundantDraftMini =
+        tab == 2 &&
+        state.pendingReviewId.isNotEmpty &&
+        !state.taking &&
+        !state.isPlaying;
+    final hasPlayer = state.current != null && !hideRedundantDraftMini;
     final full = AppMotionScope.levelOf(context) == AppMotionLevel.full;
     final duration = full ? AppMotion.expand : Duration.zero;
     final background = Theme.of(context).scaffoldBackgroundColor;
@@ -268,13 +319,13 @@ class _AppShellState extends State<AppShell> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // Soft bottom vignette in safe area only so scrolling artwork and
-            // list content stay visible behind the Liquid Glass capsules.
+            // Soft bottom vignette shields the dock's rounded corners and gap
+            // from peeking list thumbnails while keeping top glass luminous.
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              height: solidDock ? dockHeight + 36 : safe + 38,
+              height: solidDock ? dockHeight + 36 : dockHeight + 16,
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -283,7 +334,7 @@ class _AppShellState extends State<AppShell> {
                       end: Alignment.bottomCenter,
                       stops: solidDock
                           ? const [0, .24, .52, .80, 1]
-                          : const [0, .52, 1],
+                          : const [0, .26, .62, 1],
                       colors: solidDock
                           ? [
                               background.withValues(alpha: 0),
@@ -294,8 +345,9 @@ class _AppShellState extends State<AppShell> {
                             ]
                           : [
                               background.withValues(alpha: 0),
-                              background.withValues(alpha: .14),
-                              background.withValues(alpha: .34),
+                              background.withValues(alpha: .24),
+                              background.withValues(alpha: .78),
+                              background.withValues(alpha: .95),
                             ],
                     ),
                   ),
@@ -370,137 +422,81 @@ class _AppShellState extends State<AppShell> {
       final drafts = state.visibleWorks
           .where((w) => w['status'] != 'SAVED' && w['status'] != 'MISSING')
           .length;
-      final homeHeader = tab == 0 && state.authenticated && !state.senior;
+      final overlay = Theme.of(context).brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark;
       final shell = PopScope(
         canPop: tab == 0,
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop) selectTab(0);
         },
-        child: AppBackdropCapture(
-          builder: (context, envBackdrop) => AppBackdropCapture(
-            builder: (context, contentBackdrop) => AppBackdropRouteBinding(
-              environment: envBackdrop,
-              content: contentBackdrop,
-              child: Scaffold(
-                extendBody: true,
-                backgroundColor: Colors.transparent,
-                appBar: homeHeader
-                    ? null
-                    : AppBar(
-                        automaticallyImplyLeading: false,
-                        centerTitle: false,
-                        titleSpacing: 20,
-                        toolbarHeight: state.senior ? 68 : 58,
-                        title: Text(
-                          const ['点歌', '常唱', '作品'][tab],
-                          style: Theme.of(context).textTheme.headlineLarge
-                              ?.copyWith(
-                                fontSize: state.senior ? 32 : 30,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -.8,
-                              ),
-                        ),
-                        backgroundColor: Colors.transparent,
-                        systemOverlayStyle:
-                            Theme.of(context).brightness == Brightness.dark
-                            ? SystemUiOverlayStyle.light
-                            : SystemUiOverlayStyle.dark,
-                        actions: [
-                          AppBackdropScope(
-                            environment: envBackdrop,
-                            content: contentBackdrop,
-                            child: tools(state),
-                          ),
-                          const SizedBox(width: 16),
-                        ],
-                      ),
-                body: AppBackdropSource(
-                  backdrop: contentBackdrop,
-                  child: Stack(
-                    fit: StackFit.expand,
+        child: AppBackdropPage(
+          extendBody: true,
+          glow: ShellAmbientGlow(state: state),
+          body: AnnotatedRegion<SystemUiOverlayStyle>(
+            value: overlay.copyWith(
+              statusBarColor: Colors.transparent,
+              systemStatusBarContrastEnforced: false,
+            ),
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: ContentWidth(
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: trackScroll,
+                  child: IndexedStack(
+                    index: tab,
                     children: [
-                      Positioned.fill(
-                        child: AppBackdropSource(
-                          backdrop: envBackdrop,
-                          child: AppEnvironment(
-                            child: ShellAmbientGlow(state: state),
+                      TickerMode(
+                        enabled: tab == 0,
+                        child: MotionTabPane(
+                          active: tab == 0,
+                          child: state.authenticated
+                              ? SongsPage(
+                                  key: ValueKey(state.instanceId),
+                                  state: state,
+                                  embedded: true,
+                                  showBrowse: true,
+                                  headerActions: tools(state),
+                                )
+                              : _Disconnected(
+                                  state: state,
+                                  headerActions: tools(state),
+                                  onOpenWorks: () => selectTab(2),
+                                ),
+                        ),
+                      ),
+                      TickerMode(
+                        enabled: tab == 1,
+                        child: MotionTabPane(
+                          active: tab == 1,
+                          child: FrequentPage(
+                            key: ValueKey('personal:${state.instanceId}'),
+                            state: state,
+                            headerActions: tools(state),
                           ),
                         ),
                       ),
-                      AppBackdropScope(
-                        environment: envBackdrop,
-                        content: contentBackdrop,
-                        child: SafeArea(
-                          top: homeHeader,
-                          bottom: false,
-                          child: ContentWidth(
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: trackScroll,
-                              child: IndexedStack(
-                                index: tab,
-                                children: [
-                                  TickerMode(
-                                    enabled: tab == 0,
-                                    child: MotionTabPane(
-                                      active: tab == 0,
-                                      child: state.authenticated
-                                          ? SongsPage(
-                                              key: ValueKey(state.instanceId),
-                                              state: state,
-                                              embedded: true,
-                                              showBrowse: true,
-                                              headerActions: state.senior
-                                                  ? null
-                                                  : tools(state),
-                                            )
-                                          : _Disconnected(
-                                              state: state,
-                                              onOpenWorks: () => selectTab(2),
-                                            ),
-                                    ),
-                                  ),
-                                  TickerMode(
-                                    enabled: tab == 1,
-                                    child: MotionTabPane(
-                                      active: tab == 1,
-                                      child: FrequentPage(
-                                        key: ValueKey(
-                                          'personal:${state.instanceId}',
-                                        ),
-                                        state: state,
-                                      ),
-                                    ),
-                                  ),
-                                  TickerMode(
-                                    enabled: tab == 2,
-                                    child: MotionTabPane(
-                                      active: tab == 2,
-                                      child: WorksPage(
-                                        state: state,
-                                        embedded: true,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                      TickerMode(
+                        enabled: tab == 2,
+                        child: MotionTabPane(
+                          active: tab == 2,
+                          child: WorksPage(
+                            state: state,
+                            embedded: true,
+                            headerActions: tools(state),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                bottomNavigationBar: AppBackdropScope(
-                  environment: envBackdrop,
-                  content: contentBackdrop,
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: collapsed,
-                    builder: (context, value, _) =>
-                        dock(context, state, drafts, value),
-                  ),
-                ),
               ),
             ),
+          ),
+          bottomNavigationBar: ValueListenableBuilder<bool>(
+            valueListenable: collapsed,
+            builder: (context, value, _) => dock(context, state, drafts, value),
           ),
         ),
       );
@@ -510,146 +506,155 @@ class _AppShellState extends State<AppShell> {
 }
 
 class _Disconnected extends StatelessWidget {
-  const _Disconnected({required this.state, required this.onOpenWorks});
+  const _Disconnected({
+    required this.state,
+    required this.headerActions,
+    required this.onOpenWorks,
+  });
   final AppState state;
+  final Widget headerActions;
   final VoidCallback onOpenWorks;
   @override
   Widget build(BuildContext context) {
     final material = AppSurfaces.of(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-      children: [
-        if (state.error != null) Notice(state.error!),
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1F1F2B), Color(0xFF331826), Color(0xFF15151D)],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .28),
-                blurRadius: 34,
-                spreadRadius: -8,
-                offset: const Offset(0, 18),
-              ),
-            ],
+    final inset = MainTabHeader.insetOf(context);
+    final children = [
+      if (state.error != null) Notice(state.error!),
+      Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(30),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1F1F2B), Color(0xFF331826), Color(0xFF15151D)],
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            children: [
-              Positioned(
-                top: -60,
-                right: -50,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 210,
-                    height: 210,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          AppPalette.brand.withValues(alpha: .42),
-                          AppPalette.brand.withValues(alpha: 0),
-                        ],
-                      ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .28),
+              blurRadius: 34,
+              spreadRadius: -8,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            Positioned(
+              top: -60,
+              right: -50,
+              child: IgnorePointer(
+                child: Container(
+                  width: 210,
+                  height: 210,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppPalette.brand.withValues(alpha: .42),
+                        AppPalette.brand.withValues(alpha: 0),
+                      ],
                     ),
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(26),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .12),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: .24),
-                            width: .8,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.library_music_rounded,
-                          size: 30,
-                          color: material.onSpotlight,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: .24),
+                          width: .8,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      state.origin.isEmpty ? '连接家庭曲库' : '重新连接家庭曲库',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: material.onSpotlight,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -.4,
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '从 NAS 选歌练唱，录音保存在手机。已保存的作品可以离线回听。',
-                      style: Theme.of(context).textTheme.bodyLarge
-                          ?.copyWith(color: material.spotlightMuted),
-                    ),
-                    const SizedBox(height: 26),
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        minimumSize: Size.fromHeight(state.senior ? 58 : 52),
-                        backgroundColor: AppPalette.brand,
-                        foregroundColor: Colors.white,
-                        shape: const StadiumBorder(),
+                      child: Icon(
+                        Icons.library_music_rounded,
+                        size: 30,
+                        color: material.onSpotlight,
                       ),
-                      onPressed: () => openConnection(context, state),
-                      icon: const Icon(Icons.link_rounded),
-                      label: Text(state.origin.isEmpty ? '连接 NAS' : '重新登录'),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    state.origin.isEmpty ? '连接家庭曲库' : '重新连接家庭曲库',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: material.onSpotlight,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '从 NAS 选歌练唱，录音保存在手机。已保存的作品可以离线回听。',
+                    style: Theme.of(context).textTheme.bodyLarge
+                        ?.copyWith(color: material.spotlightMuted),
+                  ),
+                  const SizedBox(height: 26),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: Size.fromHeight(state.senior ? 58 : 52),
+                      backgroundColor: AppPalette.brand,
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () => openConnection(context, state),
+                    icon: const Icon(Icons.link_rounded),
+                    label: Text(state.origin.isEmpty ? '连接 NAS' : '重新登录'),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        Glass(
-          state: state,
-          radius: 999,
-          material: GlassMaterialSpec.standard,
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              minimumSize: Size.fromHeight(state.senior ? 58 : 50),
-              backgroundColor: Colors.transparent,
-              shape: const StadiumBorder(),
             ),
-            onPressed: onOpenWorks,
-            icon: Icon(
-              Icons.headphones_rounded,
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            label: const Text('查看本机作品'),
+          ],
+        ),
+      ),
+      const SizedBox(height: 14),
+      Glass(
+        state: state,
+        radius: 999,
+        material: GlassMaterialSpec.standard,
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: Size.fromHeight(state.senior ? 58 : 50),
+            backgroundColor: Colors.transparent,
+            shape: const StadiumBorder(),
           ),
+          onPressed: onOpenWorks,
+          icon: Icon(
+            Icons.headphones_rounded,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          label: const Text('查看本机作品'),
         ),
-        Builder(
-          builder: (context) =>
-              SizedBox(height: MediaQuery.paddingOf(context).bottom),
+      ),
+    ];
+    return CustomScrollView(
+      slivers: [
+        MainTabHeader(senior: state.senior, actions: headerActions),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(inset, AppSpace.xxs, inset, 0),
+          sliver: SliverList.list(children: children),
         ),
+        const SliverBottomSpace(),
       ],
     );
   }
 }
 
 class FrequentPage extends StatefulWidget {
-  const FrequentPage({super.key, required this.state});
+  const FrequentPage({super.key, required this.state, this.headerActions});
   final AppState state;
+  final Widget? headerActions;
   @override
   State<FrequentPage> createState() => _FrequentPageState();
 }
@@ -694,6 +699,10 @@ class _FrequentPageState extends State<FrequentPage> {
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
+    final actions = widget.headerActions;
+    final inset = actions == null
+        ? AppSpace.page
+        : MainTabHeader.insetOf(context);
     final rows = (history ? state.history : state.favorites)
         .where(
           (s) => '${s.title} ${s.artist}'.toLowerCase().contains(
@@ -701,40 +710,55 @@ class _FrequentPageState extends State<FrequentPage> {
           ),
         )
         .toList();
+    final searchField = GlassSearchField(
+      state: state,
+      controller: search,
+      focusNode: searchFocus,
+      onChanged: (_) => setState(() {}),
+      onSubmitted: (_) => searchFocus.unfocus(),
+      hintText: history ? '搜索最近练唱' : '搜索收藏歌曲',
+      suffix: search.text.isEmpty
+          ? null
+          : IconButton(
+              tooltip: '清除搜索',
+              onPressed: () => setState(search.clear),
+              icon: const Icon(Icons.cancel_rounded),
+            ),
+    );
     return CustomScrollView(
       key: PageStorageKey('personal-scroll:${state.instanceId}'),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
+        if (actions != null)
+          MainTabHeader(
+            senior: state.senior,
+            actions: actions,
+            search: searchField,
+          ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+          padding: EdgeInsets.fromLTRB(
+            inset,
+            actions == null ? AppSpace.xxs : 0,
+            inset,
+            0,
+          ),
           sliver: SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                GlassSearchField(
-                  state: state,
-                  controller: search,
-                  focusNode: searchFocus,
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) => searchFocus.unfocus(),
-                  hintText: history ? '搜索最近练唱' : '搜索收藏歌曲',
-                  suffix: search.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: '清除搜索',
-                          onPressed: () => setState(search.clear),
-                          icon: const Icon(Icons.cancel_rounded),
-                        ),
-                ),
-                const SizedBox(height: 10),
-                _UnderlineTabs<bool>(
+                if (actions == null) ...[
+                  searchField,
+                  const SizedBox(height: 10),
+                ],
+                AppSegments<bool>(
+                  liquid: true,
                   values: const [(false, '收藏'), (true, '最近练唱')],
                   selected: history,
                   senior: state.senior,
                   onChanged: (value) => setState(() => history = value),
                 ),
                 if (search.text.isEmpty && !state.senior) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
                   _CollectionCover(
                     state: state,
                     history: history,
@@ -744,41 +768,48 @@ class _FrequentPageState extends State<FrequentPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 18, 0, 8),
                   child: SectionTitle(
-                    history ? '最近练唱' : 'NAS 共享收藏',
-                    trailing: history && state.history.isNotEmpty
-                        ? TextButton(onPressed: clear, child: const Text('清空'))
-                        : Text(
-                            !history && !state.favoritesReady
-                                ? '待读取'
-                                : '${history ? state.history.length : state.favorites.length} 首',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                  ),
-                ),
-                if (!history) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '后台、手机和电视同步',
+                    history ? '最近练唱' : '收藏曲目',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          !history && !state.favoritesReady
+                              ? '待读取'
+                              : '${history ? state.history.length : state.favorites.length} 首',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: Theme.of(context)
                                     .colorScheme
                                     .onSurfaceVariant,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: '刷新收藏',
-                        onPressed:
-                            state.favoritesLoading || state.favoriteSaving
-                            ? null
-                            : () => state.refreshFavorites(),
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                    ],
+                        if (history && state.history.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          TextButton(onPressed: clear, child: const Text('清空')),
+                        ] else if (!history) ...[
+                          const SizedBox(width: 6),
+                          IconButton(
+                            tooltip: '刷新收藏',
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size.square(32),
+                              fixedSize: const Size.square(32),
+                              padding: EdgeInsets.zero,
+                            ),
+                            onPressed:
+                                state.favoritesLoading || state.favoriteSaving
+                                ? null
+                                : () => state.refreshFavorites(),
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
+                ),
+                if (!history) ...[
                   if (state.favoritesLoading) const LinearProgressIndicator(),
                   if (state.favoritesError != null)
                     Notice('收藏读取失败：${state.favoritesError}。当前内容可能尚未更新。'),
@@ -803,7 +834,7 @@ class _FrequentPageState extends State<FrequentPage> {
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: inset),
           sliver: SliverList.builder(
             itemCount: rows.length,
             itemBuilder: (context, index) => MotionEntrance(
@@ -814,106 +845,6 @@ class _FrequentPageState extends State<FrequentPage> {
           ),
         ),
         const SliverBottomSpace(),
-      ],
-    );
-  }
-}
-
-class _UnderlineTabs<T> extends StatelessWidget {
-  const _UnderlineTabs({
-    required this.values,
-    required this.selected,
-    required this.onChanged,
-    this.senior = false,
-  });
-  final List<(T, String)> values;
-  final T selected;
-  final ValueChanged<T> onChanged;
-  final bool senior;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final dark = theme.brightness == Brightness.dark;
-    final index = values.indexWhere((v) => v.$1 == selected).clamp(0, 1);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Stack(
-          children: [
-            Row(
-              children: [
-                for (final item in values)
-                  Expanded(
-                    child: Semantics(
-                      selected: item.$1 == selected,
-                      button: true,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () => onChanged(item.$1),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            vertical: senior ? 14 : 11,
-                          ),
-                          child: Text(
-                            item.$2,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontSize: senior ? 18 : 15,
-                              fontWeight: item.$1 == selected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: item.$1 == selected
-                                  ? scheme.onSurface
-                                  : scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: AnimatedAlign(
-                  duration: AppMotionScope.durationOf(
-                    context,
-                    AppMotion.expand,
-                  ),
-                  curve: AppMotion.fluid,
-                  alignment: Alignment(
-                    values.length <= 1
-                        ? 0
-                        : -1 + 2 * (index / (values.length - 1)),
-                    0,
-                  ),
-                  child: FractionallySizedBox(
-                    widthFactor: 1 / values.length,
-                    child: Center(
-                      child: Container(
-                        width: 32,
-                        height: 2.5,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(99),
-                          color: AppPalette.brand,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        Divider(
-          height: 1,
-          color: scheme.onSurface.withValues(alpha: dark ? .08 : .06),
-        ),
       ],
     );
   }
@@ -958,7 +889,7 @@ class _CollectionCover extends StatelessWidget {
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          history ? '本机练唱足迹' : '手机 · 电视 · 后台同步',
+                          history ? '本机记录' : '多端同步',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
@@ -978,7 +909,7 @@ class _CollectionCover extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${songs.length} 首${history ? '练唱记录' : '收藏歌曲'}',
+                    history ? '保存在此手机的练唱足迹' : '手机、电视与后台实时共享',
                     style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),

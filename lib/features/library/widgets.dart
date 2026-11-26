@@ -269,6 +269,7 @@ class SongRow extends StatelessWidget {
         ),
       );
     }
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final enlarged = MediaQuery.textScalerOf(context).scale(15) > 19;
     final playAction = IconButton(
       tooltip: '开始练唱 ${song.title}',
@@ -286,11 +287,11 @@ class SongRow extends StatelessWidget {
           shape: BoxShape.circle,
           color: playing
               ? scheme.primary
-              : scheme.primary.withValues(alpha: .10),
+              : scheme.onSurface.withValues(alpha: dark ? .09 : .055),
           border: Border.all(
             color: playing
                 ? scheme.primary
-                : scheme.primary.withValues(alpha: .18),
+                : scheme.onSurface.withValues(alpha: dark ? .14 : .08),
             width: .6,
           ),
         ),
@@ -301,7 +302,9 @@ class SongRow extends StatelessWidget {
                   AppGlyph.play,
                   size: 13.5,
                   filled: true,
-                  color: playing ? Colors.white : scheme.primary,
+                  color: playing
+                      ? Colors.white
+                      : scheme.onSurface.withValues(alpha: .76),
                 ),
         ),
       ),
@@ -498,22 +501,33 @@ class SongSpotlight extends StatelessWidget {
       final favorite = state.isFavorite(song);
       final continuing = state.current?.id == song.id && state.workId.isEmpty;
       final narrow = MediaQuery.sizeOf(context).width < 360;
+      final dark = Theme.of(context).brightness == Brightness.dark;
+      final titleColor = dark ? Colors.white : AppPalette.ink;
+      final artistColor = dark
+          ? const Color(0xCCFFFFFF)
+          : AppPalette.ink.withValues(alpha: .66);
       void open() => openSinging(context, state, song);
       return MotionPress(
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadii.featured),
+            border: dark
+                ? null
+                : Border.all(
+                    color: Colors.white.withValues(alpha: .92),
+                    width: 1,
+                  ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: .22),
-                blurRadius: 28,
+                color: Colors.black.withValues(alpha: dark ? .22 : .08),
+                blurRadius: dark ? 28 : 24,
                 spreadRadius: -8,
-                offset: const Offset(0, 14),
+                offset: Offset(0, dark ? 14 : 10),
               ),
             ],
           ),
           child: Material(
-            color: const Color(0xFF1D1B2A),
+            color: dark ? const Color(0xFF1D1B2A) : const Color(0xFFF9F9FC),
             borderRadius: BorderRadius.circular(AppRadii.featured),
             clipBehavior: Clip.antiAlias,
             child: ConstrainedBox(
@@ -529,42 +543,66 @@ class SongSpotlight extends StatelessWidget {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              ExcludeSemantics(
-                                child: Opacity(
-                                  opacity: .42,
-                                  child: FittedBox(
-                                    fit: BoxFit.cover,
-                                    child: Artwork(
-                                      state: state,
-                                      path: song.cover,
-                                      revision: song.coverVersion,
-                                      size: 320,
+                              if (narrow)
+                                ExcludeSemantics(
+                                  child: Opacity(
+                                    opacity: dark ? .38 : .22,
+                                    child: ImageFiltered(
+                                      imageFilter: ui.ImageFilter.blur(
+                                        sigmaX: 28,
+                                        sigmaY: 28,
+                                      ),
+                                      child: FittedBox(
+                                        fit: BoxFit.cover,
+                                        child: Artwork(
+                                          state: state,
+                                          path: song.cover,
+                                          revision: song.coverVersion,
+                                          size: 320,
+                                        ),
+                                      ),
                                     ),
                                   ),
+                                )
+                              else
+                                AmbientArtwork(
+                                  state: state,
+                                  song: song,
+                                  opacity: dark ? .52 : .34,
                                 ),
-                              ),
-                              const DecoratedBox(
+                              DecoratedBox(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xE01A1828),
-                                      Color(0xC83A1E34),
-                                      Color(0xB8922C42),
-                                    ],
+                                    colors: dark
+                                        ? const [
+                                            Color(0xE01A1828),
+                                            Color(0xC83A1E34),
+                                            Color(0xB8922C42),
+                                          ]
+                                        : const [
+                                            Color(0xCCFFFFFF),
+                                            Color(0xB8F9F7FC),
+                                            Color(0xA6FCEFF4),
+                                          ],
                                   ),
                                 ),
                               ),
-                              const DecoratedBox(
+                              DecoratedBox(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
-                                    colors: [
-                                      Color(0xC00E0E15),
-                                      Color(0x280E0E15),
-                                    ],
+                                    colors: dark
+                                        ? const [
+                                            Color(0xC00E0E15),
+                                            Color(0x280E0E15),
+                                          ]
+                                        : const [
+                                            Color(0xB8FFFFFF),
+                                            Color(0x24FFFFFF),
+                                          ],
                                   ),
                                 ),
                               ),
@@ -594,7 +632,10 @@ class SongSpotlight extends StatelessWidget {
                                           Glass(
                                             state: state,
                                             radius: 999,
-                                            material: GlassMaterialSpec.onColor,
+                                            material: dark
+                                                ? GlassMaterialSpec.onColor
+                                                : GlassMaterialSpec.shortcut,
+                                            tint: dark ? null : Colors.white,
                                             child: Padding(
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -604,10 +645,14 @@ class SongSpotlight extends StatelessWidget {
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  const AppVectorIcon(
+                                                  AppVectorIcon(
                                                     AppGlyph.sparkles,
                                                     size: 11,
-                                                    color: Color(0xFFFFD580),
+                                                    color: dark
+                                                        ? const Color(
+                                                            0xFFFFD580,
+                                                          )
+                                                        : AppPalette.brandText,
                                                   ),
                                                   const SizedBox(width: 4),
                                                   Flexible(
@@ -622,9 +667,9 @@ class SongSpotlight extends StatelessWidget {
                                                           .textTheme
                                                           .bodySmall
                                                           ?.copyWith(
-                                                            color: Colors.white
+                                                            color: titleColor
                                                                 .withValues(
-                                                                  alpha: .94,
+                                                                  alpha: .92,
                                                                 ),
                                                             fontSize: 11,
                                                             fontWeight:
@@ -645,7 +690,7 @@ class SongSpotlight extends StatelessWidget {
                                                 .textTheme
                                                 .headlineSmall
                                                 ?.copyWith(
-                                                  color: Colors.white,
+                                                  color: titleColor,
                                                   fontSize: narrow ? 20 : 22,
                                                   height: 1.2,
                                                   fontWeight: FontWeight.w700,
@@ -663,9 +708,7 @@ class SongSpotlight extends StatelessWidget {
                                                 .textTheme
                                                 .bodySmall
                                                 ?.copyWith(
-                                                  color: const Color(
-                                                    0xCCFFFFFF,
-                                                  ),
+                                                  color: artistColor,
                                                   fontSize: 13,
                                                   height: 1.35,
                                                 ),
@@ -679,9 +722,14 @@ class SongSpotlight extends StatelessWidget {
                                         Flexible(
                                           child: FilledButton.icon(
                                             style: FilledButton.styleFrom(
-                                              backgroundColor: Colors.white
-                                                  .withValues(alpha: .94),
-                                              foregroundColor: AppPalette.ink,
+                                              backgroundColor: dark
+                                                  ? Colors.white.withValues(
+                                                      alpha: .94,
+                                                    )
+                                                  : AppPalette.brand,
+                                              foregroundColor: dark
+                                                  ? AppPalette.ink
+                                                  : Colors.white,
                                               minimumSize: const Size(48, 48),
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -699,10 +747,12 @@ class SongSpotlight extends StatelessWidget {
                                             onPressed: song.available
                                                 ? open
                                                 : null,
-                                            icon: const AppVectorIcon(
+                                            icon: AppVectorIcon(
                                               AppGlyph.play,
                                               size: 14,
-                                              color: AppPalette.ink,
+                                              color: dark
+                                                  ? AppPalette.ink
+                                                  : Colors.white,
                                             ),
                                             label: Text(
                                               continuing ? '继续练唱' : '开始练唱',
@@ -715,14 +765,21 @@ class SongSpotlight extends StatelessWidget {
                                         Glass(
                                           state: state,
                                           radius: 999,
-                                          material: GlassMaterialSpec.onColor,
+                                          material: dark
+                                              ? GlassMaterialSpec.onColor
+                                              : GlassMaterialSpec.shortcut,
+                                          tint: dark ? null : Colors.white,
                                           child: IconButton(
                                             tooltip:
                                                 '${favorite ? '取消收藏' : '收藏'} ${song.title}',
                                             style: IconButton.styleFrom(
                                               foregroundColor: favorite
                                                   ? AppPalette.brand
-                                                  : Colors.white,
+                                                  : dark
+                                                  ? Colors.white
+                                                  : AppPalette.ink.withValues(
+                                                      alpha: .78,
+                                                    ),
                                               minimumSize: const Size.square(
                                                 48,
                                               ),
@@ -962,7 +1019,7 @@ class ShellAmbientGlow extends StatelessWidget {
                       child: AmbientArtwork(
                         state: state,
                         song: song,
-                        opacity: dark ? .36 : .28,
+                        opacity: dark ? .36 : .14,
                       ),
                     )
                   : SizedBox.expand(

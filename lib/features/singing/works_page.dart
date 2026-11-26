@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/design.dart';
+import '../../app/main_tab_header.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../library/widgets.dart';
@@ -77,9 +78,15 @@ class _WavePainter extends CustomPainter {
 }
 
 class WorksPage extends StatefulWidget {
-  const WorksPage({super.key, required this.state, this.embedded = false});
+  const WorksPage({
+    super.key,
+    required this.state,
+    this.embedded = false,
+    this.headerActions,
+  });
   final AppState state;
   final bool embedded;
+  final Widget? headerActions;
   @override
   State<WorksPage> createState() => _WorksPageState();
 }
@@ -105,6 +112,10 @@ class _WorksPageState extends State<WorksPage> {
     listenable: widget.state,
     builder: (context, _) {
       final state = widget.state;
+      final actions = widget.headerActions;
+      final inset = actions == null
+          ? AppSpace.page
+          : MainTabHeader.insetOf(context);
       final works = state.visibleWorks.where((work) {
         final name = work['name'] as String? ?? '我的演唱';
         return name.toLowerCase().contains(search.text.toLowerCase());
@@ -158,34 +169,47 @@ class _WorksPageState extends State<WorksPage> {
               ),
             ],
           );
+      final searchField = GlassSearchField(
+        state: state,
+        controller: search,
+        focusNode: searchFocus,
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => searchFocus.unfocus(),
+        hintText: '搜索作品和草稿',
+        suffix: search.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: '清除搜索',
+                onPressed: () => setState(search.clear),
+                icon: const Icon(Icons.cancel_rounded),
+              ),
+      );
       final body = RefreshIndicator(
+        edgeOffset: actions == null
+            ? 0
+            : MainTabHeader.refreshEdgeOffsetOf(context),
         onRefresh: state.refreshWorks,
         child: CustomScrollView(
           key: const PageStorageKey('works-scroll'),
           physics: const AlwaysScrollableScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
+            if (actions != null)
+              MainTabHeader(
+                senior: state.senior,
+                actions: actions,
+                search: searchField,
+              ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              padding: EdgeInsets.fromLTRB(
+                inset,
+                actions == null ? AppSpace.xs : 0,
+                inset,
+                0,
+              ),
               sliver: SliverMainAxisGroup(
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: GlassSearchField(
-                      state: state,
-                      controller: search,
-                      focusNode: searchFocus,
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: (_) => searchFocus.unfocus(),
-                      hintText: '搜索作品和草稿',
-                      suffix: search.text.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: '清除搜索',
-                              onPressed: () => setState(search.clear),
-                              icon: const Icon(Icons.cancel_rounded),
-                            ),
-                    ),
-                  ),
+                  if (actions == null) SliverToBoxAdapter(child: searchField),
                   if (state.worksLoading)
                     const SliverToBoxAdapter(
                       child: Padding(
@@ -421,7 +445,9 @@ class _WorkRow extends StatelessWidget {
                       height: senior ? 58 : 40,
                       child: Waveform(
                         values: waveform,
-                        color: scheme.primary,
+                        color: draft
+                            ? scheme.onSurface.withValues(alpha: .72)
+                            : scheme.primary,
                         progress: draft ? .42 : .68,
                       ),
                     ),
@@ -436,8 +462,9 @@ class _WorkRow extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: (missing ? scheme.error : scheme.primary)
-                                .withValues(alpha: .12),
+                            color: missing
+                                ? scheme.error.withValues(alpha: .12)
+                                : scheme.onSurface.withValues(alpha: .065),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
@@ -447,15 +474,46 @@ class _WorkRow extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                   color: missing
                                       ? scheme.error
-                                      : scheme.primary,
+                                      : scheme.onSurface.withValues(alpha: .78),
                                 ),
                           ),
                         ),
                         const Spacer(),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          color: missing ? scheme.error : scheme.primary,
-                          size: 20,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: scheme.onSurface.withValues(alpha: .065),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                missing ? '查看' : '去处理',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: missing
+                                          ? scheme.error
+                                          : scheme.onSurface.withValues(
+                                              alpha: .78,
+                                            ),
+                                    ),
+                              ),
+                              const SizedBox(width: 2),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: missing
+                                    ? scheme.error
+                                    : scheme.onSurface.withValues(alpha: .68),
+                                size: 16,
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),

@@ -192,9 +192,9 @@ class _PlayerPageState extends State<PlayerPage> {
         displayColor: foreground,
       ),
       sliderTheme: theme.sliderTheme.copyWith(
-        activeTrackColor: foreground,
-        thumbColor: foreground,
-        inactiveTrackColor: foreground.withValues(alpha: .18),
+        activeTrackColor: foreground.withValues(alpha: .86),
+        thumbColor: Colors.white,
+        inactiveTrackColor: Colors.white.withValues(alpha: .14),
       ),
     );
   }
@@ -896,67 +896,70 @@ class _PlayerPageState extends State<PlayerPage> {
                       width: .7,
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(20),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(20),
+                            ),
                           ),
-                        ),
-                        leading: const Icon(Icons.repeat_rounded),
-                        title: const Text('选段练唱'),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: chevronColor,
-                        ),
-                        onTap: widget.state.taking
-                            ? null
-                            : () {
-                                Navigator.pop(context);
-                                range();
-                              },
-                      ),
-                      Divider(
-                        height: 1,
-                        indent: 54,
-                        endIndent: 16,
-                        color: dividerColor,
-                      ),
-                      SwitchListTile(
-                        secondary: const Icon(Icons.repeat_one_rounded),
-                        value: widget.state.loop,
-                        title: const Text('单曲循环'),
-                        onChanged: widget.state.taking
-                            ? null
-                            : (v) => uiTask(
-                                context,
-                                () => widget.state.command('loop', v),
-                              ),
-                      ),
-                      Divider(
-                        height: 1,
-                        indent: 54,
-                        endIndent: 16,
-                        color: dividerColor,
-                      ),
-                      ListTile(
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(
-                            bottom: Radius.circular(20),
+                          leading: const Icon(Icons.repeat_rounded),
+                          title: const Text('选段练唱'),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: chevronColor,
                           ),
+                          onTap: widget.state.taking
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                  range();
+                                },
                         ),
-                        leading: const Icon(Icons.headphones_rounded),
-                        title: const Text('音轨与播放设置'),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: chevronColor,
+                        Divider(
+                          height: 1,
+                          indent: 54,
+                          endIndent: 16,
+                          color: dividerColor,
                         ),
-                        onTap: () =>
-                            panel(() => audioSettings(context, widget.state)),
-                      ),
-                    ],
+                        SwitchListTile(
+                          secondary: const Icon(Icons.repeat_one_rounded),
+                          value: widget.state.loop,
+                          title: const Text('单曲循环'),
+                          onChanged: widget.state.taking
+                              ? null
+                              : (v) => uiTask(
+                                  context,
+                                  () => widget.state.command('loop', v),
+                                ),
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 54,
+                          endIndent: 16,
+                          color: dividerColor,
+                        ),
+                        ListTile(
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                              bottom: Radius.circular(20),
+                            ),
+                          ),
+                          leading: const Icon(Icons.headphones_rounded),
+                          title: const Text('音轨与播放设置'),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: chevronColor,
+                          ),
+                          onTap: () =>
+                              panel(() => audioSettings(context, widget.state)),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1263,13 +1266,13 @@ class _PlayerPageState extends State<PlayerPage> {
     final state = widget.state;
     final scheme = _theme.colorScheme;
     final timeStyle = _theme.textTheme.bodySmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-      fontSize: state.senior ? 14 : 12,
+      color: Colors.white.withValues(alpha: .54),
+      fontSize: state.senior ? 14 : 11.5,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final slider = SliderTheme(
       data: _theme.sliderTheme.copyWith(
-        trackHeight: stacked ? (drag != null ? 7.0 : 5.0) : 3.0,
+        trackHeight: stacked ? (drag != null ? 5.5 : 3.5) : 3.0,
         thumbShape: _PracticeThumb(
           animate: AppMotionScope.levelOf(context) == AppMotionLevel.full,
           sleek: stacked,
@@ -1287,9 +1290,9 @@ class _PlayerPageState extends State<PlayerPage> {
       ),
       child: SizedBox(
         height: state.senior
-            ? 56
+            ? (stacked ? 48 : 56)
             : stacked
-            ? 44
+            ? 32
             : 48,
         child: Semantics(
           container: true,
@@ -1330,19 +1333,21 @@ class _PlayerPageState extends State<PlayerPage> {
     );
     final duration = Text(durationLabel(state.durationMs), style: timeStyle);
     return stacked
-        ? SizedBox(
-            height: state.senior ? 72 : 52,
-            child: Stack(
-              children: [
-                slider,
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Row(children: [elapsed, const Spacer(), duration]),
-                ),
-              ],
-            ),
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              slider,
+              Row(
+                children: [
+                  elapsed,
+                  const SizedBox(width: 12),
+                  Expanded(child: stageStatus()),
+                  const SizedBox(width: 12),
+                  duration,
+                ],
+              ),
+            ],
           )
         : Row(
             children: [
@@ -1402,17 +1407,20 @@ class _PlayerPageState extends State<PlayerPage> {
         if (!state.backingMapped) 'backing',
       },
       keyFor: (role) => ValueKey('player-role-$role'),
-      glass:
+      liquid:
           stage &&
           !state.senior &&
           !state.reduceTransparency &&
           !state.performanceMode,
-      material: stage ? GlassMaterialSpec.stageControl : null,
+      selectedColor: stage ? _theme.colorScheme.onSurface : null,
+      trackColor: stage ? Colors.white.withValues(alpha: .055) : null,
       textStyle: _theme.textTheme.labelLarge?.copyWith(
         fontSize: state.senior
             ? 19
             : compact
             ? 13
+            : stage
+            ? 14
             : 15,
       ),
       labelBuilder: (role, label) => Tooltip(
@@ -1428,9 +1436,9 @@ class _PlayerPageState extends State<PlayerPage> {
                     role == 'original'
                         ? Icons.mic_rounded
                         : Icons.music_note_rounded,
-                    size: 18,
+                    size: 16,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(label, maxLines: 1, softWrap: false),
                 ],
               )
@@ -1463,14 +1471,14 @@ class _PlayerPageState extends State<PlayerPage> {
       style: FilledButton.styleFrom(
         minimumSize: Size(
           stage
-              ? 68
+              ? (state.senior ? 58 : 56)
               : state.senior
               ? 56
               : text || compact
               ? 48
               : 56,
           stage
-              ? 68
+              ? (state.senior ? 58 : 56)
               : state.senior
               ? 56
               : text || compact
@@ -1484,18 +1492,23 @@ class _PlayerPageState extends State<PlayerPage> {
           fontWeight: FontWeight.w500,
         ),
         backgroundColor: stage
-            ? _theme.colorScheme.onSurface
+            ? Colors.white.withValues(alpha: .11)
             : _theme.colorScheme.secondaryContainer,
-        foregroundColor: stage ? pageColor : _theme.colorScheme.onSurface,
+        foregroundColor: stage ? Colors.white : _theme.colorScheme.onSurface,
+        side: stage
+            ? BorderSide(color: Colors.white.withValues(alpha: .18), width: .8)
+            : null,
         disabledBackgroundColor: _theme.colorScheme.onSurface.withValues(
-          alpha: .12,
+          alpha: .10,
         ),
         disabledForegroundColor: _theme.colorScheme.onSurface.withValues(
-          alpha: .38,
+          alpha: .36,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(text ? 12 : 32),
-        ),
+        shape: stage
+            ? const StadiumBorder()
+            : RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(text ? 12 : 32),
+              ),
       ),
       onPressed: ready && !state.taking
           ? () => uiTask(
@@ -1522,7 +1535,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     ? Icons.pause_rounded
                     : Icons.play_arrow_rounded,
                 key: ValueKey((preparingPlayback, state.isPlaying)),
-                size: stage ? 32 : 28,
+                size: stage ? 26 : 28,
               ),
             ),
             if (text) ...[
@@ -1543,7 +1556,11 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Widget recordButton({bool compact = false, Key? key}) {
+  Widget recordButton({
+    bool compact = false,
+    bool stage = false,
+    Key? key,
+  }) {
     final state = widget.state;
     final enabled =
         !actionBusy && (ready || state.recording || state.countdown > 0);
@@ -1556,24 +1573,31 @@ class _PlayerPageState extends State<PlayerPage> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         gradient: enabled
-            ? const LinearGradient(
+            ? LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [AppPalette.brand, AppPalette.recording],
+                colors: state.recording || state.countdown > 0
+                    ? const [AppPalette.brand, AppPalette.recording]
+                    : stage
+                    ? const [Color(0xFFD63058), Color(0xFFB01E43)]
+                    : const [AppPalette.brand, AppPalette.recording],
               )
             : null,
         border: enabled
-            ? Border.all(color: Colors.white.withValues(alpha: .28), width: .8)
+            ? Border.all(
+                color: Colors.white.withValues(alpha: stage ? .22 : .28),
+                width: .8,
+              )
             : null,
         boxShadow: enabled && !state.performanceMode
             ? [
                 BoxShadow(
                   color: AppPalette.brand.withValues(
-                    alpha: state.recording ? .60 : .42,
+                    alpha: state.recording ? .56 : (stage ? .24 : .42),
                   ),
-                  blurRadius: state.recording ? 28 : 22,
-                  spreadRadius: -4,
-                  offset: const Offset(0, 10),
+                  blurRadius: state.recording ? 28 : (stage ? 18 : 22),
+                  spreadRadius: state.recording ? -4 : (stage ? -6 : -4),
+                  offset: Offset(0, stage && !state.recording ? 8 : 10),
                 ),
               ]
             : null,
@@ -1701,12 +1725,12 @@ class _PlayerPageState extends State<PlayerPage> {
                 child: TextButton(
                   style: TextButton.styleFrom(
                     foregroundColor: stage
-                        ? _theme.colorScheme.onSurface
+                        ? Colors.white.withValues(alpha: .76)
                         : _theme.colorScheme.onSurfaceVariant,
                     minimumSize: Size(
                       48,
                       stage
-                          ? 60
+                          ? (state.senior ? 56 : 50)
                           : state.senior
                           ? 56
                           : 48,
@@ -1719,7 +1743,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           : compact
                           ? 12
                           : stage
-                          ? 14
+                          ? 12
                           : 13,
                     ),
                   ),
@@ -1736,8 +1760,8 @@ class _PlayerPageState extends State<PlayerPage> {
                       : Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(tool.$1, size: stage ? 22 : 20),
-                            SizedBox(height: stage ? 6 : 4),
+                            Icon(tool.$1, size: 20),
+                            SizedBox(height: stage ? 4 : 4),
                             Text(tool.$2),
                           ],
                         ),
@@ -2898,11 +2922,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       environment: layerBackdrop,
                       content: null,
                       child: AppEnvironment(
-                        solid:
-                            state.senior ||
-                            state.reduceTransparency ||
-                            state.performanceMode ||
-                            MediaQuery.highContrastOf(context),
+                        solid: true,
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
@@ -2913,41 +2933,15 @@ class _PlayerPageState extends State<PlayerPage> {
                                   child: Stack(
                                     fit: StackFit.expand,
                                     children: [
-                                      const IgnorePointer(
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: RadialGradient(
-                                              center: Alignment(-.55, -.62),
-                                              radius: 1.15,
-                                              colors: [
-                                                Color(0x52E63963),
-                                                Color(0x00101016),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const IgnorePointer(
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: RadialGradient(
-                                              center: Alignment(.65, .38),
-                                              radius: 1.1,
-                                              colors: [
-                                                Color(0x484460B8),
-                                                Color(0x00101016),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
                                       if (!(bounds.maxWidth >
                                               bounds.maxHeight &&
                                           song.mediaType == 'VIDEO'))
                                         AmbientArtwork(
                                           state: state,
                                           song: song,
-                                          opacity: .68,
+                                          opacity: song.mediaType == 'VIDEO'
+                                              ? .22
+                                              : .38,
                                         ),
                                       const IgnorePointer(
                                         child: DecoratedBox(
@@ -2955,11 +2949,12 @@ class _PlayerPageState extends State<PlayerPage> {
                                             gradient: LinearGradient(
                                               begin: Alignment.topCenter,
                                               end: Alignment.bottomCenter,
-                                              stops: [0, .50, 1],
+                                              stops: [0.0, 0.26, 0.62, 1.0],
                                               colors: [
-                                                Color(0x3C101016),
-                                                Color(0x68101016),
-                                                Color(0xB4101016),
+                                                Color(0x9E0B0C10),
+                                                Color(0x5C0B0C10),
+                                                Color(0x880B0C10),
+                                                Color(0xEA0B0C10),
                                               ],
                                             ),
                                           ),
@@ -3041,92 +3036,6 @@ void _paintPracticeBracket(
   );
 }
 
-class _SeekSecondsIcon extends StatelessWidget {
-  const _SeekSecondsIcon({required this.seconds});
-  final int seconds;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = IconTheme.of(context).color ?? Colors.white;
-    final amount = seconds.abs();
-    return SizedBox(
-      width: 34,
-      height: 34,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: const Size(34, 34),
-            painter: _SeekArcPainter(forward: seconds > 0, color: color),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(
-              '$amount',
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 9.5,
-                height: 1.0,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
-                color: color,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SeekArcPainter extends CustomPainter {
-  const _SeekArcPainter({required this.forward, required this.color});
-  final bool forward;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    if (forward) {
-      canvas.translate(size.width, 0);
-      canvas.scale(-1, 1);
-    }
-    final center = Offset(size.width / 2, size.height / 2 + 1.5);
-    const radius = 11.5;
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.9
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    // Clean 285-degree circular sweep from 12 o'clock clockwise, leaving a
-    // crisp gap before the top-left return, matching Apple SF Symbols style.
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      math.pi * 1.58,
-      false,
-      paint,
-    );
-
-    // Directional chevron at 12 o'clock pointing counter-clockwise (mirrored
-    // for forward).
-    final tip = Offset(center.dx - 1.2, center.dy - radius);
-    final arrow = Path()
-      ..moveTo(tip.dx + 4.0, tip.dy - 3.3)
-      ..lineTo(tip.dx, tip.dy)
-      ..lineTo(tip.dx + 4.0, tip.dy + 3.3);
-    canvas.drawPath(arrow, paint);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_SeekArcPainter oldDelegate) =>
-      forward != oldDelegate.forward || color != oldDelegate.color;
-}
-
 class _PracticeThumb extends SliderComponentShape {
   const _PracticeThumb({
     required this.animate,
@@ -3161,9 +3070,18 @@ class _PracticeThumb extends SliderComponentShape {
       enableAnimation.value,
     )!;
     final radius = sleek
-        ? (dragging ? 6.5 : (animate ? activationAnimation.value * 6.0 : 0.0))
+        ? (dragging ? 6.5 : 4.0)
         : 5.0 + (animate ? activationAnimation.value * 2 : 0.0);
     if (radius <= 0.1) return;
+    if (sleek) {
+      context.canvas.drawCircle(
+        center,
+        radius + 1.5,
+        Paint()
+          ..color = Colors.black.withValues(alpha: .32)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
+    }
     context.canvas.drawCircle(center, radius, Paint()..color = color);
   }
 }

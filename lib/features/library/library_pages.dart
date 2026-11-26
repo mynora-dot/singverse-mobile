@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app/design.dart';
+import '../../app/main_tab_header.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../singing/actions.dart';
@@ -129,7 +130,7 @@ class _SongsPageState extends State<SongsPage> {
     listenable: query,
     builder: (context, _) {
       final state = widget.state;
-      final pageInset = MediaQuery.sizeOf(context).width < 375 ? 16.0 : 20.0;
+      final pageInset = MainTabHeader.insetOf(context);
       final searching =
           searchFocus.hasFocus ||
           search.text.isNotEmpty ||
@@ -144,89 +145,95 @@ class _SongsPageState extends State<SongsPage> {
           MediaQuery.textScalerOf(context).scale(16) <= 21 &&
           orderedItems.isNotEmpty;
       final rows = spotlight ? orderedItems.skip(1).toList() : orderedItems;
-      final pinnedSearch = widget.embedded && widget.headerActions != null;
-      final searchHeader = Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      final actions = widget.headerActions;
+      final searchActionSize = Size.square(
+        state.senior && actions != null ? AppSizes.seniorTouch : AppSizes.touch,
+      );
+      final searchActionStyle = IconButton.styleFrom(
+        minimumSize: searchActionSize,
+        fixedSize: searchActionSize,
+        padding: EdgeInsets.zero,
+      );
+      final searchActions = Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: _SongSearchField(
-              state: state,
-              fieldKey: const ValueKey('song-search'),
-              controller: search,
-              focusNode: searchFocus,
-              suffix: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (search.text.isNotEmpty)
-                    IconButton(
-                      tooltip: '清除搜索',
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size.square(44),
-                        fixedSize: const Size.square(44),
-                        padding: EdgeInsets.zero,
-                      ),
-                      onPressed: () {
-                        debounce?.cancel();
-                        search.clear();
-                        query.query = '';
-                        query.load();
-                        setState(() {});
-                      },
-                      icon: const Icon(Icons.cancel_rounded),
-                    ),
-                  IconButton(
-                    tooltip: '筛选歌曲',
-                    focusNode: filtersFocus,
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size.square(44),
-                      fixedSize: const Size.square(44),
-                      padding: EdgeInsets.zero,
-                    ),
-                    onPressed: filters,
-                    icon: Badge(
-                      isLabelVisible: query.tagIds.isNotEmpty,
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      child: AppVectorIcon(
-                        AppGlyph.sliders,
-                        size: 18,
-                        color: query.tagIds.isNotEmpty
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              onChanged: (text) {
-                query.query = text;
-                setState(() {});
+          if (search.text.isNotEmpty)
+            IconButton(
+              tooltip: '清除搜索',
+              style: searchActionStyle,
+              onPressed: () {
                 debounce?.cancel();
-                debounce = Timer(const Duration(milliseconds: 350), () {
-                  if (scroll.hasClients) scroll.jumpTo(0);
-                  query.load();
-                });
-              },
-              onSubmitted: (_) {
-                debounce?.cancel();
+                search.clear();
+                query.query = '';
                 query.load();
-                searchFocus.unfocus();
+                setState(() {});
               },
+              icon: const Icon(Icons.cancel_rounded),
+            ),
+          IconButton(
+            tooltip: '筛选歌曲',
+            focusNode: filtersFocus,
+            style: searchActionStyle,
+            onPressed: filters,
+            icon: Badge(
+              isLabelVisible: query.tagIds.isNotEmpty,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: AppVectorIcon(
+                AppGlyph.sliders,
+                size: 18,
+                color: query.tagIds.isNotEmpty
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
-          if (!pinnedSearch && widget.headerActions != null) ...[
-            const SizedBox(width: 8),
-            widget.headerActions!,
-          ],
         ],
       );
+      void onSearchChanged(String text) {
+        query.query = text;
+        setState(() {});
+        debounce?.cancel();
+        debounce = Timer(const Duration(milliseconds: 350), () {
+          if (scroll.hasClients) scroll.jumpTo(0);
+          query.load();
+        });
+      }
+
+      void onSearchSubmitted(String _) {
+        debounce?.cancel();
+        query.load();
+        searchFocus.unfocus();
+      }
+
+      const searchKey = ValueKey('song-search');
+      final searchField = actions == null
+          ? _SongSearchField(
+              state: state,
+              fieldKey: searchKey,
+              controller: search,
+              focusNode: searchFocus,
+              suffix: searchActions,
+              onChanged: onSearchChanged,
+              onSubmitted: onSearchSubmitted,
+            )
+          : GlassSearchField(
+              state: state,
+              fieldKey: searchKey,
+              controller: search,
+              focusNode: searchFocus,
+              hintText: '搜索歌名或歌手',
+              suffix: searchActions,
+              onChanged: onSearchChanged,
+              onSubmitted: onSearchSubmitted,
+            );
       final header = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (widget.browseItem != null)
             _BrowseIntroduction(state: state, item: widget.browseItem!),
-          if (!pinnedSearch) searchHeader,
+          if (actions == null) searchField,
           if (widget.showBrowse && !searching) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             _BrowseLinks(state: state),
           ],
           if (query.tagIds.isNotEmpty)
@@ -302,16 +309,10 @@ class _SongsPageState extends State<SongsPage> {
           const SizedBox(height: 8),
         ],
       );
-      final topFloatHeight = pinnedSearch
-          ? math.max(
-              114.0,
-              MediaQuery.textScalerOf(context).scale(30) * 1.25 +
-                  (state.senior ? 64.0 : 56.0) +
-                  24,
-            )
-          : 0.0;
       final body = RefreshIndicator(
-        edgeOffset: topFloatHeight,
+        edgeOffset: actions == null
+            ? 0
+            : MainTabHeader.refreshEdgeOffsetOf(context),
         onRefresh: () => query.load(),
         child: CustomScrollView(
           controller: scroll,
@@ -321,10 +322,16 @@ class _SongsPageState extends State<SongsPage> {
           physics: const AlwaysScrollableScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
+            if (actions != null)
+              MainTabHeader(
+                senior: state.senior,
+                actions: actions,
+                search: searchField,
+              ),
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 pageInset,
-                pinnedSearch ? topFloatHeight + 6 : 4,
+                actions == null ? AppSpace.xxs : 0,
                 pageInset,
                 0,
               ),
@@ -377,118 +384,8 @@ class _SongsPageState extends State<SongsPage> {
           ],
         ),
       );
-      final content = pinnedSearch
-          ? AppBackdropCapture(
-              builder: (context, envBackdrop) => AppBackdropCapture(
-                builder: (context, contentBackdrop) => AppBackdropRouteBinding(
-                  environment: envBackdrop,
-                  content: contentBackdrop,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: AppBackdropSource(
-                          backdrop: contentBackdrop,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Positioned.fill(
-                                child: AppBackdropSource(
-                                  backdrop: envBackdrop,
-                                  child: AppEnvironment(
-                                    child: ShellAmbientGlow(state: state),
-                                  ),
-                                ),
-                              ),
-                              AppBackdropScope(
-                                environment: envBackdrop,
-                                content: contentBackdrop,
-                                child: ShaderMask(
-                                  blendMode: BlendMode.dstIn,
-                                  shaderCallback: (bounds) {
-                                    final h = bounds.height <= 0
-                                        ? 1.0
-                                        : bounds.height;
-                                    final fadeStart = (10 / h).clamp(0.0, 0.12);
-                                    final fadeEnd = (52 / h).clamp(
-                                      fadeStart + 0.01,
-                                      0.20,
-                                    );
-                                    return LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      stops: [0, fadeStart, fadeEnd, 1],
-                                      colors: const [
-                                        Colors.transparent,
-                                        Colors.transparent,
-                                        Colors.black,
-                                        Colors.black,
-                                      ],
-                                    ).createShader(bounds);
-                                  },
-                                  child: body,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: AppBackdropScope(
-                          environment: envBackdrop,
-                          content: contentBackdrop,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  pageInset,
-                                  6,
-                                  pageInset,
-                                  10,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '点歌',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineLarge
-                                            ?.copyWith(
-                                              fontSize: 30,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: -.8,
-                                            ),
-                                      ),
-                                    ),
-                                    widget.headerActions!,
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  pageInset,
-                                  0,
-                                  pageInset,
-                                  8,
-                                ),
-                                child: searchHeader,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          : body;
       return widget.embedded
-          ? content
+          ? body
           : AppBackdropPage(
               glow: ShellAmbientGlow(state: state),
               appBar: AppToolbar(
@@ -504,10 +401,7 @@ class _SongsPageState extends State<SongsPage> {
                     : null,
                 title: Text(widget.title),
               ),
-              body: SafeArea(
-                bottom: false,
-                child: ContentWidth(child: content),
-              ),
+              body: SafeArea(bottom: false, child: ContentWidth(child: body)),
             );
     },
   );
@@ -564,6 +458,7 @@ class _SongSearchField extends StatelessWidget {
     state: state,
     radius: 999,
     material: GlassMaterialSpec.search,
+    focusNode: focusNode,
     child: TextField(
       key: fieldKey,
       controller: controller,
@@ -588,20 +483,20 @@ class _SongSearchField extends StatelessWidget {
         ),
         prefixIconConstraints: BoxConstraints(
           minWidth: state.senior ? 44 : 40,
-          minHeight: state.senior ? 56 : 44,
+          minHeight: state.senior ? 56 : 48,
         ),
         suffixIcon: suffix,
         suffixIconConstraints: BoxConstraints(
-          minHeight: state.senior ? 56 : 44,
+          minHeight: state.senior ? 56 : 48,
         ),
         isDense: true,
         filled: false,
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
-        contentPadding: const EdgeInsets.symmetric(
+        contentPadding: EdgeInsets.symmetric(
           horizontal: 12,
-          vertical: 12,
+          vertical: state.senior ? 15 : 13,
         ),
       ),
       onChanged: onChanged,
@@ -974,7 +869,7 @@ class _BrowseLinks extends StatelessWidget {
                     AppVectorIcon(
                       item.$1,
                       size: state.senior ? 22 : 16.5,
-                      color: scheme.primary,
+                      color: scheme.onSurface.withValues(alpha: .78),
                     ),
                     SizedBox(width: stacked ? 12 : 6),
                     Flexible(
