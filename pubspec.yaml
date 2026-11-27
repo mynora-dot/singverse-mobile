@@ -12,15 +12,6 @@ dependencies:
   shared_preferences: ^2.5.3
   fluid_glass: ^0.6.1
 dev_dependencies:
-  integration_test:
-    sdk: flutter
-  flutter_test:
-    sdk: flutter
   flutter_lints: 6.0.0
-  sqflite_common_ffi: ^2.3.6
 flutter:
   uses-material-design: true
-hooks:
-  user_defines:
-    sqlite3:
-      source: system

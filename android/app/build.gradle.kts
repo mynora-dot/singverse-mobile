@@ -30,12 +30,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.mynora.singverse.mobile"
-        if (providers.gradleProperty("singverseE2e").orNull == "true") applicationIdSuffix = ".e2e"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = productCode.toInt()
@@ -69,12 +64,4 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
-    testImplementation("junit:junit:4.13.2")
-    debugImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-}
-
-tasks.withType<Test>().configureEach {
-    systemProperty("singverse.computeContract", rootProject.projectDir.resolve("../contracts/openapi/compute-internal.openapi.json").canonicalPath)
 }

@@ -13,7 +13,6 @@ export 'surfaces.dart';
 
 const berry = AppPalette.brand;
 const coral = Color(0xFFFF8497);
-const recordingControl = AppPalette.recording;
 const ink = AppPalette.ink;
 
 ThemeData singVerseTheme(

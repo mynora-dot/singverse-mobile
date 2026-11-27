@@ -750,20 +750,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await preferences.setBool('performanceMode', !enabled);
   }
 
-  Future<void> setTransparency(bool reduced) async {
-    reduceTransparency = reduced;
-    await preferences.remove('liquidGlass');
-    await preferences.setBool('reduceTransparency', reduced);
-    notifyListeners();
-  }
-
-  Future<void> setPerformanceMode(bool enabled) async {
-    performanceMode = enabled;
-    notifyListeners();
-    await preferences.remove('liquidGlass');
-    await preferences.setBool('performanceMode', enabled);
-  }
-
   Future<void> play(
     Song song, {
     bool force = false,

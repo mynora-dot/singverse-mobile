@@ -10,8 +10,6 @@ else
 fi
 export SINGVERSE_VERSION="$version"
 code=$(python3 -c 'import sys; major,minor,patch=map(int,sys.argv[1].split(".")); print(max(1,major*1000000+minor*1000+patch))' "$version")
-# Flutter regenerates the native plugin registrant for the selected build mode
-# only when pub is enabled. Keep dev-only integration_test out of release APKs.
 lock_snapshot=$(mktemp)
 cp pubspec.lock "$lock_snapshot"
 trap 'rm -f "$lock_snapshot"' EXIT HUP INT TERM

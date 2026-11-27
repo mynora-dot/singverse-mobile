@@ -121,7 +121,11 @@ class _AppGlyphPainter extends CustomPainter {
           ..lineTo(3.5, 15.8);
         canvas.drawPath(path, stroke);
         // Inner horizontal scan beam
-        canvas.drawLine(const Offset(7.2, 12.0), const Offset(16.8, 12.0), stroke);
+        canvas.drawLine(
+          const Offset(7.2, 12.0),
+          const Offset(16.8, 12.0),
+          stroke,
+        );
 
       case AppGlyph.person:
       case AppGlyph.artist:
@@ -144,8 +148,16 @@ class _AppGlyphPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = (strokeWidth * .82) / s
             ..strokeCap = StrokeCap.round;
-          canvas.drawLine(const Offset(18.2, 5.2), const Offset(18.2, 9.6), note);
-          canvas.drawLine(const Offset(18.2, 5.2), const Offset(20.4, 4.5), note);
+          canvas.drawLine(
+            const Offset(18.2, 5.2),
+            const Offset(18.2, 9.6),
+            note,
+          );
+          canvas.drawLine(
+            const Offset(18.2, 5.2),
+            const Offset(20.4, 4.5),
+            note,
+          );
           canvas.drawCircle(const Offset(17.2, 9.8), 1.25, fill);
         }
 
@@ -157,7 +169,11 @@ class _AppGlyphPainter extends CustomPainter {
           ..strokeWidth = (strokeWidth * .92) / s
           ..strokeCap = StrokeCap.round;
         // Top line (knob on left-mid)
-        canvas.drawLine(const Offset(4, 6.5), const Offset(7.2, 6.5), railPaint);
+        canvas.drawLine(
+          const Offset(4, 6.5),
+          const Offset(7.2, 6.5),
+          railPaint,
+        );
         canvas.drawLine(
           const Offset(11.6, 6.5),
           const Offset(20, 6.5),
@@ -193,15 +209,30 @@ class _AppGlyphPainter extends CustomPainter {
           Rect.fromLTWH(3.6, 13.2, 7.2, 7.2),
           Rect.fromLTWH(13.2, 13.2, 7.2, 7.2),
         ]) {
-          final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(2.4));
+          final rrect = RRect.fromRectAndRadius(
+            rect,
+            const Radius.circular(2.4),
+          );
           canvas.drawRRect(rrect, filled ? fill : stroke);
         }
 
       case AppGlyph.playlist:
         // Apple Music music.note.list: three clean horizontal bars + beamed eighth note
-        canvas.drawLine(const Offset(3.5, 6.5), const Offset(13.5, 6.5), stroke);
-        canvas.drawLine(const Offset(3.5, 11.5), const Offset(11.5, 11.5), stroke);
-        canvas.drawLine(const Offset(3.5, 16.5), const Offset(10.0, 16.5), stroke);
+        canvas.drawLine(
+          const Offset(3.5, 6.5),
+          const Offset(13.5, 6.5),
+          stroke,
+        );
+        canvas.drawLine(
+          const Offset(3.5, 11.5),
+          const Offset(11.5, 11.5),
+          stroke,
+        );
+        canvas.drawLine(
+          const Offset(3.5, 16.5),
+          const Offset(10.0, 16.5),
+          stroke,
+        );
         final stem = Path()
           ..moveTo(16.6, 16.8)
           ..lineTo(16.6, 6.2)
@@ -254,14 +285,14 @@ class _AppGlyphPainter extends CustomPainter {
         );
         canvas.drawRRect(capsule, filled ? fill : stroke);
         final cradle = Path()
-          ..addArc(
-            const Rect.fromLTWH(5.6, 7.2, 12.8, 9.8),
-            0,
-            math.pi,
-          );
+          ..addArc(const Rect.fromLTWH(5.6, 7.2, 12.8, 9.8), 0, math.pi);
         canvas.drawPath(cradle, stroke);
         canvas.drawLine(const Offset(12, 17.2), const Offset(12, 20.4), stroke);
-        canvas.drawLine(const Offset(8.8, 20.4), const Offset(15.2, 20.4), stroke);
+        canvas.drawLine(
+          const Offset(8.8, 20.4),
+          const Offset(15.2, 20.4),
+          stroke,
+        );
 
       case AppGlyph.waveform:
         // Apple SF waveform (5 symmetric rounded acoustic bars)
@@ -270,11 +301,31 @@ class _AppGlyphPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = (filled ? 2.35 : 2.0) / s
           ..strokeCap = StrokeCap.round;
-        canvas.drawLine(const Offset(4.2, 10.2), const Offset(4.2, 13.8), barPaint);
-        canvas.drawLine(const Offset(8.1, 7.0), const Offset(8.1, 17.0), barPaint);
-        canvas.drawLine(const Offset(12.0, 4.0), const Offset(12.0, 20.0), barPaint);
-        canvas.drawLine(const Offset(15.9, 6.5), const Offset(15.9, 17.5), barPaint);
-        canvas.drawLine(const Offset(19.8, 9.6), const Offset(19.8, 14.4), barPaint);
+        canvas.drawLine(
+          const Offset(4.2, 10.2),
+          const Offset(4.2, 13.8),
+          barPaint,
+        );
+        canvas.drawLine(
+          const Offset(8.1, 7.0),
+          const Offset(8.1, 17.0),
+          barPaint,
+        );
+        canvas.drawLine(
+          const Offset(12.0, 4.0),
+          const Offset(12.0, 20.0),
+          barPaint,
+        );
+        canvas.drawLine(
+          const Offset(15.9, 6.5),
+          const Offset(15.9, 17.5),
+          barPaint,
+        );
+        canvas.drawLine(
+          const Offset(19.8, 9.6),
+          const Offset(19.8, 14.4),
+          barPaint,
+        );
 
       case AppGlyph.sparkles:
         // Apple SF sparkles four-point star
@@ -293,7 +344,11 @@ class _AppGlyphPainter extends CustomPainter {
 
       case AppGlyph.search:
         canvas.drawCircle(const Offset(10.6, 10.6), 6.2, stroke);
-        canvas.drawLine(const Offset(15.2, 15.2), const Offset(19.8, 19.8), stroke);
+        canvas.drawLine(
+          const Offset(15.2, 15.2),
+          const Offset(19.8, 19.8),
+          stroke,
+        );
     }
 
     canvas.restore();
