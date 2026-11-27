@@ -27,8 +27,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     uiMode = preferences.getString('uiMode') == 'senior'
         ? UiMode.senior
         : UiMode.standard;
-    reduceTransparency = preferences.getBool('reduceTransparency') ?? false;
-    performanceMode = preferences.getBool('performanceMode') ?? false;
+    final savedLiquidGlass = preferences.getBool('liquidGlass');
+    if (savedLiquidGlass != null) {
+      reduceTransparency = !savedLiquidGlass;
+      performanceMode = !savedLiquidGlass;
+    } else {
+      reduceTransparency = preferences.getBool('reduceTransparency') ?? false;
+      performanceMode = preferences.getBool('performanceMode') ?? false;
+    }
     nativeEnabled = listenPlayer;
     updates = AppUpdates(
       api: api,
@@ -89,6 +95,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool get senior => uiMode == UiMode.senior;
   bool reduceTransparency = false;
   bool performanceMode = false;
+  bool get liquidGlass => !reduceTransparency && !performanceMode;
   bool nativeEnabled = true;
   Json singing = {};
   List<Json> works = [];
@@ -734,8 +741,18 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Future<void> setLiquidGlass(bool enabled) async {
+    reduceTransparency = !enabled;
+    performanceMode = !enabled;
+    notifyListeners();
+    await preferences.setBool('liquidGlass', enabled);
+    await preferences.setBool('reduceTransparency', !enabled);
+    await preferences.setBool('performanceMode', !enabled);
+  }
+
   Future<void> setTransparency(bool reduced) async {
     reduceTransparency = reduced;
+    await preferences.remove('liquidGlass');
     await preferences.setBool('reduceTransparency', reduced);
     notifyListeners();
   }
@@ -743,6 +760,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setPerformanceMode(bool enabled) async {
     performanceMode = enabled;
     notifyListeners();
+    await preferences.remove('liquidGlass');
     await preferences.setBool('performanceMode', enabled);
   }
 

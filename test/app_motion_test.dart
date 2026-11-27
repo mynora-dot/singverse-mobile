@@ -714,6 +714,52 @@ void main() {
     },
   );
 
+  test(
+    'liquidGlass defaults to enabled and persists unified off/on toggle',
+    () async {
+      sqfliteFfiInit();
+      SharedPreferences.setMockInitialValues({});
+      final store = await LocalStore.open(
+        factory: databaseFactoryFfiNoIsolate,
+        path: inMemoryDatabasePath,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final state = AppState(
+        api: FakeApi(),
+        store: store,
+        preferences: prefs,
+        listenPlayer: false,
+      );
+      expect(state.liquidGlass, isTrue);
+      expect(state.reduceTransparency, isFalse);
+      expect(state.performanceMode, isFalse);
+
+      await state.setLiquidGlass(false);
+      expect(state.liquidGlass, isFalse);
+      expect(state.reduceTransparency, isTrue);
+      expect(state.performanceMode, isTrue);
+
+      final restored = AppState(
+        api: FakeApi(),
+        store: store,
+        preferences: prefs,
+        listenPlayer: false,
+      );
+      expect(restored.liquidGlass, isFalse);
+      expect(restored.reduceTransparency, isTrue);
+      expect(restored.performanceMode, isTrue);
+
+      await restored.setLiquidGlass(true);
+      expect(restored.liquidGlass, isTrue);
+      expect(restored.reduceTransparency, isFalse);
+      expect(restored.performanceMode, isFalse);
+
+      state.dispose();
+      restored.dispose();
+      await store.close();
+    },
+  );
+
   test('performance preference persists without changing theme transparency or media clocks', () async {
     sqfliteFfiInit();
     SharedPreferences.setMockInitialValues({

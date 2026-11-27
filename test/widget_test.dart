@@ -164,7 +164,15 @@ void main() {
       await tester.tap(find.byTooltip('设置'));
       await tester.pumpAndSettle();
       expect(find.text('长辈模式'), findsOneWidget);
-      expect(find.text('减少透明效果'), findsOneWidget);
+      expect(find.text('液态玻璃效果'), findsOneWidget);
+      expect(
+        tester
+            .widget<SwitchListTile>(find.byKey(const Key('liquid-glass-mode')))
+            .value,
+        isTrue,
+      );
+      expect(find.text('减少透明效果'), findsNothing);
+      expect(find.text('性能模式'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

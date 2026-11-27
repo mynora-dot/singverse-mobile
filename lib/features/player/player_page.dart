@@ -410,11 +410,19 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Future<void> range() async {
     final state = widget.state;
+    final song = state.current ?? widget.song;
     if (state.durationMs <= 0 || state.taking) return;
     final duration = state.durationMs.toDouble();
-    final timedLines = lines
+    final rawTimedLines = lines
         .where((line) => line.startMs != null && line.text.trim().isNotEmpty)
         .toList();
+    final timedLines = [
+      for (var i = 0; i < rawTimedLines.length; i++)
+        if (!(i == 0 &&
+            song != null &&
+            PlayerLyrics.isOpeningHeading(rawTimedLines[i].text, song)))
+          rawTimedLines[i],
+    ];
     // Native playback keeps the committed loop while this sheet owns a draft.
     var values = RangeValues(
       state.rangeA.toDouble().clamp(0, duration),
@@ -422,6 +430,7 @@ class _PlayerPageState extends State<PlayerPage> {
           ? state.rangeB.toDouble().clamp(0, duration)
           : duration,
     );
+    var rangeEdited = state.rangeB > state.rangeA;
     int? startLine;
     var selectingEnd = false;
     var committing = false;
@@ -503,6 +512,7 @@ class _PlayerPageState extends State<PlayerPage> {
                         onChanged: committing
                             ? null
                             : (value) => update(() {
+                                rangeEdited = true;
                                 values = start
                                     ? RangeValues(
                                         value.clamp(0, values.end),
@@ -523,154 +533,217 @@ class _PlayerPageState extends State<PlayerPage> {
             final theme = Theme.of(context);
             final dark = theme.brightness == Brightness.dark;
             final cardColor = theme.colorScheme.onSurface.withValues(
-              alpha: dark ? .06 : .04,
+              alpha: dark ? .05 : .04,
             );
-            final cardBorder = theme.colorScheme.onSurface.withValues(
-              alpha: dark ? .09 : .07,
-            );
+            final cardBorder = Colors.white.withValues(alpha: dark ? .08 : .60);
             final canApply = !committing && values.end > values.start;
 
+            Widget quickButtons() => Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: theme.colorScheme.onSurface.withValues(
+                        alpha: dark ? .08 : .06,
+                      ),
+                      foregroundColor: theme.colorScheme.onSurface,
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: const StadiumBorder(),
+                      textStyle: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    onPressed: committing
+                        ? null
+                        : () => update(() {
+                            rangeEdited = true;
+                            values = RangeValues(
+                              state.positionMs.toDouble().clamp(0, values.end),
+                              values.end,
+                            );
+                          }),
+                    child: const Text(
+                      '当前位置设为起点',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: theme.colorScheme.onSurface.withValues(
+                        alpha: dark ? .08 : .06,
+                      ),
+                      foregroundColor: theme.colorScheme.onSurface,
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: const StadiumBorder(),
+                      textStyle: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    onPressed: committing
+                        ? null
+                        : () => update(() {
+                            rangeEdited = true;
+                            values = RangeValues(
+                              values.start,
+                              state.positionMs.toDouble().clamp(
+                                values.start,
+                                duration,
+                              ),
+                            );
+                          }),
+                    child: const Text(
+                      '当前位置设为终点',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            );
+
             final rangeCard = Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              padding: EdgeInsets.fromLTRB(
+                14,
+                timedLines.isEmpty ? 14 : 12,
+                14,
+                timedLines.isEmpty ? 14 : 10,
+              ),
               decoration: BoxDecoration(
                 color: cardColor,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: cardBorder, width: .7),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  endpoint('起点', true),
-                  const SizedBox(height: 6),
-                  endpoint('终点', false),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: theme.colorScheme.onSurface
-                                .withValues(alpha: dark ? .09 : .06),
-                            foregroundColor: theme.colorScheme.onSurface,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 11,
+              child: timedLines.isEmpty
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        endpoint('起点', true),
+                        const SizedBox(height: 6),
+                        endpoint('终点', false),
+                        const SizedBox(height: 8),
+                        quickButtons(),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              '起点 ${durationLabel(values.start.round())}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                             ),
-                            shape: const StadiumBorder(),
-                            textStyle: theme.textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
+                            const Spacer(),
+                            Text(
+                              '终点 ${durationLabel(values.end.round())}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SliderTheme(
+                          data: theme.sliderTheme.copyWith(
+                            trackHeight: 4,
+                            activeTrackColor: rangeEdited
+                                ? AppPalette.brand
+                                : Colors.white.withValues(alpha: .72),
+                            inactiveTrackColor: theme.colorScheme.onSurface
+                                .withValues(alpha: .14),
+                            thumbColor: Colors.white,
+                            rangeThumbShape: const RoundRangeSliderThumbShape(
+                              enabledThumbRadius: 7,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 14,
                             ),
                           ),
-                          onPressed: committing
-                              ? null
-                              : () => update(
-                                  () => values = RangeValues(
-                                    state.positionMs.toDouble().clamp(
-                                      0,
-                                      values.end,
-                                    ),
-                                    values.end,
-                                  ),
-                                ),
-                          child: const Text(
-                            '当前位置设为起点',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: RangeSlider(
+                            key: const ValueKey('player-range-slider'),
+                            values: values,
+                            max: duration,
+                            onChanged: committing
+                                ? null
+                                : (next) => update(() {
+                                    rangeEdited = true;
+                                    values = next;
+                                  }),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: theme.colorScheme.onSurface
-                                .withValues(alpha: dark ? .09 : .06),
-                            foregroundColor: theme.colorScheme.onSurface,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 11,
-                            ),
-                            shape: const StadiumBorder(),
-                            textStyle: theme.textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                          onPressed: committing
-                              ? null
-                              : () => update(
-                                  () => values = RangeValues(
-                                    values.start,
-                                    state.positionMs.toDouble().clamp(
-                                      values.start,
-                                      duration,
-                                    ),
-                                  ),
-                                ),
-                          child: const Text(
-                            '当前位置设为终点',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                        quickButtons(),
+                      ],
+                    ),
             );
 
-            final actions = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
+            final actions = Row(
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: canApply
-                        ? const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [AppPalette.brand, AppPalette.brandDeep],
-                          )
-                        : null,
-                    boxShadow: canApply && !state.performanceMode
-                        ? [
-                            BoxShadow(
-                              color: AppPalette.brand.withValues(alpha: .32),
-                              blurRadius: 18,
-                              spreadRadius: -4,
-                              offset: const Offset(0, 8),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: FilledButton(
-                    key: const ValueKey('player-range-apply'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      backgroundColor: canApply ? Colors.transparent : null,
-                      foregroundColor: Colors.white,
-                      shape: const StadiumBorder(),
-                      textStyle: theme.textTheme.titleMedium?.copyWith(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    onPressed: canApply ? commit : null,
-                    child: Text(committing ? '正在应用…' : '循环练唱这一段'),
-                  ),
-                ),
-                const SizedBox(height: 6),
                 TextButton(
                   key: const ValueKey('player-range-clear'),
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
-                    minimumSize: const Size.fromHeight(44),
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
                   onPressed: committing ? null : () => commit(wholeSong: true),
                   child: const Text('恢复整首练唱'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      gradient: canApply
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFFD63058), Color(0xFFB01E43)],
+                            )
+                          : null,
+                      boxShadow: canApply && !state.performanceMode
+                          ? [
+                              BoxShadow(
+                                color: AppPalette.brand.withValues(alpha: .24),
+                                blurRadius: 16,
+                                spreadRadius: -4,
+                                offset: const Offset(0, 6),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: FilledButton(
+                      key: const ValueKey('player-range-apply'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        backgroundColor: canApply ? Colors.transparent : null,
+                        foregroundColor: Colors.white,
+                        shape: const StadiumBorder(),
+                        textStyle: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onPressed: canApply ? commit : null,
+                      child: Text(committing ? '正在应用…' : '循环练唱这一段'),
+                    ),
+                  ),
                 ),
               ],
             );
@@ -693,7 +766,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     ),
                     const SizedBox(height: 14),
                     rangeCard,
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
                     actions,
                   ],
                 ),
@@ -701,9 +774,9 @@ class _PlayerPageState extends State<PlayerPage> {
             }
 
             return SizedBox(
-              height: (MediaQuery.sizeOf(context).height * .78).clamp(
+              height: (MediaQuery.sizeOf(context).height * .76).clamp(
                 360.0,
-                680.0,
+                660.0,
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
@@ -711,15 +784,18 @@ class _PlayerPageState extends State<PlayerPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SheetHeader('选段练唱', done: '取消'),
-                    const SizedBox(height: 6),
-                    Text(
-                      '起点 ${durationLabel(values.start.round())} — 终点 ${durationLabel(values.end.round())}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                    const SizedBox(height: 8),
+                    rangeCard,
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text(
+                        selectingEnd ? '再点一句作为结束句' : '按歌词选段：先点起句，再点结束句',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
                     Expanded(
                       child: ShaderMask(
                         blendMode: BlendMode.dstIn,
@@ -733,121 +809,97 @@ class _PlayerPageState extends State<PlayerPage> {
                             Colors.transparent,
                           ],
                         ).createShader(bounds),
-                        child: ListView(
-                          padding: const EdgeInsets.only(bottom: 18),
-                          children: [
-                            rangeCard,
-                            const SizedBox(height: 16),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                left: 4,
-                                bottom: 8,
-                              ),
-                              child: Text(
-                                selectingEnd ? '再点一句作为结束句' : '按歌词选段：先点起句，再点结束句',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            for (var i = 0; i < timedLines.length; i++) ...[
-                              () {
-                                final inRange =
-                                    timedLines[i].startMs! >= values.start &&
-                                    timedLines[i].startMs! < values.end;
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: ListTile(
-                                    dense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 2,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    tileColor: inRange
-                                        ? AppPalette.brand.withValues(
-                                            alpha: dark ? .14 : .08,
-                                          )
-                                        : Colors.transparent,
-                                    leading: Text(
-                                      durationLabel(timedLines[i].startMs!),
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: inRange
-                                                ? theme.colorScheme.primary
-                                                : theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                            fontWeight: inRange
-                                                ? FontWeight.w600
-                                                : FontWeight.w400,
-                                            fontFeatures: const [
-                                              FontFeature.tabularFigures(),
-                                            ],
-                                          ),
-                                    ),
-                                    title: Text(
-                                      timedLines[i].text,
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: inRange
-                                                ? theme.colorScheme.onSurface
-                                                : theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                            fontWeight: inRange
-                                                ? FontWeight.w500
-                                                : FontWeight.w400,
-                                          ),
-                                    ),
-                                    onTap: committing
-                                        ? null
-                                        : () => update(() {
-                                            final end =
-                                                (timedLines[i].endMs ??
-                                                        (i + 1 <
-                                                                timedLines
-                                                                    .length
-                                                            ? timedLines[i + 1]
-                                                                  .startMs!
-                                                            : state.durationMs))
-                                                    .toDouble();
-                                            if (!selectingEnd ||
-                                                startLine == null ||
-                                                i < startLine!) {
-                                              startLine = i;
-                                              selectingEnd = true;
-                                              final start = timedLines[i]
-                                                  .startMs!
-                                                  .toDouble()
-                                                  .clamp(0, duration)
-                                                  .toDouble();
-                                              values = RangeValues(
-                                                start,
-                                                end.clamp(start, duration),
-                                              );
-                                            } else {
-                                              values = RangeValues(
-                                                values.start,
-                                                end.clamp(
-                                                  values.start,
-                                                  duration,
-                                                ),
-                                              );
-                                              selectingEnd = false;
-                                            }
-                                          }),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            itemCount: timedLines.length,
+                            itemBuilder: (context, i) {
+                              final inRange =
+                                  (rangeEdited || selectingEnd) &&
+                                  timedLines[i].startMs! >= values.start &&
+                                  timedLines[i].startMs! < values.end;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: ListTile(
+                                  dense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 1,
                                   ),
-                                );
-                              }(),
-                            ],
-                          ],
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  tileColor: inRange
+                                      ? Colors.white.withValues(
+                                          alpha: dark ? .08 : .05,
+                                        )
+                                      : Colors.transparent,
+                                  leading: Text(
+                                    durationLabel(timedLines[i].startMs!),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: inRange
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurfaceVariant,
+                                      fontWeight: inRange
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                  title: Text(
+                                    timedLines[i].text,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: inRange
+                                          ? theme.colorScheme.onSurface
+                                          : theme.colorScheme.onSurfaceVariant,
+                                      fontWeight: inRange
+                                          ? FontWeight.w500
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                  onTap: committing
+                                      ? null
+                                      : () => update(() {
+                                          rangeEdited = true;
+                                          final end =
+                                              (timedLines[i].endMs ??
+                                                      (i + 1 < timedLines.length
+                                                          ? timedLines[i + 1]
+                                                                .startMs!
+                                                          : state.durationMs))
+                                                  .toDouble();
+                                          if (!selectingEnd ||
+                                              startLine == null ||
+                                              i < startLine!) {
+                                            startLine = i;
+                                            selectingEnd = true;
+                                            final start = timedLines[i].startMs!
+                                                .toDouble()
+                                                .clamp(0, duration)
+                                                .toDouble();
+                                            values = RangeValues(
+                                              start,
+                                              end.clamp(start, duration),
+                                            );
+                                          } else {
+                                            values = RangeValues(
+                                              values.start,
+                                              end.clamp(values.start, duration),
+                                            );
+                                            selectingEnd = false;
+                                          }
+                                        }),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     actions,
                   ],
                 ),
@@ -864,10 +916,10 @@ class _PlayerPageState extends State<PlayerPage> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) => ListenableBuilder(
+      builder: (sheetContext) => ListenableBuilder(
         listenable: widget.state.performance,
-        builder: (context, _) {
-          final theme = Theme.of(context);
+        builder: (sheetContext, _) {
+          final theme = Theme.of(sheetContext);
           final dark = theme.brightness == Brightness.dark;
           final dividerColor = theme.colorScheme.onSurface.withValues(
             alpha: dark ? .08 : .06,
@@ -875,6 +927,7 @@ class _PlayerPageState extends State<PlayerPage> {
           final chevronColor = theme.colorScheme.onSurfaceVariant.withValues(
             alpha: .62,
           );
+          final song = widget.state.current ?? widget.song;
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
             child: Column(
@@ -886,13 +939,11 @@ class _PlayerPageState extends State<PlayerPage> {
                 Container(
                   decoration: BoxDecoration(
                     color: theme.colorScheme.onSurface.withValues(
-                      alpha: dark ? .06 : .04,
+                      alpha: dark ? .05 : .04,
                     ),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: theme.colorScheme.onSurface.withValues(
-                        alpha: dark ? .09 : .07,
-                      ),
+                      color: Colors.white.withValues(alpha: dark ? .08 : .60),
                       width: .7,
                     ),
                   ),
@@ -901,31 +952,38 @@ class _PlayerPageState extends State<PlayerPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ListTile(
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(20),
+                        if (song != null) ...[
+                          ListTile(
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(20),
+                              ),
                             ),
+                            leading: const Icon(Icons.info_outline_rounded),
+                            title: const Text('歌曲信息'),
+                            trailing: Icon(
+                              Icons.chevron_right_rounded,
+                              color: chevronColor,
+                            ),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              panel(
+                                () => showSong(
+                                  context,
+                                  widget.state,
+                                  song,
+                                  credits: lyricCredits,
+                                ),
+                              );
+                            },
                           ),
-                          leading: const Icon(Icons.repeat_rounded),
-                          title: const Text('选段练唱'),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: chevronColor,
+                          Divider(
+                            height: 1,
+                            indent: 54,
+                            endIndent: 16,
+                            color: dividerColor,
                           ),
-                          onTap: widget.state.taking
-                              ? null
-                              : () {
-                                  Navigator.pop(context);
-                                  range();
-                                },
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 54,
-                          endIndent: 16,
-                          color: dividerColor,
-                        ),
+                        ],
                         SwitchListTile(
                           secondary: const Icon(Icons.repeat_one_rounded),
                           value: widget.state.loop,
@@ -933,7 +991,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           onChanged: widget.state.taking
                               ? null
                               : (v) => uiTask(
-                                  context,
+                                  sheetContext,
                                   () => widget.state.command('loop', v),
                                 ),
                         ),
@@ -955,8 +1013,10 @@ class _PlayerPageState extends State<PlayerPage> {
                             Icons.chevron_right_rounded,
                             color: chevronColor,
                           ),
-                          onTap: () =>
-                              panel(() => audioSettings(context, widget.state)),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            panel(() => audioSettings(context, widget.state));
+                          },
                         ),
                       ],
                     ),
@@ -1556,11 +1616,7 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Widget recordButton({
-    bool compact = false,
-    bool stage = false,
-    Key? key,
-  }) {
+  Widget recordButton({bool compact = false, bool stage = false, Key? key}) {
     final state = widget.state;
     final enabled =
         !actionBusy && (ready || state.recording || state.countdown > 0);
@@ -2255,11 +2311,7 @@ class _PlayerPageState extends State<PlayerPage> {
       if (readingHeight <= 0) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Spacer(flex: 3),
-            artwork,
-            const Spacer(flex: 4),
-          ],
+          children: [const Spacer(flex: 3), artwork, const Spacer(flex: 4)],
         );
       }
       return Column(
@@ -2952,6 +3004,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                   child: Stack(
                                     fit: StackFit.expand,
                                     children: [
+                                      ColoredBox(color: pageColor),
                                       if (!(bounds.maxWidth >
                                               bounds.maxHeight &&
                                           song.mediaType == 'VIDEO'))

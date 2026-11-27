@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -157,21 +158,161 @@ class _SoundActions extends StatelessWidget {
   }
 }
 
-Future<void> singingSettings(
-  BuildContext context,
-  AppState state,
-) => showAppSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  builder: (context) => ListenableBuilder(
-    listenable: state.performance,
+class _CenteredTrackShape extends RoundedRectSliderTrackShape {
+  const _CenteredTrackShape({
+    required this.originFraction,
+    required this.activeColor,
+  });
+
+  final double originFraction;
+  final Color activeColor;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 0,
+  }) {
+    final trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    final radius = Radius.circular(trackRect.height / 2);
+    final inactiveColor = Color.lerp(
+      sliderTheme.disabledInactiveTrackColor ??
+          Colors.white.withValues(alpha: .08),
+      sliderTheme.inactiveTrackColor ?? Colors.white.withValues(alpha: .14),
+      enableAnimation.value,
+    )!;
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(trackRect, radius),
+      Paint()..color = inactiveColor,
+    );
+
+    final fraction = textDirection == TextDirection.rtl
+        ? 1 - originFraction
+        : originFraction;
+    final originX = trackRect.left + trackRect.width * fraction.clamp(0.0, 1.0);
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(originX, trackRect.center.dy),
+          width: 1.5,
+          height: 10,
+        ),
+        const Radius.circular(1),
+      ),
+      Paint()..color = Colors.white.withValues(alpha: .28),
+    );
+
+    if ((thumbCenter.dx - originX).abs() > 1.5) {
+      final activeLeft = math.min(originX, thumbCenter.dx);
+      final activeRight = math.max(originX, thumbCenter.dx);
+      final activeRect = Rect.fromLTRB(
+        activeLeft,
+        trackRect.top,
+        activeRight,
+        trackRect.bottom,
+      );
+      final fillColor = Color.lerp(
+        sliderTheme.disabledActiveTrackColor ??
+            activeColor.withValues(alpha: .35),
+        activeColor,
+        enableAnimation.value,
+      )!;
+      context.canvas.drawRRect(
+        RRect.fromRectAndRadius(activeRect, radius),
+        Paint()..color = fillColor,
+      );
+    }
+  }
+}
+
+Future<void> singingSettings(BuildContext context, AppState state) =>
+    showAppSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _SingingSettingsSheet(state: state),
+    );
+
+class _SingingSettingsSheet extends StatefulWidget {
+  const _SingingSettingsSheet({required this.state});
+  final AppState state;
+
+  @override
+  State<_SingingSettingsSheet> createState() => _SingingSettingsSheetState();
+}
+
+class _SingingSettingsSheetState extends State<_SingingSettingsSheet> {
+  bool _showMicTest = false;
+  bool _showAudioSubpage = false;
+  bool _micStarted = false;
+  bool _micBusy = false;
+  LocalHistoryEntry? _audioHistoryEntry;
+
+  @override
+  void dispose() {
+    if (_micStarted && widget.state.singingPhase == 'TESTING') {
+      unawaited(widget.state.sing('test', {'start': false}));
+    }
+    super.dispose();
+  }
+
+  void _openAudioSubpage() {
+    if (_showAudioSubpage) return;
+    final entry = LocalHistoryEntry(
+      onRemove: () {
+        if (!mounted) return;
+        setState(() {
+          _showAudioSubpage = false;
+          _audioHistoryEntry = null;
+        });
+      },
+    );
+    _audioHistoryEntry = entry;
+    ModalRoute.of(context)?.addLocalHistoryEntry(entry);
+    setState(() => _showAudioSubpage = true);
+  }
+
+  Future<void> _toggleMicTest() => uiTask(context, () async {
+    if (_micBusy) return;
+    setState(() => _micBusy = true);
+    try {
+      if (widget.state.singingPhase == 'TESTING') {
+        await widget.state.sing('test', {'start': false});
+        _micStarted = false;
+      } else if (await microphonePermission(context, widget.state) && mounted) {
+        await widget.state.sing('test', {'start': true});
+        _micStarted = true;
+      }
+    } finally {
+      if (mounted) setState(() => _micBusy = false);
+    }
+  });
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([widget.state, widget.state.performance]),
     builder: (context, _) {
+      final state = widget.state;
       final theme = Theme.of(context);
       final dark = theme.brightness == Brightness.dark;
       final cardBg = theme.colorScheme.onSurface.withValues(
-        alpha: dark ? .06 : .04,
+        alpha: dark ? .05 : .04,
       );
+      final cardBorder = Colors.white.withValues(alpha: dark ? .08 : .60);
       final dividerColor = theme.colorScheme.onSurface.withValues(
         alpha: dark ? .08 : .06,
       );
@@ -179,225 +320,388 @@ Future<void> singingSettings(
         alpha: .62,
       );
       final modified = state.pitch != 0 || (state.speed - 1.0).abs() > .01;
-      final sliderTheme = theme.sliderTheme.copyWith(
+      final volumeTrackColor = dark
+          ? Colors.white.withValues(alpha: .78)
+          : theme.colorScheme.primary;
+      final baseSliderTheme = theme.sliderTheme.copyWith(
         trackHeight: 4,
-        activeTrackColor: AppPalette.brand,
         inactiveTrackColor: theme.colorScheme.onSurface.withValues(alpha: .14),
         thumbColor: Colors.white,
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
         overlayShape: const RoundSliderOverlayShape(overlayRadius: 15),
       );
-      return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SheetHeader(
-              '调音',
-              trailing: modified && !state.taking
-                  ? TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: theme.colorScheme.primary,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        minimumSize: const Size(0, 36),
-                        textStyle: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      onPressed: () => uiTask(context, () async {
-                        if (state.pitch != 0) {
-                          await state.command('pitch', 0);
-                        }
-                        if ((state.speed - 1.0).abs() > .01) {
-                          await state.command('speed', 1.0);
-                        }
-                      }),
-                      child: const Text('恢复默认'),
-                    )
-                  : null,
-            ),
-            if (state.taking)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '录音参数已锁定，结束录音后可以调整。',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(20),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.white.withValues(alpha: dark ? .06 : .45),
-                    cardBg,
-                  ],
-                ),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: dark ? .16 : .68),
-                  width: .8,
-                ),
-              ),
-              child: SliderTheme(
-                data: sliderTheme,
+      final micEnabled = !_micBusy && !state.taking;
+      final micTesting = state.singingPhase == 'TESTING';
+      final micError = state.singing['error'] as String? ?? '';
+
+      return AnimatedSwitcher(
+        duration: AppMotionScope.durationOf(
+          context,
+          const Duration(milliseconds: 200),
+        ),
+        child: _showAudioSubpage
+            ? _AudioSettingsBody(
+                key: const ValueKey('sheet-audio-subpage'),
+                state: state,
+                onBack: () {
+                  final entry = _audioHistoryEntry;
+                  if (entry != null) {
+                    Navigator.maybePop(context);
+                  } else {
+                    setState(() => _showAudioSubpage = false);
+                  }
+                },
+              )
+            : SingleChildScrollView(
+                key: const ValueKey('sheet-singing-main'),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _SoundValue(
-                      label: '音调',
-                      value: '${state.pitch > 0 ? '+' : ''}${state.pitch} 半音',
-                    ),
-                    Semantics(
-                      label: '音调',
-                      child: Slider(
-                        key: const ValueKey('pitch-control'),
-                        semanticFormatterCallback: (v) => '${v.round()} 半音',
-                        value: state.pitch.toDouble().clamp(-6, 6),
-                        min: -6,
-                        max: 6,
-                        divisions: 12,
-                        onChanged: state.taking
-                            ? null
-                            : (v) => uiTask(
-                                context,
-                                () => state.command('pitch', v.round()),
+                    SheetHeader(
+                      '调音',
+                      trailing: modified && !state.taking
+                          ? TextButton(
+                              style: TextButton.styleFrom(
+                                foregroundColor: theme.colorScheme.primary,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                minimumSize: const Size(0, 36),
+                                textStyle: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                      ),
+                              onPressed: () => uiTask(context, () async {
+                                if (state.pitch != 0) {
+                                  await state.command('pitch', 0);
+                                }
+                                if ((state.speed - 1.0).abs() > .01) {
+                                  await state.command('speed', 1.0);
+                                }
+                              }),
+                              child: const Text('恢复默认'),
+                            )
+                          : null,
                     ),
-                    const SizedBox(height: 6),
-                    _SoundValue(
-                      label: '速度',
-                      value: '${(state.speed * 100).round()}%',
-                    ),
-                    Semantics(
-                      label: '速度',
-                      child: Slider(
-                        key: const ValueKey('speed-control'),
-                        semanticFormatterCallback: (v) =>
-                            '${(v * 100).round()}%',
-                        value: state.speed.clamp(.6, 1.2),
-                        min: .6,
-                        max: 1.2,
-                        divisions: 12,
-                        onChanged: state.taking
-                            ? null
-                            : (v) => uiTask(
-                                context,
-                                () => state.command('speed', v),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    _SoundValue(
-                      label: '播放音量',
-                      value: '${(state.volume * 100).round()}%',
-                    ),
-                    Semantics(
-                      label: '播放音量',
-                      child: Slider(
-                        key: const ValueKey('volume-control'),
-                        semanticFormatterCallback: (v) =>
-                            '${(v * 100).round()}%',
-                        value: state.volume.clamp(0, 1),
-                        onChanged: (v) =>
-                            uiTask(context, () => state.command('volume', v)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                '这里调整听到的声音。作品的人声和伴奏比例在回听时调整。',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(20),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.white.withValues(alpha: dark ? .06 : .45),
-                    cardBg,
-                  ],
-                ),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: dark ? .16 : .68),
-                  width: .8,
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
-                    ),
-                    leading: const Icon(Icons.mic_rounded),
-                    title: const Text('麦克风试音'),
-                    subtitle: const Text('检查声音是否能录到，不保存录音'),
-                    trailing: Icon(
-                      Icons.chevron_right_rounded,
-                      color: chevronColor,
-                    ),
-                    onTap: state.taking
-                        ? null
-                        : () => showAppSheet<void>(
-                            context: context,
-                            isScrollControlled: true,
-                            useSafeArea: true,
-                            builder: (_) => _MicrophoneTest(state: state),
+                    if (state.taking)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '录音参数已锁定，结束录音后可以调整。',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                  ),
-                  Divider(
-                    height: 1,
-                    indent: 54,
-                    endIndent: 16,
-                    color: dividerColor,
-                  ),
-                  ListTile(
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        bottom: Radius.circular(20),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: cardBorder, width: .7),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SoundValue(
+                            label: '音调',
+                            value:
+                                '${state.pitch > 0 ? '+' : ''}${state.pitch} 半音',
+                          ),
+                          SliderTheme(
+                            data: baseSliderTheme.copyWith(
+                              activeTrackColor: state.pitch == 0
+                                  ? Colors.white.withValues(alpha: .72)
+                                  : AppPalette.brand,
+                              trackShape: _CenteredTrackShape(
+                                originFraction: .5,
+                                activeColor: state.pitch == 0
+                                    ? Colors.white.withValues(alpha: .72)
+                                    : AppPalette.brand,
+                              ),
+                            ),
+                            child: Semantics(
+                              label: '音调',
+                              child: Slider(
+                                key: const ValueKey('pitch-control'),
+                                semanticFormatterCallback: (v) =>
+                                    '${v.round()} 半音',
+                                value: state.pitch.toDouble().clamp(-6, 6),
+                                min: -6,
+                                max: 6,
+                                divisions: 12,
+                                onChanged: state.taking
+                                    ? null
+                                    : (v) => uiTask(
+                                        context,
+                                        () => state.command('pitch', v.round()),
+                                      ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          _SoundValue(
+                            label: '速度',
+                            value: '${(state.speed * 100).round()}%',
+                          ),
+                          SliderTheme(
+                            data: baseSliderTheme.copyWith(
+                              activeTrackColor: (state.speed - 1.0).abs() <= .01
+                                  ? Colors.white.withValues(alpha: .72)
+                                  : AppPalette.brand,
+                              trackShape: _CenteredTrackShape(
+                                originFraction: (1.0 - .6) / (1.2 - .6),
+                                activeColor: (state.speed - 1.0).abs() <= .01
+                                    ? Colors.white.withValues(alpha: .72)
+                                    : AppPalette.brand,
+                              ),
+                            ),
+                            child: Semantics(
+                              label: '速度',
+                              child: Slider(
+                                key: const ValueKey('speed-control'),
+                                semanticFormatterCallback: (v) =>
+                                    '${(v * 100).round()}%',
+                                value: state.speed.clamp(.6, 1.2),
+                                min: .6,
+                                max: 1.2,
+                                divisions: 12,
+                                onChanged: state.taking
+                                    ? null
+                                    : (v) => uiTask(
+                                        context,
+                                        () => state.command('speed', v),
+                                      ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          _SoundValue(
+                            label: '播放音量',
+                            value: '${(state.volume * 100).round()}%',
+                          ),
+                          SliderTheme(
+                            data: baseSliderTheme.copyWith(
+                              activeTrackColor: volumeTrackColor,
+                            ),
+                            child: Semantics(
+                              label: '播放音量',
+                              child: Slider(
+                                key: const ValueKey('volume-control'),
+                                semanticFormatterCallback: (v) =>
+                                    '${(v * 100).round()}%',
+                                value: state.volume.clamp(0, 1),
+                                onChanged: (v) => uiTask(
+                                  context,
+                                  () => state.command('volume', v),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    leading: const Icon(Icons.headphones_rounded),
-                    title: const Text('音轨与播放设置'),
-                    subtitle: const Text('试听伴奏、声道、字幕和兼容播放'),
-                    trailing: Icon(
-                      Icons.chevron_right_rounded,
-                      color: chevronColor,
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        '这里调整听到的声音。作品的人声和伴奏比例在回听时调整。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
-                    onTap: () => audioSettings(context, state),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: cardBorder, width: .7),
+                      ),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ListTile(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(20),
+                                ),
+                              ),
+                              leading: const Icon(Icons.mic_rounded),
+                              title: const Text('麦克风试音'),
+                              subtitle: const Text('检查声音是否能录到，不保存录音'),
+                              trailing: AnimatedRotation(
+                                turns: _showMicTest ? .25 : 0,
+                                duration: AppMotionScope.durationOf(
+                                  context,
+                                  const Duration(milliseconds: 180),
+                                ),
+                                child: Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: chevronColor,
+                                ),
+                              ),
+                              onTap: state.taking
+                                  ? null
+                                  : () => setState(
+                                      () => _showMicTest = !_showMicTest,
+                                    ),
+                            ),
+                            AnimatedSize(
+                              duration: AppMotionScope.durationOf(
+                                context,
+                                const Duration(milliseconds: 220),
+                              ),
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.topCenter,
+                              child: _showMicTest
+                                  ? Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        0,
+                                        16,
+                                        14,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Text(
+                                            '说一句话，看看音量条是否变化。试音不会保存声音，也不提供实时耳返。',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                  height: 1.4,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            child: LinearProgressIndicator(
+                                              minHeight: 8,
+                                              color: AppPalette.brand,
+                                              backgroundColor: theme
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withValues(alpha: .12),
+                                              value:
+                                                  ((state.singing['level']
+                                                                      as num? ??
+                                                                  0)
+                                                              .toDouble() *
+                                                          6)
+                                                      .clamp(0, 1),
+                                            ),
+                                          ),
+                                          if (micError.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 10,
+                                              ),
+                                              child: Semantics(
+                                                liveRegion: true,
+                                                child: Text(
+                                                  micError,
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: theme
+                                                            .colorScheme
+                                                            .error,
+                                                      ),
+                                                ),
+                                              ),
+                                            ),
+                                          const SizedBox(height: 12),
+                                          DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                              gradient: micEnabled
+                                                  ? const LinearGradient(
+                                                      begin: Alignment.topLeft,
+                                                      end:
+                                                          Alignment.bottomRight,
+                                                      colors: [
+                                                        Color(0xFFD63058),
+                                                        Color(0xFFB01E43),
+                                                      ],
+                                                    )
+                                                  : null,
+                                            ),
+                                            child: FilledButton(
+                                              style: FilledButton.styleFrom(
+                                                minimumSize:
+                                                    const Size.fromHeight(44),
+                                                backgroundColor: micEnabled
+                                                    ? Colors.transparent
+                                                    : null,
+                                                foregroundColor: Colors.white,
+                                                shape: const StadiumBorder(),
+                                                textStyle: theme
+                                                    .textTheme
+                                                    .labelLarge
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                              onPressed: micEnabled
+                                                  ? _toggleMicTest
+                                                  : null,
+                                              child: Text(
+                                                micTesting ? '结束试音' : '开始试音',
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                            Divider(
+                              height: 1,
+                              indent: 54,
+                              endIndent: 16,
+                              color: dividerColor,
+                            ),
+                            ListTile(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(
+                                  bottom: Radius.circular(20),
+                                ),
+                              ),
+                              leading: const Icon(Icons.headphones_rounded),
+                              title: const Text('音轨与播放设置'),
+                              subtitle: const Text('试听伴奏、声道、字幕和兼容播放'),
+                              trailing: Icon(
+                                Icons.chevron_right_rounded,
+                                color: chevronColor,
+                              ),
+                              onTap: _openAudioSubpage,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
       );
     },
-  ),
-);
+  );
+}
 
 String _friendlyTrackSubtitle(Map<String, dynamic> track) {
   final raw = (track['label'] as String? ?? '').trim();
@@ -427,27 +731,38 @@ String _friendlyTrackSubtitle(Map<String, dynamic> track) {
   return cleaned.isNotEmpty ? cleaned : '默认音轨';
 }
 
-Future<void> audioSettings(
-  BuildContext context,
-  AppState state,
-) => showAppSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  builder: (context) => ListenableBuilder(
+Future<void> audioSettings(BuildContext context, AppState state) =>
+    showAppSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _AudioSettingsBody(state: state),
+    );
+
+class _AudioSettingsBody extends StatelessWidget {
+  const _AudioSettingsBody({super.key, required this.state, this.onBack});
+
+  final AppState state;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
     listenable: state.performance,
     builder: (context, _) {
       final theme = Theme.of(context);
       final dark = theme.brightness == Brightness.dark;
       final cardBg = theme.colorScheme.onSurface.withValues(
-        alpha: dark ? .06 : .04,
+        alpha: dark ? .05 : .04,
       );
-      final cardBorder = theme.colorScheme.onSurface.withValues(
-        alpha: dark ? .09 : .07,
-      );
+      final cardBorder = Colors.white.withValues(alpha: dark ? .08 : .60);
       final audio = state.tracks.where((t) => t['type'] == 'audio').toList();
       final selected = audio.where((t) => t['selected'] == true).firstOrNull;
       final stereo = selected?['channels'] == 2;
+      final roleLabel = state.audioRole == 'backing'
+          ? '当前伴奏'
+          : state.audioRole == 'original'
+          ? '当前原唱'
+          : '待标记';
       Future<void> mark(String role) => uiTask(context, () async {
         final local =
             audio.length == 1 && ['LEFT', 'RIGHT'].contains(state.channelMode);
@@ -480,7 +795,70 @@ Future<void> audioSettings(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SheetHeader('音轨与播放设置'),
+            if (onBack != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: '返回调音',
+                      onPressed: onBack,
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(44, 44),
+                        padding: EdgeInsets.zero,
+                      ),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 21),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text('音轨与播放设置', style: theme.textTheme.titleLarge),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: IconButton(
+                        tooltip: '完成',
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.pop(context),
+                        icon: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                theme.colorScheme.onSurface.withValues(
+                                  alpha: dark ? .18 : .09,
+                                ),
+                                theme.colorScheme.onSurface.withValues(
+                                  alpha: dark ? .08 : .04,
+                                ),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: Colors.white.withValues(
+                                alpha: dark ? .20 : .65,
+                              ),
+                              width: .7,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 19,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: .88,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              const SheetHeader('音轨与播放设置'),
             Text(
               state.taking ? '录音中不能切换音轨或声道。' : '先试听，再选择原唱或伴奏。',
               style: theme.textTheme.bodySmall?.copyWith(
@@ -494,100 +872,127 @@ Future<void> audioSettings(
                 decoration: BoxDecoration(
                   color: cardBg,
                   borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withValues(alpha: dark ? .06 : .45),
-                      cardBg,
-                    ],
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: dark ? .16 : .68),
-                    width: .8,
-                  ),
+                  border: Border.all(color: cardBorder, width: .7),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < audio.length; i++) ...[
-                      if (i > 0)
-                        Divider(
-                          height: 1,
-                          indent: 52,
-                          endIndent: 16,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: dark ? .08 : .06,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < audio.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 1,
+                            indent: 52,
+                            endIndent: 16,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: dark ? .08 : .06,
+                            ),
                           ),
-                        ),
-                      ListTile(
-                        key: ValueKey('audio-track-${audio[i]['id']}'),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 2,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(
-                            top: i == 0
-                                ? const Radius.circular(20)
-                                : Radius.zero,
-                            bottom: i == audio.length - 1
-                                ? const Radius.circular(20)
-                                : Radius.zero,
+                        ListTile(
+                          key: ValueKey('audio-track-${audio[i]['id']}'),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 2,
                           ),
-                        ),
-                        selected: audio[i]['selected'] == true,
-                        selectedTileColor: AppPalette.brand.withValues(
-                          alpha: dark ? .14 : .08,
-                        ),
-                        selectedColor: theme.colorScheme.primary,
-                        leading: Icon(
-                          audio[i]['selected'] == true
-                              ? Icons.check_circle_rounded
-                              : Icons.circle_outlined,
-                          size: 20,
-                          color: audio[i]['selected'] == true
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                        title: Text(
-                          '音轨 ${i + 1}',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                              top: i == 0
+                                  ? const Radius.circular(20)
+                                  : Radius.zero,
+                              bottom: i == audio.length - 1
+                                  ? const Radius.circular(20)
+                                  : Radius.zero,
+                            ),
                           ),
-                        ),
-                        subtitle: Text(
-                          _friendlyTrackSubtitle(audio[i]),
-                          style: theme.textTheme.bodySmall?.copyWith(
+                          selected: audio[i]['selected'] == true,
+                          selectedTileColor: theme.colorScheme.onSurface
+                              .withValues(alpha: dark ? .07 : .05),
+                          selectedColor: theme.colorScheme.onSurface,
+                          leading: Icon(
+                            audio[i]['selected'] == true
+                                ? Icons.check_circle_rounded
+                                : Icons.circle_outlined,
+                            size: 20,
                             color: audio[i]['selected'] == true
-                                ? theme.colorScheme.primary.withValues(
-                                    alpha: .85,
-                                  )
+                                ? theme.colorScheme.primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
+                          title: Text(
+                            '音轨 ${i + 1}',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _friendlyTrackSubtitle(audio[i]),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          trailing: audio[i]['selected'] == true
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: state.audioRole == 'backing'
+                                        ? AppPalette.brand.withValues(
+                                            alpha: dark ? .18 : .10,
+                                          )
+                                        : theme.colorScheme.onSurface
+                                              .withValues(
+                                                alpha: dark ? .09 : .06,
+                                              ),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: state.audioRole == 'backing'
+                                          ? AppPalette.brand.withValues(
+                                              alpha: .42,
+                                            )
+                                          : Colors.white.withValues(
+                                              alpha: dark ? .14 : .45,
+                                            ),
+                                      width: .7,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    roleLabel,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: state.audioRole == 'backing'
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                          onTap: state.taking
+                              ? null
+                              : () => uiTask(
+                                  context,
+                                  () => state.command('track', audio[i]['id']),
+                                ),
                         ),
-                        onTap: state.taking
-                            ? null
-                            : () => uiTask(
-                                context,
-                                () => state.command('track', audio[i]['id']),
-                              ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             if (audio.isNotEmpty) ...[
               const SizedBox(height: 10),
               FilledButton.tonalIcon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppPalette.brand.withValues(
-                    alpha: dark ? .16 : .10,
+                  backgroundColor: theme.colorScheme.onSurface.withValues(
+                    alpha: dark ? .08 : .06,
                   ),
-                  foregroundColor: theme.colorScheme.primary,
-                  minimumSize: const Size.fromHeight(46),
+                  foregroundColor: theme.colorScheme.onSurface,
+                  minimumSize: const Size.fromHeight(44),
                   shape: const StadiumBorder(),
+                  side: BorderSide(color: cardBorder, width: .7),
                   textStyle: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -628,6 +1033,12 @@ Future<void> audioSettings(
                 selected: state.channelMode,
                 senior: state.senior,
                 enabled: !state.taking,
+                liquid:
+                    !state.senior &&
+                    !state.reduceTransparency &&
+                    !state.performanceMode,
+                selectedColor: theme.colorScheme.onSurface,
+                trackColor: dark ? Colors.white.withValues(alpha: .06) : null,
                 keyFor: (value) => ValueKey('audio-channel-$value'),
                 onChanged: (value) =>
                     uiTask(context, () => state.command('channel', value)),
@@ -639,20 +1050,40 @@ Future<void> audioSettings(
                 children: [
                   FilledButton.tonal(
                     style: FilledButton.styleFrom(
-                      backgroundColor: cardBg,
-                      foregroundColor: theme.colorScheme.onSurface,
-                      minimumSize: const Size.fromHeight(46),
+                      backgroundColor: state.audioRole == 'backing'
+                          ? AppPalette.brand.withValues(alpha: dark ? .16 : .10)
+                          : cardBg,
+                      foregroundColor: state.audioRole == 'backing'
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                      minimumSize: const Size.fromHeight(44),
                       shape: const StadiumBorder(),
+                      side: BorderSide(
+                        color: state.audioRole == 'backing'
+                            ? AppPalette.brand.withValues(alpha: .42)
+                            : cardBorder,
+                        width: .7,
+                      ),
                     ),
                     onPressed: state.taking ? null : () => mark('backing'),
                     child: const Text('设为伴奏'),
                   ),
                   FilledButton.tonal(
                     style: FilledButton.styleFrom(
-                      backgroundColor: cardBg,
+                      backgroundColor: state.audioRole == 'original'
+                          ? theme.colorScheme.onSurface.withValues(
+                              alpha: dark ? .12 : .08,
+                            )
+                          : cardBg,
                       foregroundColor: theme.colorScheme.onSurface,
-                      minimumSize: const Size.fromHeight(46),
+                      minimumSize: const Size.fromHeight(44),
                       shape: const StadiumBorder(),
+                      side: BorderSide(
+                        color: state.audioRole == 'original'
+                            ? Colors.white.withValues(alpha: dark ? .26 : .45)
+                            : cardBorder,
+                        width: .7,
+                      ),
                     ),
                     onPressed: state.taking ? null : () => mark('original'),
                     child: const Text('设为原唱'),
@@ -678,33 +1109,36 @@ Future<void> audioSettings(
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: cardBorder, width: .7),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final track in state.tracks.where(
-                      (t) => t['type'] == 'text',
-                    ))
-                      ListTile(
-                        title: Text(track['label'] as String? ?? '字幕'),
-                        trailing: track['selected'] == true
-                            ? Icon(
-                                Icons.check_rounded,
-                                color: theme.colorScheme.primary,
-                              )
-                            : null,
-                        onTap: () => uiTask(
-                          context,
-                          () => state.command('track', track['id']),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final track in state.tracks.where(
+                        (t) => t['type'] == 'text',
+                      ))
+                        ListTile(
+                          title: Text(track['label'] as String? ?? '字幕'),
+                          trailing: track['selected'] == true
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  color: theme.colorScheme.primary,
+                                )
+                              : null,
+                          onTap: () => uiTask(
+                            context,
+                            () => state.command('track', track['id']),
+                          ),
                         ),
+                      TextButton(
+                        onPressed: () => uiTask(
+                          context,
+                          () => state.command('subtitles', false),
+                        ),
+                        child: const Text('关闭视频字幕'),
                       ),
-                    TextButton(
-                      onPressed: () => uiTask(
-                        context,
-                        () => state.command('subtitles', false),
-                      ),
-                      child: const Text('关闭视频字幕'),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -714,7 +1148,7 @@ Future<void> audioSettings(
             ],
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
               decoration: BoxDecoration(
                 color: cardBg,
                 borderRadius: BorderRadius.circular(18),
@@ -739,11 +1173,13 @@ Future<void> audioSettings(
                     ),
                   ),
                   const SizedBox(width: 8),
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.colorScheme.primary,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      minimumSize: const Size(0, 36),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.onSurface,
+                      side: BorderSide(color: cardBorder, width: .8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: const Size(0, 34),
+                      shape: const StadiumBorder(),
                       textStyle: theme.textTheme.bodySmall?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -768,8 +1204,8 @@ Future<void> audioSettings(
         ),
       );
     },
-  ),
-);
+  );
+}
 
 Future<bool> confirmRecording(BuildContext context, AppState state) async {
   if (state.audioRole != 'backing' &&
@@ -857,130 +1293,4 @@ Future<bool> confirmRecording(BuildContext context, AppState state) async {
     return false;
   }
   return context.mounted;
-}
-
-class _MicrophoneTest extends StatefulWidget {
-  const _MicrophoneTest({required this.state});
-  final AppState state;
-  @override
-  State<_MicrophoneTest> createState() => _MicrophoneTestState();
-}
-
-class _MicrophoneTestState extends State<_MicrophoneTest> {
-  bool started = false, busy = false;
-  @override
-  void dispose() {
-    if (started && widget.state.singingPhase == 'TESTING') {
-      unawaited(widget.state.sing('test', {'start': false}));
-    }
-    super.dispose();
-  }
-
-  Future<void> toggle() => uiTask(context, () async {
-    if (busy) return;
-    setState(() => busy = true);
-    try {
-      if (widget.state.singingPhase == 'TESTING') {
-        await widget.state.sing('test', {'start': false});
-        started = false;
-      } else if (await microphonePermission(context, widget.state) && mounted) {
-        await widget.state.sing('test', {'start': true});
-        started = true;
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  });
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.state.performance,
-    builder: (context, _) {
-      final theme = Theme.of(context);
-      final enabled = !busy && !widget.state.taking;
-      final testing = widget.state.singingPhase == 'TESTING';
-      return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SheetHeader('麦克风试音', done: '关闭'),
-            const SizedBox(height: 10),
-            Text(
-              '说一句话，看看音量条是否变化。试音不会保存声音，也不提供实时耳返。',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                color: AppPalette.brand,
-                backgroundColor: theme.colorScheme.onSurface.withValues(
-                  alpha: .12,
-                ),
-                value:
-                    ((widget.state.singing['level'] as num? ?? 0).toDouble() *
-                            6)
-                        .clamp(0, 1),
-              ),
-            ),
-            if ((widget.state.singing['error'] as String? ?? '').isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    widget.state.singing['error'] as String,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 20),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                gradient: enabled
-                    ? const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppPalette.brand, AppPalette.brandDeep],
-                      )
-                    : null,
-                boxShadow: enabled && !widget.state.performanceMode
-                    ? [
-                        BoxShadow(
-                          color: AppPalette.brand.withValues(alpha: .32),
-                          blurRadius: 18,
-                          spreadRadius: -4,
-                          offset: const Offset(0, 8),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  backgroundColor: enabled ? Colors.transparent : null,
-                  foregroundColor: Colors.white,
-                  shape: const StadiumBorder(),
-                  textStyle: theme.textTheme.titleMedium?.copyWith(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                onPressed: enabled ? toggle : null,
-                child: Text(testing ? '结束试音' : '开始试音'),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
 }

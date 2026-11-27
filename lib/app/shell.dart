@@ -988,7 +988,6 @@ class SettingsPage extends StatelessWidget {
     listenable: state,
     builder: (context, _) {
       final scheme = Theme.of(context).colorScheme;
-      final bg = Theme.of(context).scaffoldBackgroundColor;
       final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
       Widget group(
         String title,
@@ -1042,307 +1041,271 @@ class SettingsPage extends StatelessWidget {
       );
       return AppBackdropPage(
         glow: ShellAmbientGlow(state: state),
-        appBar: AppToolbar(
-          leading: Navigator.canPop(context)
-              ? Padding(
-                  padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
-                  child: Glass(
-                    state: state,
-                    radius: 24,
-                    variant: GlassVariant.liquid,
-                    child: const BackButton(),
+        appBar: const AppToolbar(title: Text('设置')),
+        body: ContentWidth(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              topInset + 10,
+              20,
+              28 + MediaQuery.paddingOf(context).bottom,
+            ),
+            children: [
+              group('家庭曲库', [
+                ListTile(
+                  leading: badge(Icons.dns_rounded, const [
+                    AppPalette.brand,
+                    AppPalette.coral,
+                  ]),
+                  title: const Text('NAS 连接与账号'),
+                  subtitle: Text(
+                    state.authenticated
+                        ? '${state.accountName.isEmpty ? '已登录' : state.accountName}\n${state.origin}'
+                        : state.origin.isEmpty
+                        ? '尚未连接'
+                        : '需要登录\n${state.origin}',
                   ),
-                )
-              : null,
-          title: const Text('设置'),
-        ),
-        body: Stack(
-          children: [
-            ContentWidth(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  topInset + 10,
-                  20,
-                  28 + MediaQuery.paddingOf(context).bottom,
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => openConnection(context, state),
                 ),
-                children: [
-                  group('家庭曲库', [
-                    ListTile(
-                      leading: badge(Icons.dns_rounded, const [
-                        AppPalette.brand,
-                        AppPalette.coral,
-                      ]),
-                      title: const Text('NAS 连接与账号'),
-                      subtitle: Text(
-                        state.authenticated
-                            ? '${state.accountName.isEmpty ? '已登录' : state.accountName}\n${state.origin}'
-                            : state.origin.isEmpty
-                            ? '尚未连接'
-                            : '需要登录\n${state.origin}',
+                ListTile(
+                  key: const Key('open-admin'),
+                  leading: badge(Icons.tune_rounded, const [
+                    Color(0xFF3B82F6),
+                    Color(0xFF6366F1),
+                  ]),
+                  title: const Text('管理端'),
+                  subtitle: Text(
+                    state.origin.isEmpty
+                        ? '连接 NAS 后管理曲库和系统设置'
+                        : '管理当前 NAS 的曲库和系统设置',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => openAdmin(context, state),
+                ),
+                ListenableBuilder(
+                  listenable: state.updates,
+                  builder: (context, _) => ListTile(
+                    leading: badge(Icons.system_update_rounded, const [
+                      Color(0xFF10B981),
+                      Color(0xFF059669),
+                    ]),
+                    title: const Text('应用更新'),
+                    subtitle: Text(state.updates.status),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        settings: const RouteSettings(name: 'updates'),
+                        builder: (_) => UpdatePage(updates: state.updates),
                       ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => openConnection(context, state),
                     ),
-                    ListTile(
-                      key: const Key('open-admin'),
-                      leading: badge(Icons.tune_rounded, const [
-                        Color(0xFF3B82F6),
-                        Color(0xFF6366F1),
-                      ]),
-                      title: const Text('管理端'),
-                      subtitle: Text(
-                        state.origin.isEmpty
-                            ? '连接 NAS 后管理曲库和系统设置'
-                            : '管理当前 NAS 的曲库和系统设置',
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => openAdmin(context, state),
-                    ),
-                    ListenableBuilder(
-                      listenable: state.updates,
-                      builder: (context, _) => ListTile(
-                        leading: badge(Icons.system_update_rounded, const [
-                          Color(0xFF10B981),
-                          Color(0xFF059669),
-                        ]),
-                        title: const Text('应用更新'),
-                        subtitle: Text(state.updates.status),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            settings: const RouteSettings(name: 'updates'),
-                            builder: (_) => UpdatePage(updates: state.updates),
-                          ),
+                  ),
+                ),
+              ], dividerIndent: 58),
+              group('外观', [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                  child: Row(
+                    children: [
+                      for (final item in const [
+                        (ThemeMode.light, Icons.light_mode_rounded, '浅色'),
+                        (ThemeMode.dark, Icons.dark_mode_rounded, '深色'),
+                        (
+                          ThemeMode.system,
+                          Icons.brightness_auto_rounded,
+                          '跟随系统',
                         ),
-                      ),
-                    ),
-                  ], dividerIndent: 58),
-                  group('外观', [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                      child: Row(
-                        children: [
-                          for (final item in const [
-                            (ThemeMode.light, Icons.light_mode_rounded, '浅色'),
-                            (ThemeMode.dark, Icons.dark_mode_rounded, '深色'),
-                            (
-                              ThemeMode.system,
-                              Icons.brightness_auto_rounded,
-                              '跟随系统',
-                            ),
-                          ]) ...[
-                            if (item.$1 != ThemeMode.light)
-                              const SizedBox(width: 8),
-                            Expanded(
-                              child: () {
-                                final active = state.themeMode == item.$1;
-                                final dark =
-                                    Theme.of(context).brightness ==
-                                    Brightness.dark;
-                                return Semantics(
-                                  selected: active,
-                                  button: true,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(16),
-                                    onTap: () => uiTask(
-                                      context,
-                                      () => state.setTheme(item.$1),
-                                    ),
-                                    child: active
-                                        ? LiquidDropletBox(
-                                            radius: 16,
-                                            accent: true,
-                                            solid:
-                                                AppMotionScope.solidOf(
-                                                  context,
-                                                ) ||
-                                                state.reduceTransparency ||
-                                                state.senior ||
-                                                state.performanceMode,
-                                            child: Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                vertical: state.senior
-                                                    ? 14
-                                                    : 11,
-                                                horizontal: 6,
-                                              ),
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    item.$2,
-                                                    size: state.senior
-                                                        ? 22
-                                                        : 19,
-                                                    color: scheme.primary,
-                                                  ),
-                                                  const SizedBox(height: 5),
-                                                  Text(
-                                                    item.$3,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.copyWith(
-                                                          fontSize: state.senior
-                                                              ? 15
-                                                              : 12.5,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: scheme.primary,
-                                                        ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          )
-                                        : AnimatedContainer(
-                                            duration: AppMotionScope.durationOf(
-                                              context,
-                                              AppMotion.release,
-                                            ),
-                                            curve: AppMotion.fluid,
-                                            padding: EdgeInsets.symmetric(
-                                              vertical: state.senior ? 14 : 11,
-                                              horizontal: 6,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                              color: scheme.onSurface
-                                                  .withValues(
-                                                    alpha: dark ? .05 : .035,
-                                                  ),
-                                              border: Border.all(
-                                                color: Colors.white.withValues(
-                                                  alpha: dark ? .07 : .45,
-                                                ),
-                                                width: .6,
-                                              ),
-                                            ),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  item.$2,
-                                                  size: state.senior ? 22 : 19,
-                                                  color:
-                                                      scheme.onSurfaceVariant,
-                                                ),
-                                                const SizedBox(height: 5),
-                                                Text(
-                                                  item.$3,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall
-                                                      ?.copyWith(
-                                                        fontSize: state.senior
-                                                            ? 15
-                                                            : 12.5,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        color: scheme
-                                                            .onSurfaceVariant,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
+                      ]) ...[
+                        if (item.$1 != ThemeMode.light)
+                          const SizedBox(width: 8),
+                        Expanded(
+                          child: () {
+                            final active = state.themeMode == item.$1;
+                            final dark =
+                                Theme.of(context).brightness == Brightness.dark;
+                            return Semantics(
+                              selected: active,
+                              button: true,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () => uiTask(
+                                  context,
+                                  () => state.setTheme(item.$1),
+                                ),
+                                child: active
+                                    ? LiquidDropletBox(
+                                        radius: 16,
+                                        accent: true,
+                                        solid:
+                                            AppMotionScope.solidOf(context) ||
+                                            state.reduceTransparency ||
+                                            state.senior ||
+                                            state.performanceMode,
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: state.senior ? 14 : 11,
+                                            horizontal: 6,
                                           ),
-                                  ),
-                                );
-                              }(),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    SwitchListTile(
-                      key: const Key('reduce-transparency'),
-                      value: state.reduceTransparency,
-                      onChanged: (value) =>
-                          uiTask(context, () => state.setTransparency(value)),
-                      title: const Text('减少透明效果'),
-                      subtitle: Text(
-                        state.reduceTransparency
-                            ? '已开启，使用清晰的不透明背景'
-                            : state.senior
-                            ? '已关闭，长辈模式仍使用实底'
-                            : state.performanceMode
-                            ? '已关闭，性能模式仍使用实底'
-                            : '已关闭，使用常规透明效果',
-                      ),
-                    ),
-                  ]),
-                  group('使用体验', [
-                    SwitchListTile(
-                      value: state.senior,
-                      onChanged: (value) => uiTask(
-                        context,
-                        () => state.setUiMode(
-                          value ? UiMode.senior : UiMode.standard,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                item.$2,
+                                                size: state.senior ? 22 : 19,
+                                                color: scheme.primary,
+                                              ),
+                                              const SizedBox(height: 5),
+                                              Text(
+                                                item.$3,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      fontSize: state.senior
+                                                          ? 15
+                                                          : 12.5,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: scheme.primary,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                    : AnimatedContainer(
+                                        duration: AppMotionScope.durationOf(
+                                          context,
+                                          AppMotion.release,
+                                        ),
+                                        curve: AppMotion.fluid,
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: state.senior ? 14 : 11,
+                                          horizontal: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          color: scheme.onSurface.withValues(
+                                            alpha: dark ? .05 : .035,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(
+                                              alpha: dark ? .07 : .45,
+                                            ),
+                                            width: .6,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              item.$2,
+                                              size: state.senior ? 22 : 19,
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                            const SizedBox(height: 5),
+                                            Text(
+                                              item.$3,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    fontSize: state.senior
+                                                        ? 15
+                                                        : 12.5,
+                                                    fontWeight: FontWeight.w500,
+                                                    color:
+                                                        scheme.onSurfaceVariant,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                            );
+                          }(),
                         ),
-                      ),
-                      title: Text(state.senior ? '长辈模式已开启' : '长辈模式'),
-                      subtitle: const Text('放大文字和按钮'),
-                    ),
-                    SwitchListTile(
-                      key: const Key('performance-mode'),
-                      value: state.performanceMode,
-                      onChanged: (value) => uiTask(
-                        context,
-                        () => state.setPerformanceMode(value),
-                      ),
-                      title: const Text('性能模式'),
-                      subtitle: Text(
-                        state.performanceMode
-                            ? '已开启，停用动效与实时模糊'
-                            : '已关闭，界面效果遵循外观设置',
-                      ),
-                    ),
-                  ]),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      '歌曲与收藏来自 NAS，后台、手机和电视共用收藏。练唱记录与录音作品保存在此手机。',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                  ),
-                  if (state.defaultPassword)
-                    const Notice('NAS 仍使用初始密码，请在管理端修改。'),
-                ],
-              ),
-            ),
-            // Progressive top veil softens cards scrolling beneath the toolbar.
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: topInset + 14,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0, .55, 1],
-                      colors: [
-                        bg.withValues(alpha: .30),
-                        bg.withValues(alpha: .12),
-                        bg.withValues(alpha: 0),
                       ],
-                    ),
+                    ],
                   ),
                 ),
+                SwitchListTile(
+                  key: const Key('liquid-glass-mode'),
+                  value: state.liquidGlass,
+                  onChanged: (value) =>
+                      uiTask(context, () => state.setLiquidGlass(value)),
+                  title: const Text('液态玻璃效果'),
+                  subtitle: Text(
+                    state.liquidGlass
+                        ? (state.senior
+                              ? '已开启，长辈模式下自动使用清晰实底'
+                              : '已开启，启用实时折射、模糊与流畅动效')
+                        : '已关闭，使用清晰实底并节省性能',
+                  ),
+                ),
+              ]),
+              group('使用体验', [
+                SwitchListTile(
+                  value: state.senior,
+                  onChanged: (value) => uiTask(
+                    context,
+                    () => state.setUiMode(
+                      value ? UiMode.senior : UiMode.standard,
+                    ),
+                  ),
+                  title: Text(state.senior ? '长辈模式已开启' : '长辈模式'),
+                  subtitle: const Text('放大文字和按钮'),
+                ),
+              ]),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  '歌曲与收藏来自 NAS，后台、手机和电视共用收藏。练唱记录与录音作品保存在此手机。',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
               ),
-            ),
-          ],
+              if (state.defaultPassword) ...[
+                const SizedBox(height: 14),
+                Glass(
+                  state: state,
+                  radius: 18,
+                  material: GlassMaterialSpec.standard,
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    leading: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: AppPalette.brand.withValues(alpha: .14),
+                      ),
+                      child: Icon(
+                        Icons.gpp_maybe_rounded,
+                        size: 18,
+                        color: scheme.primary,
+                      ),
+                    ),
+                    title: Text(
+                      'NAS 仍使用初始密码，请在管理端修改。',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w500),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => openAdmin(context, state),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     },

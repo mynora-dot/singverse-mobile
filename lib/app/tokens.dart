@@ -90,9 +90,9 @@ class GlassMaterialSpec {
   );
   static const shortcut = GlassMaterialSpec(
     lightTint: .74,
-    darkTint: .40,
+    darkTint: .44,
     blur: 10,
-    highlight: .90,
+    highlight: .58,
     shadow: .24,
     refraction: true,
     sampleContent: false,
@@ -154,14 +154,14 @@ class GlassMaterialSpec {
     refraction: true,
   );
   static const sheet = GlassMaterialSpec(
-    lightTint: .76,
-    darkTint: .46,
-    blur: 20,
-    highlight: .92,
-    shadow: .74,
+    lightTint: .78,
+    darkTint: .66,
+    blur: 24,
+    highlight: .54,
+    shadow: .76,
     refraction: true,
     lensHeight: 18,
-    lensAmount: 30,
+    lensAmount: 28,
   );
   // Unified zero-blur smoked Liquid Glass for sheets over native routes
   // (TV, scan, admin): high opacity eliminates sharp background ghosting

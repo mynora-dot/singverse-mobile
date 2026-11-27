@@ -1134,39 +1134,29 @@ class _ConnectionPageState extends State<ConnectionPage> {
             content: contentBackdrop,
             child: Scaffold(
               backgroundColor: Colors.transparent,
-              appBar: AppBar(
-                backgroundColor: Colors.transparent,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                toolbarHeight: state.senior ? 64 : 52,
-                centerTitle: true,
-                systemOverlayStyle:
-                    (Theme.of(context).brightness == Brightness.dark
-                            ? SystemUiOverlayStyle.light
-                            : SystemUiOverlayStyle.dark)
-                        .copyWith(statusBarColor: Colors.transparent),
-                leadingWidth: state.senior ? 76 : 60,
+              extendBodyBehindAppBar: true,
+              appBar: AppToolbar(
                 leading: Navigator.canPop(context)
                     ? AppBackdropScope(
                         environment: envBackdrop,
                         content: contentBackdrop,
                         child: Padding(
-                          padding: const EdgeInsets.only(
-                            left: 16,
-                            top: 4,
-                            bottom: 4,
-                          ),
-                          child: Glass(
-                            state: state,
-                            radius: 26,
-                            variant: GlassVariant.liquid,
-                            child: BackButton(
-                              style: IconButton.styleFrom(
-                                minimumSize: Size.square(
-                                  state.senior ? 56 : 44,
+                          padding: const EdgeInsets.only(left: 16),
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: state.senior ? 52 : 44,
+                              child: Glass(
+                                state: state,
+                                radius: 999,
+                                material: GlassMaterialSpec.shortcut,
+                                child: BackButton(
+                                  style: IconButton.styleFrom(
+                                    minimumSize: Size.square(
+                                      state.senior ? 52 : 44,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
                                 ),
-                                padding: EdgeInsets.zero,
                               ),
                             ),
                           ),
@@ -1182,24 +1172,30 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       environment: envBackdrop,
                       content: contentBackdrop,
                       child: Padding(
-                        padding: const EdgeInsets.only(
-                          right: 16,
-                          top: 4,
-                          bottom: 4,
-                        ),
-                        child: Glass(
-                          state: state,
-                          radius: 26,
-                          variant: GlassVariant.liquid,
-                          child: IconButton(
-                            key: const ValueKey('nas-history'),
-                            tooltip: '历史登录',
-                            style: IconButton.styleFrom(
-                              minimumSize: Size.square(state.senior ? 56 : 44),
-                              padding: EdgeInsets.zero,
+                        padding: const EdgeInsets.only(right: 16),
+                        child: Center(
+                          child: SizedBox.square(
+                            dimension: state.senior ? 52 : 44,
+                            child: Glass(
+                              state: state,
+                              radius: 999,
+                              material: GlassMaterialSpec.shortcut,
+                              child: IconButton(
+                                key: const ValueKey('nas-history'),
+                                tooltip: '历史登录',
+                                style: IconButton.styleFrom(
+                                  minimumSize: Size.square(
+                                    state.senior ? 52 : 44,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                ),
+                                onPressed: working ? null : showHistory,
+                                icon: const Icon(
+                                  Icons.history_rounded,
+                                  size: 20,
+                                ),
+                              ),
                             ),
-                            onPressed: working ? null : showHistory,
-                            icon: const Icon(Icons.history_rounded, size: 20),
                           ),
                         ),
                       ),

@@ -1,3 +1,4 @@
+import 'package:fluid_glass/fluid_glass.dart' as fg;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -376,23 +377,37 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
                 canPop &&
                 backgroundColor == null &&
                 !nativeRoute
-            ? const Padding(
-                padding: EdgeInsets.only(left: 12, top: 2, bottom: 2),
-                child: GlassSurface(
-                  radius: 24,
-                  variant: GlassVariant.liquid,
-                  child: BackButton(),
+            ? Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 44,
+                    child: GlassSurface(
+                      radius: 999,
+                      material: GlassMaterialSpec.shortcut,
+                      child: BackButton(
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size.square(44),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               )
             : null);
-    return AppBar(
+    final bar = AppBar(
       title: title,
       leading: effectiveLeading,
+      leadingWidth: leading == null && effectiveLeading != null ? 60 : null,
       actions: actions,
       bottom: bottom,
       automaticallyImplyLeading: automaticallyImplyLeading,
       foregroundColor: foregroundColor,
       backgroundColor: backgroundColor ?? Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
       systemOverlayStyle: backgroundColor == null
           ? null
           : ThemeData.estimateBrightnessForColor(backgroundColor!) ==
@@ -400,31 +415,100 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
       flexibleSpace: backgroundColor == null
-          ? const _ToolbarBackground()
+          ? null
           : ColoredBox(color: backgroundColor!),
+    );
+    if (backgroundColor != null || nativeRoute) return bar;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: -22,
+          child: IgnorePointer(child: _ToolbarBackground()),
+        ),
+        bar,
+      ],
     );
   }
 }
 
-class _ToolbarBackground extends StatelessWidget {
+class _ToolbarBackground extends StatefulWidget {
   const _ToolbarBackground();
 
   @override
+  State<_ToolbarBackground> createState() => _ToolbarBackgroundState();
+}
+
+class _ToolbarBackgroundState extends State<_ToolbarBackground> {
+  ScrollNotificationObserverState? _observer;
+  double _scrollOffset = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = ScrollNotificationObserver.maybeOf(context);
+    if (!identical(_observer, next)) {
+      _observer?.removeListener(_onScrollNotification);
+      _observer = next;
+      _observer?.addListener(_onScrollNotification);
+    }
+  }
+
+  @override
+  void dispose() {
+    _observer?.removeListener(_onScrollNotification);
+    super.dispose();
+  }
+
+  void _onScrollNotification(ScrollNotification notification) {
+    if (!mounted ||
+        notification.depth != 0 ||
+        notification.metrics.axis != Axis.vertical) {
+      return;
+    }
+    final next = notification.metrics.pixels.clamp(0.0, 48.0);
+    if ((next - _scrollOffset).abs() < 0.5 &&
+        !(next == 0 && _scrollOffset > 0)) {
+      return;
+    }
+    setState(() => _scrollOffset = next);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final amount = (_scrollOffset / 32).clamp(0.0, 1.0);
+    if (amount <= 0) return const SizedBox.shrink();
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final color = Theme.of(context).scaffoldBackgroundColor;
     final solid = AppMotionScope.solidOf(context);
-    return DecoratedBox(
+    final tint = DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: solid
-              ? [color, color.withValues(alpha: 0)]
-              : [color.withValues(alpha: .28), color.withValues(alpha: 0)],
-          stops: solid ? const [.82, 1] : const [.35, 1],
+          stops: const [0.0, 0.30, 0.54, 0.72, 0.85, 0.94, 1.0],
+          colors: [
+            color.withValues(alpha: (dark ? .88 : .88) * amount),
+            color.withValues(alpha: (dark ? .76 : .74) * amount),
+            color.withValues(alpha: (dark ? .52 : .48) * amount),
+            color.withValues(alpha: (dark ? .26 : .22) * amount),
+            color.withValues(alpha: (dark ? .09 : .07) * amount),
+            color.withValues(alpha: (dark ? .02 : .015) * amount),
+            color.withValues(alpha: 0),
+          ],
         ),
       ),
-      child: const SizedBox.expand(),
+    );
+    if (solid) return tint;
+    return fg.ProgressiveBlur(
+      maxBlurRadius: 16 * amount,
+      direction: fg.ProgressiveBlurDirection.blurredTopClearBottom,
+      startOffset: 0.44,
+      bands: 6,
+      child: tint,
     );
   }
 }
@@ -689,10 +773,10 @@ class AppSegments<T> extends StatelessWidget {
                           foregroundColor: value.$1 == selected
                               ? (selectedColor ??
                                     (accent
-                                          ? scheme.onPrimary
-                                          : liquid
-                                          ? scheme.primary
-                                          : scheme.onSurface))
+                                        ? scheme.onPrimary
+                                        : liquid
+                                        ? scheme.primary
+                                        : scheme.onSurface))
                               : scheme.onSurfaceVariant,
                         ),
                         onPressed: enabled && !disabled.contains(value.$1)
@@ -1063,7 +1147,7 @@ Future<T?> showAppSheet<T>({
     ),
     modalBarrierColor: avoidBackdrop
         ? Colors.black.withValues(alpha: dark ? .64 : .36)
-        : Colors.black.withValues(alpha: dark ? .34 : .18),
+        : Colors.black.withValues(alpha: dark ? .52 : .22),
     isScrollControlled: isScrollControlled,
     useSafeArea: useSafeArea,
     showDragHandle: false,
